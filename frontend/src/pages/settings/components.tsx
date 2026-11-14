@@ -114,7 +114,7 @@ export function SettingRow({
               onChange={(event) => onChange(event.target.value)}
             />
             {spec.suffix ? (
-              <span className="mono pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[9px] uppercase tracking-[0.1em] text-slate-600">
+              <span className="mono pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] font-semibold tracking-[0.04em] text-slate-300">
                 {spec.suffix}
               </span>
             ) : null}
