@@ -783,38 +783,20 @@ class TradingBot:
         return await self.snapshot()
 
     async def clear_order_history(self) -> dict:
-        """Delete the order / fill / position history of the active mode (paper or live).
+        """Clear the order-history list of the active mode (paper or live).
 
-        The bot must be stopped and nothing may still be open for this mode (open positions or
-        orders in flight), so a real-money position is never dropped from the records.
-        The account balance is not changed.
+        This only hides the rows from the list (server-side marker). Nothing is deleted, so
+        Daily PnL, trades today, analytics, positions and risk limits are not changed, and it
+        works while the bot is running.
         """
-        if self._status == "RUNNING":
-            raise BotError("stop the bot before clearing the order history")
         async with self._lock:
             mode = self._mode
             with session_scope() as session:
-                open_positions = self.portfolio.open_positions(session, mode)
-                working = session.execute(
-                    select(Order.id).where(
-                        Order.mode == mode,
-                        Order.status.in_(["PENDING", "SUBMITTED", "PARTIALLY_FILLED"]),
-                    )
-                ).scalars().all()
-                if open_positions or working:
-                    raise BotError(
-                        f"{mode} positions/orders are still open; settle or sell them first "
-                        "so no open record is lost"
-                    )
-                removed = self.portfolio.clear_history(session, mode)
-            self._last_order = None
-            self._risk_halt_reason = None
-            self.orders.reset_trigger_cache()
+                hidden = self.portfolio.clear_orders_view(session, mode)
             self.logs.log(
-                "WARNING",
+                "INFO",
                 "system",
-                f"{mode} order history cleared ({removed['orders']} orders, "
-                f"{removed['fills']} fills, {removed['positions']} positions)",
+                f"{mode} order history cleared from view ({hidden} orders hidden, nothing deleted)",
                 mode=mode,
             )
         await self._broadcast_state()
@@ -1798,8 +1780,12 @@ class TradingBot:
 
     async def recent_orders(self, mode: str, limit: int = 100) -> list[dict]:
         with session_scope() as session:
+            floor_id = self.portfolio.orders_view_floor(session, mode)
             rows = session.execute(
-                select(Order).where(Order.mode == mode).order_by(Order.id.desc()).limit(limit)
+                select(Order)
+                .where(Order.mode == mode, Order.id > floor_id)
+                .order_by(Order.id.desc())
+                .limit(limit)
             ).scalars().all()
             market_ids = {o.market_id for o in rows}
             market_orders = session.execute(

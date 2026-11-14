@@ -31,6 +31,7 @@ def start_of_day_utc(now: datetime | None = None) -> datetime:
 
 
 DAILY_RESET_KEY = "daily_reset_at:{mode}"
+ORDERS_CLEARED_KEY = "orders_cleared_before:{mode}"
 
 
 class Portfolio:
@@ -64,18 +65,36 @@ class Portfolio:
             row.value = stamp
         session.flush()
 
-    def clear_history(self, session: Session, mode: str) -> dict:
-        """Delete the order, fill and position history of one mode and zero its daily stats.
+    def orders_view_floor(self, session: Session, mode: str) -> int:
+        """Order id up to which the order-history list is hidden (0 = nothing hidden)."""
+        row = session.get(BotSetting, ORDERS_CLEARED_KEY.format(mode=mode))
+        try:
+            return int(row.value) if row is not None else 0
+        except (TypeError, ValueError):
+            return 0
 
-        Only that mode's rows are touched (paper and live never mix). The account balance is
-        left as it is; the caller must make sure nothing is still open for the mode.
+    def clear_orders_view(self, session: Session, mode: str) -> int:
+        """Hide every order up to the newest one from the order-history list.
+
+        Nothing is deleted: orders, fills and positions stay in the database, so daily PnL,
+        trades today, analytics and risk limits keep counting exactly as before.
+        Returns how many orders were hidden by this call.
         """
-        fills = session.execute(delete(Fill).where(Fill.mode == mode)).rowcount or 0
-        orders = session.execute(delete(Order).where(Order.mode == mode)).rowcount or 0
-        positions = session.execute(delete(Position).where(Position.mode == mode)).rowcount or 0
+        newest = session.execute(
+            select(func.coalesce(func.max(Order.id), 0)).where(Order.mode == mode)
+        ).scalar_one()
+        before = self.orders_view_floor(session, mode)
+        hidden = session.execute(
+            select(func.count(Order.id)).where(Order.mode == mode, Order.id > before, Order.id <= newest)
+        ).scalar_one()
+        key = ORDERS_CLEARED_KEY.format(mode=mode)
+        row = session.get(BotSetting, key)
+        if row is None:
+            session.add(BotSetting(key=key, value=int(newest)))
+        else:
+            row.value = int(newest)
         session.flush()
-        self.reset_daily(session, mode)
-        return {"orders": orders, "fills": fills, "positions": positions}
+        return int(hidden)
 
     def reset_all(self, session: Session) -> None:
         """Wipe every table (orders, fills, positions, markets, prices, triggers, logs,
@@ -388,6 +407,9 @@ class Portfolio:
         session.execute(delete(Fill).where(Fill.mode == "paper"))
         session.execute(delete(Order).where(Order.mode == "paper"))
         session.execute(delete(Position).where(Position.mode == "paper"))
+        marker = session.get(BotSetting, ORDERS_CLEARED_KEY.format(mode="paper"))
+        if marker is not None:
+            session.delete(marker)
         account = self.account(session, "paper")
         account.balance = float(balance)
         account.starting_balance = float(balance)

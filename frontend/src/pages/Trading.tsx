@@ -19,12 +19,11 @@ import {
 
 export function Trading() {
   const { snapshot, dataVersion, clearOrderHistory } = useBot();
-  const running = snapshot?.bot.status === "RUNNING";
 
   const onClearHistory = async () => {
     const label = snapshot?.bot.mode ?? "this mode";
     const ok = window.confirm(
-      `Delete the whole ${label} order history (orders, fills, positions)? This cannot be undone.`,
+      `Clear the ${label} order history list? Daily PnL, trades today and stats are not changed.`,
     );
     if (ok) await clearOrderHistory();
   };
@@ -174,8 +173,8 @@ export function Trading() {
             <button
               type="button"
               onClick={onClearHistory}
-              disabled={running || !polled.data || polled.data.orders.length === 0}
-              title={running ? "Stop the bot to clear the history" : "Delete this mode's order history"}
+              disabled={!polled.data || polled.data.orders.length === 0}
+              title="Clear this list. Daily PnL and stats stay as they are."
               className="btn btn-ghost h-8 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <IconTrash size={13} />

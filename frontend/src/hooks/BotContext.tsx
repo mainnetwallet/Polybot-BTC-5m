@@ -461,7 +461,7 @@ export function BotProvider({ children }: { children: ReactNode }) {
     try {
       applySnapshot(await api.clearOrders());
       setDataVersion((v) => v + 1);
-      notify("success", "Order history cleared", "Orders, fills and positions of this mode were deleted.");
+      notify("success", "Order history cleared", "The list is empty now. Daily PnL and stats are unchanged.");
       return { ok: true };
     } catch (error) {
       const message = describeError(error);
