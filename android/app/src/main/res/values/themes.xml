@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Polybot" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/polybot_window_bg</item>
+    </style>
+
+    <style name="Theme.Polybot.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/polybot_navy</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.Polybot</item>
+    </style>
+</resources>
