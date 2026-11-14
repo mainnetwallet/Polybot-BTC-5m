@@ -12,6 +12,7 @@ from app.api.schemas import (
     ManualSellAllRequest,
     ManualSellRequest,
     ModeRequest,
+    ClearHistoryRequest,
     ResetDailyRequest,
     ResetPaperRequest,
     ResetServerRequest,
@@ -209,6 +210,15 @@ def build_router(
             raise HTTPException(status_code=400, detail="confirm must be true")
         try:
             return await bot.reset_paper_account(request.balance)
+        except BotError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @router.post("/orders/clear")
+    async def clear_orders(request: ClearHistoryRequest) -> dict:
+        if not request.confirm:
+            raise HTTPException(status_code=400, detail="confirm must be true")
+        try:
+            return await bot.clear_order_history()
         except BotError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 

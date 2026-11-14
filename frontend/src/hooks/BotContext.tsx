@@ -53,6 +53,7 @@ interface BotContextValue {
   sellAll: (marketId: string) => Promise<ActionResult>;
   resetPaper: (balance: number) => Promise<ActionResult>;
   resetDaily: () => Promise<ActionResult>;
+  clearOrderHistory: () => Promise<ActionResult>;
   resetServer: (phrase: string) => Promise<ActionResult>;
   notify: (kind: ToastKind, title: string, message?: string) => void;
   dismissToast: (id: number) => void;
@@ -456,6 +457,19 @@ export function BotProvider({ children }: { children: ReactNode }) {
     [applySnapshot, notify],
   );
 
+  const clearOrderHistory = useCallback(async (): Promise<ActionResult> => {
+    try {
+      applySnapshot(await api.clearOrders());
+      setDataVersion((v) => v + 1);
+      notify("success", "Order history cleared", "Orders, fills and positions of this mode were deleted.");
+      return { ok: true };
+    } catch (error) {
+      const message = describeError(error);
+      notify("error", "Clear failed", message);
+      return { ok: false, error: message };
+    }
+  }, [applySnapshot, notify]);
+
   const resetDaily = useCallback(async (): Promise<ActionResult> => {
     try {
       applySnapshot(await api.resetDaily());
@@ -511,6 +525,7 @@ export function BotProvider({ children }: { children: ReactNode }) {
       sellAll,
       resetPaper,
       resetDaily,
+      clearOrderHistory,
       resetServer,
       notify,
       dismissToast,
@@ -533,6 +548,7 @@ export function BotProvider({ children }: { children: ReactNode }) {
       sellAll,
       resetPaper,
       resetDaily,
+      clearOrderHistory,
       resetServer,
       notify,
       dismissToast,

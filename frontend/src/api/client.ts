@@ -118,6 +118,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ balance, confirm: true }),
     }),
+  clearOrders: () =>
+    request<Snapshot>("/api/orders/clear", {
+      method: "POST",
+      body: JSON.stringify({ confirm: true }),
+    }),
   resetDaily: () =>
     request<Snapshot>("/api/daily/reset", {
       method: "POST",

@@ -39,6 +39,10 @@ class ResetDailyRequest(BaseModel):
     confirm: bool = False
 
 
+class ClearHistoryRequest(BaseModel):
+    confirm: bool = False
+
+
 class ResetServerRequest(BaseModel):
     confirm: bool = False
     confirmation_phrase: str = ""

@@ -1,7 +1,7 @@
 import { api } from "../api/client";
 import { ModeBadge, SideBadge, StatusChip } from "../components/Badges";
 import { EmptyState } from "../components/EmptyState";
-import { IconActivity, IconLayers, IconZap } from "../components/Icons";
+import { IconActivity, IconLayers, IconTrash, IconZap } from "../components/Icons";
 import { Stat } from "../components/Stat";
 import { OrdersTable, PositionsTable } from "../components/Tables";
 import { useBot } from "../hooks/BotContext";
@@ -18,7 +18,16 @@ import {
 } from "../lib/format";
 
 export function Trading() {
-  const { snapshot, dataVersion } = useBot();
+  const { snapshot, dataVersion, clearOrderHistory } = useBot();
+  const running = snapshot?.bot.status === "RUNNING";
+
+  const onClearHistory = async () => {
+    const label = snapshot?.bot.mode ?? "this mode";
+    const ok = window.confirm(
+      `Delete the whole ${label} order history (orders, fills, positions)? This cannot be undone.`,
+    );
+    if (ok) await clearOrderHistory();
+  };
   const mode = snapshot?.bot.mode;
   const polled = useLiveRefresh(async () => {
     if (!mode) return null;
@@ -162,6 +171,16 @@ export function Trading() {
               <IconLayers size={10} />
               {polled.data?.orders.length ?? "—"} orders
             </span>
+            <button
+              type="button"
+              onClick={onClearHistory}
+              disabled={running || !polled.data || polled.data.orders.length === 0}
+              title={running ? "Stop the bot to clear the history" : "Delete this mode's order history"}
+              className="btn btn-ghost h-8 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <IconTrash size={13} />
+              Clear history
+            </button>
           </div>
         </div>
         {polled.data ? <OrdersTable orders={polled.data.orders} detailed /> : <EmptyState icon={<IconLayers size={24} />} title={polled.loading ? "Loading orders" : "Order history unavailable"} />}

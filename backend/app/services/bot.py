@@ -782,6 +782,44 @@ class TradingBot:
         await self._broadcast_state()
         return await self.snapshot()
 
+    async def clear_order_history(self) -> dict:
+        """Delete the order / fill / position history of the active mode (paper or live).
+
+        The bot must be stopped and nothing may still be open for this mode (open positions or
+        orders in flight), so a real-money position is never dropped from the records.
+        The account balance is not changed.
+        """
+        if self._status == "RUNNING":
+            raise BotError("stop the bot before clearing the order history")
+        async with self._lock:
+            mode = self._mode
+            with session_scope() as session:
+                open_positions = self.portfolio.open_positions(session, mode)
+                working = session.execute(
+                    select(Order.id).where(
+                        Order.mode == mode,
+                        Order.status.in_(["PENDING", "SUBMITTED", "PARTIALLY_FILLED"]),
+                    )
+                ).scalars().all()
+                if open_positions or working:
+                    raise BotError(
+                        f"{mode} positions/orders are still open; settle or sell them first "
+                        "so no open record is lost"
+                    )
+                removed = self.portfolio.clear_history(session, mode)
+            self._last_order = None
+            self._risk_halt_reason = None
+            self.orders.reset_trigger_cache()
+            self.logs.log(
+                "WARNING",
+                "system",
+                f"{mode} order history cleared ({removed['orders']} orders, "
+                f"{removed['fills']} fills, {removed['positions']} positions)",
+                mode=mode,
+            )
+        await self._broadcast_state()
+        return await self.snapshot()
+
     async def reset_server(self) -> dict:
         """Wipe the whole database (paper + live records, logs, setting overrides) and
         return the app to a fresh STOPPED paper state. Requires the bot to be stopped."""

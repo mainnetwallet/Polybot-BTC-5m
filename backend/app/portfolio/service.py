@@ -64,6 +64,19 @@ class Portfolio:
             row.value = stamp
         session.flush()
 
+    def clear_history(self, session: Session, mode: str) -> dict:
+        """Delete the order, fill and position history of one mode and zero its daily stats.
+
+        Only that mode's rows are touched (paper and live never mix). The account balance is
+        left as it is; the caller must make sure nothing is still open for the mode.
+        """
+        fills = session.execute(delete(Fill).where(Fill.mode == mode)).rowcount or 0
+        orders = session.execute(delete(Order).where(Order.mode == mode)).rowcount or 0
+        positions = session.execute(delete(Position).where(Position.mode == mode)).rowcount or 0
+        session.flush()
+        self.reset_daily(session, mode)
+        return {"orders": orders, "fills": fills, "positions": positions}
+
     def reset_all(self, session: Session) -> None:
         """Wipe every table (orders, fills, positions, markets, prices, triggers, logs,
         setting overrides, bot state) and recreate fresh accounts."""
