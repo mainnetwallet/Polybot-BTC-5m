@@ -18,6 +18,9 @@ from app.config.settings import Settings
 OVERRIDABLE_KEYS = (
     "trigger_threshold",
     "final_window_seconds",
+    "stage1_enabled",
+    "stage2_enabled",
+    "stage3_enabled",
     "stage2_seconds",
     "stage2_threshold",
     "stage3_seconds",
@@ -70,6 +73,10 @@ STAGE0_MAX_TAKE_PROFIT_PRICE = 0.99
 class RuntimeSettings(BaseModel):
     trigger_threshold: float = Field(ge=0.01, le=0.999)
     final_window_seconds: int = Field(ge=1, le=300)
+    # Master switch per entry stage (stage 0: stage0_enabled). Off = no buys, no take-profit, no stop-loss.
+    stage1_enabled: bool = True
+    stage2_enabled: bool = True
+    stage3_enabled: bool = True
     stage2_seconds: int = Field(default=50, ge=1, le=300)
     stage2_threshold: float = Field(default=0.90, ge=0.01, le=0.999)
     stage3_seconds: int = Field(default=30, ge=1, le=300)
@@ -155,6 +162,15 @@ class RuntimeSettings(BaseModel):
         if self.stage2_sell_price <= self.stage2_threshold:
             raise ValueError("stage2_sell_price must be greater than stage2_threshold")
         return self
+
+    def stage_enabled(self, stage: int) -> bool:
+        """True when `stage` (0-3) is switched on. A switched-off stage buys and sells nothing."""
+        return {
+            0: self.stage0_enabled,
+            1: self.stage1_enabled,
+            2: self.stage2_enabled,
+            3: self.stage3_enabled,
+        }.get(stage, True)
 
     def stage1_sell_price_for(self, cost_per_share: float | None) -> float | None:
         """Take-profit price for stage 1 shares bought at `cost_per_share`; None = take-profit is off.

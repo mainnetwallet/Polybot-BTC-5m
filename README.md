@@ -381,7 +381,8 @@ Strategy and risk defaults:
 | --- | --- | --- |
 | `TRIGGER_THRESHOLD` | `0.80` | Ask level that triggers a BUY |
 | `FINAL_WINDOW_SECONDS` | `80` | Trading window at the end of the market |
-| `STAGE0_ENABLED` | `true` | Switches stage 0 (early buy + take-profit sell) on or off |
+| `STAGE0_ENABLED` | `true` | Switches stage 0 (early buy + take-profit sell) on or off. Off = no buys, no take-profit, no stop-loss |
+| `STAGE1_ENABLED` / `STAGE2_ENABLED` / `STAGE3_ENABLED` | `true` | Switch stage 1 / 2 / 3 on or off. Off = the stage does nothing: no buys, no take-profit, no stop-loss |
 | `STAGE0_START_SECONDS` | `200` | Stage 0 may start buying when this many seconds are left before expiry |
 | `STAGE0_END_SECONDS` | `100` | Stage 0 stops buying when this many seconds are left (must be lower than the start; independent of the final window) |
 | `STAGE0_MIN_ASK` | `0.60` | Stage 0 buys only while the best ask is at or above this |

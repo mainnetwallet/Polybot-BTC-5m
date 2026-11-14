@@ -26,6 +26,11 @@ export const TABS: TabSpec[] = [
     description: "When the final-window stages fire a marketable BUY.",
     groups: [
       {
+        title: "Stages on / off",
+        description: "A stage that is off does nothing: no buys, no take-profit and no stop-loss for it.",
+        keys: ["stage1_enabled", "stage2_enabled", "stage3_enabled"],
+      },
+      {
         title: "Timing",
         description: "How many seconds before expiry each stage becomes active.",
         keys: ["final_window_seconds", "stage2_seconds", "stage3_seconds"],

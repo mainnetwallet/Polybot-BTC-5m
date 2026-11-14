@@ -43,12 +43,13 @@ def datetime_to_epoch_ms(value: datetime) -> int:
 
 
 def stage_plan(config: RuntimeSettings) -> list[tuple[int, float, float]]:
-    """(stage, max remaining seconds, ask threshold) for every entry stage."""
-    return [
+    """(stage, max remaining seconds, ask threshold) for every entry stage that is switched on."""
+    plan = [
         (1, float(config.final_window_seconds), config.trigger_threshold),
         (2, float(config.stage2_seconds), config.stage2_threshold),
         (3, float(config.stage3_seconds), config.stage3_threshold),
     ]
+    return [entry for entry in plan if config.stage_enabled(entry[0])]
 
 
 def stage0_active(config: RuntimeSettings, remaining: float) -> bool:

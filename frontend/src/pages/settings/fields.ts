@@ -33,6 +33,24 @@ export const FIELDS: FieldSpec[] = [
     suffix: "s",
   },
   {
+    key: "stage1_enabled",
+    label: "Stage 1: on / off",
+    hint: "Off: stage 1 does nothing at all: no buys, no take-profit sell and no stop-loss for its shares.",
+    kind: "toggle",
+  },
+  {
+    key: "stage2_enabled",
+    label: "Stage 2: on / off",
+    hint: "Off: stage 2 does nothing at all: no buys, no take-profit sell and no stop-loss for its shares.",
+    kind: "toggle",
+  },
+  {
+    key: "stage3_enabled",
+    label: "Stage 3: on / off",
+    hint: "Off: stage 3 does nothing at all: no buys, no take-profit sell and no stop-loss for its shares.",
+    kind: "toggle",
+  },
+  {
     key: "stage0_enabled",
     label: "Stage 0: early buy + sell",
     hint: "On: before the final window, buy when the ask is low enough and BTC is far enough beyond the price to beat, then sell at the sell price.",

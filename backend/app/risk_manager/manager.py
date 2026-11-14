@@ -93,9 +93,11 @@ class RiskManager:
             return RiskDecision(False, "market_inactive", "market is no longer active")
         if ctx.market_expired or ctx.remaining_seconds <= 0:
             return RiskDecision(False, "market_expired", "market window has expired")
+        if not config.stage_enabled(signal.stage):
+            return RiskDecision(
+                False, f"stage{signal.stage}_disabled", f"stage {signal.stage} is switched off"
+            )
         if signal.stage == 0:
-            if not config.stage0_enabled:
-                return RiskDecision(False, "stage0_disabled", "stage 0 is switched off")
             if not (config.stage0_end_seconds < ctx.remaining_seconds <= config.stage0_start_seconds):
                 return RiskDecision(
                     False,

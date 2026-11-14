@@ -67,6 +67,11 @@ class Settings(BaseSettings):
     final_window_seconds: int = 90
     # Extra staged entries inside the final window: once `remaining <= stageN_seconds`
     # and a best ask >= stageN_threshold, one more buy per stage (same market).
+    # Per-stage master switches. A stage that is switched off does nothing at all: no buys, no
+    # take-profit sell and no stop-loss for its shares (stage 0 has its own switch, stage0_enabled).
+    stage1_enabled: bool = True
+    stage2_enabled: bool = True
+    stage3_enabled: bool = True
     stage2_seconds: int = 50
     stage2_threshold: float = 0.90
     stage3_seconds: int = 30

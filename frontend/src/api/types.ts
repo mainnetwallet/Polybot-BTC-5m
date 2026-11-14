@@ -38,6 +38,9 @@ export interface StrategyState {
   reason: string;
   trigger_threshold: number;
   final_window_seconds: number;
+  stage1_enabled: boolean;
+  stage2_enabled: boolean;
+  stage3_enabled: boolean;
   stage2_seconds: number;
   stage2_threshold: number;
   stage3_seconds: number;
@@ -242,6 +245,9 @@ export interface LogRow {
 export interface SettingsState {
   trigger_threshold: number;
   final_window_seconds: number;
+  stage1_enabled: boolean;
+  stage2_enabled: boolean;
+  stage3_enabled: boolean;
   stage2_seconds: number;
   stage2_threshold: number;
   stage3_seconds: number;

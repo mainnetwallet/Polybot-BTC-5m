@@ -605,6 +605,8 @@ class OrderManager:
             if now_ms - last < 500:
                 continue
             stage = self._key_stage(order_key)
+            if not config.stage_enabled(stage):
+                continue  # a stage that was switched off stops topping up its buys
             max_price = config.max_execution_price
             if stage == 0:
                 remaining_s = market.remaining_seconds()
@@ -1040,6 +1042,8 @@ class OrderManager:
                 return [OrderResult(None, manual_side, "BLOCKED", "no_holding")]
             if holding is None:
                 return []
+            if not manual and not config.stage_enabled(stage):
+                return []  # switched-off stage: no take-profit, no stop-loss (only a manual sell still works)
             if holding.sell_in_flight:
                 return [OrderResult(None, holding.side, "BLOCKED", "sell_in_flight")] if manual else []
             sell_size = _floor_shares(holding.size)
