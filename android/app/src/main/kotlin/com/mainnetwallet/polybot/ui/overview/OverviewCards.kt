@@ -54,11 +54,14 @@ import com.mainnetwallet.polybot.data.model.BtcState
 import com.mainnetwallet.polybot.data.model.LiveReadiness
 import com.mainnetwallet.polybot.data.model.MarketSnapshot
 import com.mainnetwallet.polybot.data.model.Modes
+import com.mainnetwallet.polybot.data.model.PositionRow
+import com.mainnetwallet.polybot.data.model.SellableHolding
 import com.mainnetwallet.polybot.ui.Fmt
 import com.mainnetwallet.polybot.ui.components.Dot
 import com.mainnetwallet.polybot.ui.components.FlashBackground
 import com.mainnetwallet.polybot.ui.components.Label
 import com.mainnetwallet.polybot.ui.components.Pill
+import com.mainnetwallet.polybot.ui.components.SidePill
 import com.mainnetwallet.polybot.ui.components.Sparkline
 import com.mainnetwallet.polybot.ui.components.pnlColor
 import com.mainnetwallet.polybot.ui.theme.Mono
@@ -67,8 +70,8 @@ import com.mainnetwallet.polybot.ui.theme.Space
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
-// Overview layout, top to bottom: hero (countdown + BTC), odds (UP | DOWN), account, last order, and the
-// engine controls pinned in a dock at the bottom, so it fits one phone screen with little or no scrolling.
+// Overview layout, top to bottom: hero (countdown, BTC and account numbers), odds (UP | DOWN) and the position
+// box with its instant Sell buttons. The engine controls live in the top bar.
 
 /** Compact card used on the Overview: 12dp padding, 6dp between children. */
 @Composable
@@ -623,5 +626,120 @@ fun EngineControlsRow(
         }
         ModeToggle(selected = bot.mode, enabled = !busy, onSelect = onMode, modifier = Modifier.weight(1.5f), compact = true)
         KillButton(active = bot.killSwitch, enabled = !busy, onToggle = onKill)
+    }
+}
+
+/** Key used in the "selling" set while a Sell all request is on its way. */
+internal const val SELL_ALL_KEY = "__all__"
+
+/** Key of one stage row in the "selling" set, used to block a second tap on the same row while its request is on the way. */
+internal fun sellKey(h: SellableHolding): String = "${h.marketId}:${h.side}:${h.stage}"
+
+@Composable
+private fun SellButton(label: String, enabled: Boolean, onClick: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = scheme.errorContainer,
+            contentColor = scheme.onErrorContainer,
+        ),
+        modifier = Modifier.heightIn(min = 36.dp),
+    ) {
+        Text(label, style = MaterialTheme.typography.labelLarge, maxLines = 1)
+    }
+}
+
+/**
+ * Position box: what is held in the live market, one block per side (shares, average price, best bid, PnL)
+ * with one row per stage under it, each with its own Sell button, plus Sell all in the header.
+ * A tap sells at the market right away: there is no confirm dialog or sheet and no extra delay. `selling`
+ * only disables a button while its own request is on the way, so a double tap cannot send it twice.
+ */
+@Composable
+fun PositionBoxCard(
+    marketId: String?,
+    positions: List<PositionRow>,
+    sellable: List<SellableHolding>,
+    upBook: BookSnapshot?,
+    downBook: BookSnapshot?,
+    selling: Set<String>,
+    onSell: (SellableHolding) -> Unit,
+    onSellAll: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val open = if (marketId == null) {
+        emptyList()
+    } else {
+        positions
+            .filter { it.marketId == marketId && it.status == "open" && it.size > 0 }
+            .sortedByDescending { it.side.equals("UP", ignoreCase = true) }
+    }
+    val sellableHere = if (marketId == null) emptyList() else sellable.filter { it.marketId == marketId }
+    val sellingAll = SELL_ALL_KEY in selling
+
+    CompactCard(modifier) {
+        CardHeader("Position") {
+            if (marketId != null && sellableHere.isNotEmpty()) {
+                SellButton(
+                    label = if (sellingAll) "Selling\u2026" else "Sell all",
+                    enabled = !sellingAll,
+                    onClick = { onSellAll(marketId) },
+                )
+            }
+        }
+        if (open.isEmpty()) {
+            Text(
+                "No open position in this market",
+                style = MaterialTheme.typography.bodySmall,
+                color = scheme.onSurfaceVariant,
+            )
+        } else {
+            open.forEach { p ->
+                val bid = (if (p.side.equals("UP", ignoreCase = true)) upBook else downBook)?.bestBid
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Space.sm),
+                ) {
+                    SidePill(p.side)
+                    Text(
+                        "${Fmt.num(p.size, 2)} sh",
+                        style = Mono.small,
+                        color = scheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+                    MiniStat("Avg", Fmt.cents(p.avgPrice), Modifier.weight(1f))
+                    MiniStat("Bid", Fmt.cents(bid), Modifier.weight(1f))
+                    MiniStat(
+                        "PnL",
+                        Fmt.signedUsd(p.unrealizedPnl),
+                        Modifier.weight(1f),
+                        valueColor = pnlColor(p.unrealizedPnl),
+                    )
+                }
+                sellableHere.filter { it.side.equals(p.side, ignoreCase = true) }.forEach { h ->
+                    val busy = sellKey(h) in selling
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(Space.sm),
+                    ) {
+                        Text("Stage ${h.stage}", style = Mono.small, color = scheme.onSurfaceVariant)
+                        Text("${Fmt.num(h.size, 2)} sh", style = Mono.small, modifier = Modifier.weight(1f))
+                        SellButton(
+                            label = if (busy) "Selling\u2026" else "Sell",
+                            enabled = !busy,
+                            onClick = { onSell(h) },
+                        )
+                    }
+                }
+            }
+        }
     }
 }

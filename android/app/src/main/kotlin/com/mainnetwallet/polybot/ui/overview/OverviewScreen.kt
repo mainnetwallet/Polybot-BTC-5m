@@ -16,13 +16,17 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.mainnetwallet.polybot.data.ActionResult
 import com.mainnetwallet.polybot.ui.LocalGraph
 import com.mainnetwallet.polybot.ui.LocalUi
 import com.mainnetwallet.polybot.ui.components.SkeletonCard
 import com.mainnetwallet.polybot.ui.theme.Space
 import kotlinx.coroutines.launch
 
-/** Overview: hero (countdown, BTC and account numbers) and UP/DOWN odds. The engine controls are in the top bar. */
+/**
+ * Overview: hero (countdown, BTC and account numbers), UP/DOWN odds and the position box with instant Sell
+ * buttons. The engine controls are in the top bar.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OverviewScreen(modifier: Modifier = Modifier) {
@@ -35,6 +39,19 @@ fun OverviewScreen(modifier: Modifier = Modifier) {
     val scope = rememberCoroutineScope()
 
     var refreshing by remember { mutableStateOf(false) }
+    var selling by remember { mutableStateOf<Set<String>>(emptySet()) }
+
+    // Instant sell: the request goes out the moment the button is tapped (no confirm dialog, no sheet).
+    // `selling` only stops a second tap on the same button while its request is still on the way.
+    fun sell(key: String, call: suspend () -> ActionResult) {
+        if (key in selling) return
+        selling = selling + key
+        scope.launch {
+            val result = call()
+            selling = selling - key
+            ui.report(result)
+        }
+    }
 
     val snap = snapshot
     PullToRefreshBox(
@@ -70,6 +87,16 @@ fun OverviewScreen(modifier: Modifier = Modifier) {
                     downArmed = snap.strategy.downArmed,
                     upHistory = history.up,
                     downHistory = history.down,
+                )
+                PositionBoxCard(
+                    marketId = snap.market?.marketId,
+                    positions = snap.positions,
+                    sellable = snap.sellable,
+                    upBook = snap.books.up,
+                    downBook = snap.books.down,
+                    selling = selling,
+                    onSell = { h -> sell(sellKey(h)) { repo.sellNow(h.marketId, h.side, h.stage) } },
+                    onSellAll = { marketId -> sell(SELL_ALL_KEY) { repo.sellAll(marketId) } },
                 )
             }
         }
