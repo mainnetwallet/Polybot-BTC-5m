@@ -137,14 +137,16 @@ private fun MiniStat(
 }
 
 /**
- * Hero card: the 5-minute window countdown, the BTC price and its gap to the price to beat, in one place.
- * The clock follows the server, not the phone. The card tints amber inside the final window.
+ * Hero card: the 5-minute window countdown, the BTC price and its gap to the price to beat, and the account
+ * numbers (balance, PnL, trades) in one place. The clock follows the server, not the phone.
+ * The card tints amber inside the final window.
  */
 @Composable
 fun HeroCard(
     market: MarketSnapshot?,
     btc: BtcState?,
     btcHistory: List<Float>,
+    account: AccountState,
     inWindow: Boolean,
     offsetMs: Long,
     modifier: Modifier = Modifier,
@@ -171,7 +173,6 @@ fun HeroCard(
     } else {
         0f
     }
-    val title = if (market == null) "Waiting for the next window" else market.slug.ifBlank { Fmt.shortId(market.marketId) }
 
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -188,14 +189,11 @@ fun HeroCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(Space.sm),
                 ) {
-                    Text(
-                        title,
-                        style = Mono.small,
-                        color = scheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
-                    )
+                    Label(if (market == null) "Waiting for the next window" else "Closes in", Modifier.weight(1f))
+                    if (account.positionsAwaitingSettlement > 0) {
+                        val redeem = if (account.pendingRedeems > 0) " \u00B7 ${account.pendingRedeems} redeem" else ""
+                        Pill("${account.positionsAwaitingSettlement} settling$redeem", scheme.onSurfaceVariant, scheme.surfaceVariant)
+                    }
                     if (market != null) {
                         if (inWindow) {
                             Pill("FINAL WINDOW", c.warn, c.warnContainer)
@@ -206,7 +204,6 @@ fun HeroCard(
                 }
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
                     Column(Modifier.weight(1f)) {
-                        Label(if (market == null) "Window" else "Closes in")
                         Text(
                             if (remaining == null) "--:--" else Fmt.clock(remaining),
                             style = Mono.xlarge,
@@ -297,10 +294,40 @@ fun HeroCard(
                 Sparkline(
                     btcHistory,
                     scheme.primary,
-                    height = 36.dp,
+                    height = 32.dp,
                     reference = btc?.priceToBeat?.toFloat(),
                     description = "BTC price chart",
                 )
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(scheme.outlineVariant.copy(alpha = 0.6f)),
+                )
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(Space.sm),
+                    verticalAlignment = Alignment.Bottom,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Label("Balance")
+                        Text(Fmt.usdGrouped(account.balance), style = Mono.large.copy(fontSize = 20.sp), maxLines = 1)
+                    }
+                    Column(Modifier.weight(1f), horizontalAlignment = Alignment.End) {
+                        Label("Daily PnL")
+                        Text(
+                            Fmt.signedUsd(account.dailyPnl),
+                            style = Mono.large.copy(fontSize = 20.sp),
+                            color = pnlColor(account.dailyPnl),
+                            maxLines = 1,
+                        )
+                    }
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+                    MiniStat("Realized", Fmt.signedUsd(account.realizedPnl), Modifier.weight(1f), valueColor = pnlColor(account.realizedPnl))
+                    MiniStat("Unrealized", Fmt.signedUsd(account.unrealizedPnl), Modifier.weight(1f), valueColor = pnlColor(account.unrealizedPnl))
+                    MiniStat("Trades", account.tradesToday.toString(), Modifier.weight(1f))
+                }
             }
         }
     }
@@ -414,40 +441,6 @@ private fun OddsTile(side: String, book: BookSnapshot?, armed: Boolean, history:
                 )
             }
             Sparkline(history, tone, height = 20.dp, description = "$side ask history")
-        }
-    }
-}
-
-/** Balance and daily PnL big, the rest in one row. Settling positions show as a chip in the header. */
-@Composable
-fun AccountCard(account: AccountState, modifier: Modifier = Modifier) {
-    val scheme = MaterialTheme.colorScheme
-    CompactCard(modifier) {
-        CardHeader("Account \u00B7 " + account.mode.uppercase()) {
-            if (account.positionsAwaitingSettlement > 0) {
-                val redeem = if (account.pendingRedeems > 0) " \u00B7 ${account.pendingRedeems} redeem" else ""
-                Pill("${account.positionsAwaitingSettlement} settling$redeem", scheme.onSurfaceVariant, scheme.surfaceVariant)
-            }
-        }
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
-            Column(Modifier.weight(1f)) {
-                Label("Balance")
-                Text(Fmt.usdGrouped(account.balance), style = Mono.large.copy(fontSize = 24.sp), maxLines = 1)
-            }
-            Column(horizontalAlignment = Alignment.End) {
-                Label("Daily PnL")
-                Text(
-                    Fmt.signedUsd(account.dailyPnl),
-                    style = Mono.large.copy(fontSize = 24.sp),
-                    color = pnlColor(account.dailyPnl),
-                    maxLines = 1,
-                )
-            }
-        }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
-            MiniStat("Realized", Fmt.signedUsd(account.realizedPnl), Modifier.weight(1f), valueColor = pnlColor(account.realizedPnl))
-            MiniStat("Unrealized", Fmt.signedUsd(account.unrealizedPnl), Modifier.weight(1f), valueColor = pnlColor(account.unrealizedPnl))
-            MiniStat("Trades", account.tradesToday.toString(), Modifier.weight(1f))
         }
     }
 }

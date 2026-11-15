@@ -22,7 +22,7 @@ import com.mainnetwallet.polybot.ui.components.SkeletonCard
 import com.mainnetwallet.polybot.ui.theme.Space
 import kotlinx.coroutines.launch
 
-/** Overview: hero (countdown + BTC), UP/DOWN odds and account. The engine controls are in the top bar. */
+/** Overview: hero (countdown, BTC and account numbers) and UP/DOWN odds. The engine controls are in the top bar. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OverviewScreen(modifier: Modifier = Modifier) {
@@ -62,7 +62,7 @@ fun OverviewScreen(modifier: Modifier = Modifier) {
                 SkeletonCard(lines = 2)
             } else {
                 EngineNotices(snap.bot, snap.live)
-                HeroCard(snap.market, snap.btc, history.btc, snap.strategy.inWindow, offsetMs)
+                HeroCard(snap.market, snap.btc, history.btc, snap.account, snap.strategy.inWindow, offsetMs)
                 OddsCard(
                     up = snap.books.up,
                     down = snap.books.down,
@@ -71,7 +71,6 @@ fun OverviewScreen(modifier: Modifier = Modifier) {
                     upHistory = history.up,
                     downHistory = history.down,
                 )
-                AccountCard(snap.account)
             }
         }
     }
