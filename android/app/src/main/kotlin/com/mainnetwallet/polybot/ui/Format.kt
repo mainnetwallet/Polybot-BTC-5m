@@ -35,6 +35,12 @@ object Fmt {
         return String.format(Locale.US, "%.${digits}f", v!! * 100.0) + "¢"
     }
 
+    /** A 0..1 share price in cents without trailing zeros, e.g. 0.6 -> "60¢", 0.875 -> "87.5¢". */
+    fun centsShort(v: Double?): String {
+        if (!ok(v)) return "—"
+        return plain(Math.round(v!! * 1000.0) / 10.0) + "¢"
+    }
+
     /** A 0..1 share price as a decimal, e.g. 0.874. */
     fun price(v: Double?, digits: Int = 3): String {
         if (!ok(v)) return "—"

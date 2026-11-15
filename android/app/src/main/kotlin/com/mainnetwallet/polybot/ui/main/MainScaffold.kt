@@ -15,18 +15,23 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Dashboard
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.outlined.BarChart
+import androidx.compose.material.icons.outlined.Dashboard
+import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.SwapVert
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.Icon
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -63,12 +68,17 @@ import com.mainnetwallet.polybot.ui.theme.Poly
 import com.mainnetwallet.polybot.ui.theme.Space
 
 /** The five tabs of the bottom bar. Settings lives behind the gear in the top bar. */
-enum class Dest(val route: String, val label: String, val icon: ImageVector) {
-    Overview("overview", "Overview", Icons.Filled.Dashboard),
-    Trading("trading", "Trading", Icons.Filled.SwapVert),
-    Strategy("strategy", "Strategy", Icons.Filled.Tune),
-    Analytics("analytics", "Analytics", Icons.Filled.BarChart),
-    Logs("logs", "Logs", Icons.AutoMirrored.Filled.List),
+enum class Dest(
+    val route: String,
+    val label: String,
+    val icon: ImageVector,
+    val selectedIcon: ImageVector,
+) {
+    Overview("overview", "Overview", Icons.Outlined.Dashboard, Icons.Filled.Dashboard),
+    Trading("trading", "Trading", Icons.Outlined.SwapVert, Icons.Filled.SwapVert),
+    Strategy("strategy", "Strategy", Icons.Outlined.Tune, Icons.Filled.Tune),
+    Analytics("analytics", "Analytics", Icons.Outlined.BarChart, Icons.Filled.BarChart),
+    Logs("logs", "Logs", Icons.Outlined.Description, Icons.Filled.Description),
 }
 
 const val ROUTE_SETTINGS = "settings"
@@ -83,6 +93,7 @@ fun MainScaffold(prefs: AppPrefs, snackbar: SnackbarHostState) {
     val snapshot by graph.repository.snapshot.collectAsStateWithLifecycle()
     val feed by graph.repository.feedState.collectAsStateWithLifecycle()
     val live = snapshot?.bot?.isLive == true
+    val strategyArmed = snapshot?.strategy?.let { it.upArmed || it.downArmed } == true
     val onTab = Dest.entries.any { it.route == route }
 
     Scaffold(
@@ -103,23 +114,17 @@ fun MainScaffold(prefs: AppPrefs, snackbar: SnackbarHostState) {
             )
         },
         bottomBar = {
-            NavigationBar {
-                Dest.entries.forEach { dest ->
-                    NavigationBarItem(
-                        selected = route == dest.route,
-                        onClick = {
-                            nav.navigate(dest.route) {
-                                popUpTo(nav.graph.findStartDestination().id) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
-                        icon = { Icon(dest.icon, contentDescription = null) },
-                        label = { Text(dest.label, maxLines = 1) },
-                        alwaysShowLabel = true,
-                    )
-                }
-            }
+            PolyBottomBar(
+                route = route,
+                attention = if (strategyArmed) setOf(Dest.Strategy) else emptySet(),
+                onSelect = { dest ->
+                    nav.navigate(dest.route) {
+                        popUpTo(nav.graph.findStartDestination().id) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                },
+            )
         },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { inner ->
@@ -186,8 +191,14 @@ private fun PolyTopBar(
                 }
                 Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) { title() }
                 if (onTab) {
-                    IconButton(onClick = onSettings) {
-                        Icon(Icons.Filled.Settings, contentDescription = "Settings")
+                    FilledTonalIconButton(
+                        onClick = onSettings,
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        ),
+                    ) {
+                        Icon(Icons.Outlined.Settings, contentDescription = "Settings")
                     }
                 } else {
                     Spacer(Modifier.width(Space.md))
