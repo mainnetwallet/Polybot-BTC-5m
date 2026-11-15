@@ -51,7 +51,6 @@ import com.mainnetwallet.polybot.data.model.AccountState
 import com.mainnetwallet.polybot.data.model.BookSnapshot
 import com.mainnetwallet.polybot.data.model.BotState
 import com.mainnetwallet.polybot.data.model.BtcState
-import com.mainnetwallet.polybot.data.model.LastOrder
 import com.mainnetwallet.polybot.data.model.LiveReadiness
 import com.mainnetwallet.polybot.data.model.MarketSnapshot
 import com.mainnetwallet.polybot.data.model.Modes
@@ -60,7 +59,6 @@ import com.mainnetwallet.polybot.ui.components.Dot
 import com.mainnetwallet.polybot.ui.components.FlashBackground
 import com.mainnetwallet.polybot.ui.components.Label
 import com.mainnetwallet.polybot.ui.components.Pill
-import com.mainnetwallet.polybot.ui.components.SidePill
 import com.mainnetwallet.polybot.ui.components.Sparkline
 import com.mainnetwallet.polybot.ui.components.pnlColor
 import com.mainnetwallet.polybot.ui.theme.Mono
@@ -500,49 +498,6 @@ fun ModeToggle(selected: String, enabled: Boolean, onSelect: (String) -> Unit, m
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                     )
                 }
-            }
-        }
-    }
-}
-
-/** One line about the last order: side, status, fill and time. */
-@Composable
-fun LastOrderCard(order: LastOrder?, modifier: Modifier = Modifier) {
-    val c = Poly.colors
-    CompactCard(modifier) {
-        if (order == null) {
-            Label("Last order")
-            Text(
-                "No order yet. The engine buys when an ask reaches the trigger inside the final window.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-        } else {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.md)) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Label("Last order \u00B7 ${Fmt.time(order.ts)}")
-                    Text(
-                        "${order.status.replace('_', ' ')} \u00B7 ${Fmt.num(order.filledSize, 2)} sh @ ${Fmt.cents(order.avgPrice)}",
-                        style = Mono.small,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    if (order.reason.isNotBlank()) {
-                        Text(
-                            order.reason,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                    if (!order.error.isNullOrBlank()) {
-                        Text(order.error, style = MaterialTheme.typography.bodySmall, color = c.down, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    }
-                }
-                SidePill(order.side)
             }
         }
     }

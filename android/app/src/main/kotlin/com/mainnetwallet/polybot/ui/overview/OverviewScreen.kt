@@ -95,7 +95,6 @@ fun OverviewScreen(modifier: Modifier = Modifier) {
                         downHistory = history.down,
                     )
                     AccountCard(snap.account)
-                    LastOrderCard(snap.lastOrder)
                 }
             }
         }
