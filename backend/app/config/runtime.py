@@ -22,6 +22,7 @@ OVERRIDABLE_KEYS = (
     "stage2_enabled",
     "stage3_enabled",
     "stage2_seconds",
+    "stage2_end_seconds",
     "stage2_threshold",
     "stage3_seconds",
     "stage3_threshold",
@@ -82,6 +83,9 @@ class RuntimeSettings(BaseModel):
     stage2_enabled: bool = True
     stage3_enabled: bool = True
     stage2_seconds: int = Field(default=50, ge=1, le=300)
+    # Stage 2 stops buying once this many seconds (or fewer) are left: stage 3 takes over from there.
+    # Stage 2 therefore buys while stage2_end_seconds < remaining <= stage2_seconds. 0 = no cutoff.
+    stage2_end_seconds: int = Field(default=30, ge=0, le=299)
     stage2_threshold: float = Field(default=0.90, ge=0.01, le=0.999)
     stage3_seconds: int = Field(default=30, ge=1, le=300)
     stage3_threshold: float = Field(default=0.90, ge=0.01, le=0.999)
@@ -163,6 +167,8 @@ class RuntimeSettings(BaseModel):
             raise ValueError("max_execution_price must be >= trigger_threshold")
         if self.max_execution_price < max(self.stage2_threshold, self.stage3_threshold):
             raise ValueError("max_execution_price must be >= the stage 2/3 thresholds")
+        if self.stage2_end_seconds >= self.stage2_seconds:
+            raise ValueError("stage2_end_seconds must be less than stage2_seconds")
         if self.stage0_end_seconds >= self.stage0_start_seconds:
             raise ValueError("stage0_end_seconds must be less than stage0_start_seconds")
         if self.stage0_min_ask > self.stage0_max_ask:

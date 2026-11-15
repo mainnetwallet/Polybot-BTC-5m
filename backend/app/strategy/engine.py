@@ -14,8 +14,8 @@ Entries are staged. Each stage may place ONE buy per market:
 * stage 1: inside the final window, best_ask >= trigger_threshold (default 0.80).
   If the ask is not there yet the strategy keeps watching and fires the moment it
   gets there, any time before the market ends.
-* stage 2: remaining <= stage2_seconds (default 50) and best_ask >= stage2_threshold
-  (default 0.90).
+* stage 2: stage2_end_seconds (default 30) < remaining <= stage2_seconds (default 50) and
+  best_ask >= stage2_threshold (default 0.90). From stage2_end_seconds on stage 3 takes over.
 * stage 3: remaining <= stage3_seconds (default 30) and best_ask >= stage3_threshold
   (default 0.90).
 
@@ -122,6 +122,8 @@ class FinalWindowStrategy:
         for stage, max_remaining, threshold in stage_plan(config):
             if remaining > max_remaining:
                 continue
+            if stage == 2 and config.stage2_end_seconds > 0 and remaining <= config.stage2_end_seconds:
+                continue  # stage 2 ends where stage 3 begins
             for side, market_side_token, book, ask in (
                 ("UP", market.up_token_id, up, up_ask),
                 ("DOWN", market.down_token_id, down, down_ask),

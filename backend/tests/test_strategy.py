@@ -113,7 +113,8 @@ def test_stage2_needs_50s_left_and_090():
 def test_stage3_needs_30s_left_and_090():
     assert _stages(evaluate(35, up=0.95, down=0.05)) == [1, 2]
     assert _stages(evaluate(25, up=0.85, down=0.15)) == [1]
-    assert _stages(evaluate(25, up=0.95, down=0.05)) == [1, 2, 3]
+    # stage 2 ends at 30s, so only stages 1 and 3 are left at 25s
+    assert _stages(evaluate(25, up=0.95, down=0.05)) == [1, 3]
 
 
 def test_stage_settings_are_configurable():
@@ -121,3 +122,14 @@ def test_stage_settings_are_configurable():
         40, up=0.95, down=0.05, stage2_seconds=45, stage2_threshold=0.95, stage3_seconds=20
     )
     assert _stages(result) == [1, 2]
+
+
+def test_stage2_window_is_50s_to_30s_then_stage3_takes_over():
+    assert 2 in _stages(evaluate(50, up=0.95, down=0.05))
+    assert 2 in _stages(evaluate(35, up=0.95, down=0.05))
+    # at 30s and below stage 2 is over, stage 3 is the one that buys
+    assert 2 not in _stages(evaluate(30, up=0.95, down=0.05))
+    assert 3 in _stages(evaluate(30, up=0.95, down=0.05))
+    assert 2 not in _stages(evaluate(10, up=0.95, down=0.05))
+    # 0 = no cutoff: stage 2 keeps buying until the end
+    assert 2 in _stages(evaluate(10, up=0.95, down=0.05, stage2_end_seconds=0))

@@ -31,15 +31,16 @@ def test_all_stages_are_on_by_default():
 
 @pytest.mark.parametrize("stage", ALL_STAGES)
 def test_switched_off_stage_produces_no_signal_and_the_others_still_do(stage):
-    on = evaluate(25, up=0.95, down=0.05)
+    # stage2_end_seconds=0: no stage 2 cutoff, so all three stages are active at 25s
+    on = evaluate(25, up=0.95, down=0.05, stage2_end_seconds=0)
     assert _stages(on) == {1, 2, 3}
-    off = evaluate(25, up=0.95, down=0.05, **{f"stage{stage}_enabled": False})
+    off = evaluate(25, up=0.95, down=0.05, stage2_end_seconds=0, **{f"stage{stage}_enabled": False})
     assert _stages(off) == {1, 2, 3} - {stage}
 
 
 @pytest.mark.parametrize("stage", ALL_STAGES)
 def test_risk_manager_rejects_a_switched_off_stage_even_if_a_signal_arrives(stage):
-    signal = next(s for s in evaluate(25, up=0.95, down=0.05).signals if s.stage == stage)
+    signal = next(s for s in evaluate(25, up=0.95, down=0.05, stage2_end_seconds=0).signals if s.stage == stage)
     ctx = make_ctx(remaining=25, btc_price=100_150.0, price_to_beat=100_000.0, stage1_bought=True)
     on = make_config(**{f"stage{stage}_enabled": True})
     off = make_config(**{f"stage{stage}_enabled": False})

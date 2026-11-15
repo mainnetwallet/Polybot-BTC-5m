@@ -1721,6 +1721,7 @@ class TradingBot:
                 "stage2_enabled": config.stage2_enabled,
                 "stage3_enabled": config.stage3_enabled,
                 "stage2_seconds": config.stage2_seconds,
+                "stage2_end_seconds": config.stage2_end_seconds,
                 "stage2_threshold": config.stage2_threshold,
                 "stage3_seconds": config.stage3_seconds,
                 "stage3_threshold": config.stage3_threshold,

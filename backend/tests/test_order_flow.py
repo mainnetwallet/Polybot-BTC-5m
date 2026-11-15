@@ -454,9 +454,9 @@ async def test_price_gap_blocks_order_until_btc_is_far_enough_from_price_to_beat
     assert len(_orders()) == 1
 
 
-async def test_chain_gap_met_in_last_30s_buys_stage2_and_stage3_independently():
-    # gap rule blocks until 25s left: stage 1 missed its 30s deadline, but stages 2 and 3 do not need
-    # stage 1 and each buys as soon as its own rules are met
+async def test_chain_gap_met_in_last_30s_buys_only_stage3():
+    # gap rule blocks until 25s left: stage 1 missed its 30s deadline and stage 2 ended at 30s, but
+    # stage 3 does not need stage 1 and buys as soon as its own rules are met
     stack = build_stack(
         make_config(min_price_gap_usd=20.0, stage2_min_price_gap_usd=25.0, stage3_min_price_gap_usd=30.0)
     )
@@ -468,9 +468,9 @@ async def test_chain_gap_met_in_last_30s_buys_stage2_and_stage3_independently():
     strong = make_ctx(remaining=25, btc_price=100_030.0, price_to_beat=100_000.0)
     _, results = await _submit(stack, market, books, ctx=strong)
     reasons = sorted(r.reason for r in results)
-    assert reasons == ["stage1_missed", "submitted", "submitted"]
+    assert reasons == ["stage1_missed", "submitted"]
     orders = _orders()
-    assert sorted(o.order_key.rsplit(":", 1)[-1] for o in orders) == ["s2", "s3"]
+    assert sorted(o.order_key.rsplit(":", 1)[-1] for o in orders) == ["s3"]
 
 
 async def test_chain_full_sequence_three_buys_in_one_market():
@@ -606,12 +606,12 @@ async def test_timeline_stage1_late_still_lets_stage2_and_stage3_buy():
     assert _keys() == ["s1", "s2", "s3"]
 
 
-async def test_timeline_gap_only_met_in_last_30s_gives_stage2_and_stage3():
+async def test_timeline_gap_only_met_in_last_30s_gives_only_stage3():
     config = _timeline_config()
     stack = build_stack(config)
     market = make_market(remaining=78)
     await _timeline(stack, market, config, [(0, 0.93, 3), (40, 0.93, 3), (54, 0.95, 30)])
-    assert _keys() == ["s2", "s3"]  # stage 1 missed its cutoff, stages 2 and 3 do not need it
+    assert _keys() == ["s3"]  # stage 1 missed its cutoff and stage 2 ended at 30s; stage 3 needs neither
 
 
 async def test_timeline_gap_never_met_gives_no_buy():
