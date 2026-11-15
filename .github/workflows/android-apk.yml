@@ -85,11 +85,29 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: >
-          ./gradlew --no-daemon --stacktrace
-          lintDebug testDebugUnitTest assembleDebug assembleRelease
-          -PversionCode=${{ github.run_number }}
-          -PversionName=${{ steps.ver.outputs.name }}
+        run: |
+          set -o pipefail
+          ./gradlew --no-daemon --stacktrace \
+            lintDebug testDebugUnitTest assembleDebug assembleRelease \
+            -PversionCode=${{ github.run_number }} \
+            -PversionName=${{ steps.ver.outputs.name }} 2>&1 | tee "$RUNNER_TEMP/gradle.log"
+
+      - name: Show build errors as annotations
+        if: failure()
+        run: |
+          LOG="$RUNNER_TEMP/gradle.log"
+          [ -f "$LOG" ] || exit 0
+          {
+            echo '### Gradle errors'
+            echo '```'
+            grep -E '^(e: |error: |FAILURE: |\* What went wrong|Execution failed|.*(Unresolved reference|Type mismatch).*)' -A3 "$LOG" | head -80
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          grep -E '^e: ' "$LOG" | head -9 | while IFS= read -r line; do
+            echo "::error title=Kotlin compile error::${line//$'\n'/ }"
+          done
+          grep -A4 -m1 'What went wrong' "$LOG" | tr '\n' ' ' | sed 's/^/::error title=Gradle::/'
+          echo
 
       - name: Collect APKs
         run: |
