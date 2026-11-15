@@ -142,6 +142,8 @@ data class SellableHolding(
     val side: String = "",
     val stage: Int = 0,
     val size: Double = 0.0,
+    /** Average price this stage paid per share (null when the server does not know it). */
+    @SerialName("entry_price") val entryPrice: Double? = null,
 )
 
 @Serializable

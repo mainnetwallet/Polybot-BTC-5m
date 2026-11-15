@@ -107,6 +107,8 @@ export interface SellableHolding {
   side: Side;
   stage: number;
   size: number;
+  /** average price this stage paid per share, when known */
+  entry_price?: number | null;
 }
 
 export interface OrderRow {

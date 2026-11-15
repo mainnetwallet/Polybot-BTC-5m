@@ -81,6 +81,8 @@ async def test_manual_sell_ignores_the_submission_gate_but_the_bot_must_be_runni
 
     snapshot = await bot.snapshot()
     assert [(h["side"], h["stage"]) for h in snapshot["sellable"]] == [("UP", 0)]
+    entry = snapshot["sellable"][0]["entry_price"]  # what stage 0 itself paid per share, for the live PnL
+    assert entry is not None and 0 < entry < 1
 
     bot._risk_halt_reason = "daily_loss_limit"  # a risk halt must not trap the operator in a position
     sold = await bot.manual_sell(market.market_id, "UP", 0)

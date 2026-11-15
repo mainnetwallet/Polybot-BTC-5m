@@ -1630,6 +1630,8 @@ class TradingBot:
                                     "side": p.side,
                                     "stage": stage,
                                     "size": _floor_shares(held.size),
+                                    # average price paid per share by this stage alone (None if unknown)
+                                    "entry_price": held.cost,
                                 }
                             )
             order_rows = [

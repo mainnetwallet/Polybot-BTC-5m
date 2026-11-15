@@ -652,9 +652,21 @@ private fun SellButton(label: String, enabled: Boolean, onClick: () -> Unit) {
     }
 }
 
+/** (bid - entry) x shares: what this stage would make or lose if it sold at the best bid right now. */
+internal fun stagePnl(entry: Double?, bid: Double?, size: Double): Double? =
+    if (entry == null || bid == null) null else (bid - entry) * size
+
+/** The same gain or loss as a percent of the entry price, e.g. "+8.4%". */
+internal fun stagePct(entry: Double?, bid: Double?): String? {
+    if (entry == null || bid == null || entry <= 0.0) return null
+    val pct = (bid - entry) / entry * 100.0
+    return (if (pct > 0) "+" else "") + Fmt.percent(pct)
+}
+
 /**
- * Position box: what is held in the live market, one block per side (shares, average price, best bid, PnL)
- * with one row per stage under it, each with its own Sell button, plus Sell all in the header.
+ * Position box: what is held in the live market, one block per side (shares and total PnL) with one card per
+ * stage under it: its shares, what it paid (Entry), the best Bid and its own live PnL (green gain, red loss),
+ * and its own Sell button. Sell all is in the header.
  * A tap sells at the market right away: there is no confirm dialog or sheet and no extra delay. `selling`
  * only disables a button while its own request is on the way, so a double tap cannot send it twice.
  */
@@ -700,6 +712,10 @@ fun PositionBoxCard(
         } else {
             open.forEach { p ->
                 val bid = (if (p.side.equals("UP", ignoreCase = true)) upBook else downBook)?.bestBid
+                val stages = sellableHere.filter { it.side.equals(p.side, ignoreCase = true) }
+                // Live PnL per stage: (best bid now - what this stage paid) x its shares. It follows every book update.
+                val stagePnl = stages.map { stagePnl(it.entryPrice, bid, it.size) }
+                val total = if (stages.isNotEmpty() && stagePnl.all { it != null }) stagePnl.sumOf { it ?: 0.0 } else p.unrealizedPnl
                 Row(
                     Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -712,31 +728,55 @@ fun PositionBoxCard(
                         color = scheme.onSurfaceVariant,
                         modifier = Modifier.weight(1f),
                     )
-                }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
-                    MiniStat("Avg", Fmt.cents(p.avgPrice), Modifier.weight(1f))
-                    MiniStat("Bid", Fmt.cents(bid), Modifier.weight(1f))
-                    MiniStat(
-                        "PnL",
-                        Fmt.signedUsd(p.unrealizedPnl),
-                        Modifier.weight(1f),
-                        valueColor = pnlColor(p.unrealizedPnl),
+                    Text(
+                        Fmt.signedUsd(total),
+                        style = Mono.body.copy(fontWeight = FontWeight.Medium),
+                        color = pnlColor(total),
                     )
                 }
-                sellableHere.filter { it.side.equals(p.side, ignoreCase = true) }.forEach { h ->
+                stages.forEachIndexed { i, h ->
                     val busy = sellKey(h) in selling
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(Space.sm),
+                    val pnl = stagePnl[i]
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(scheme.surfaceContainerHigh)
+                            .padding(Space.sm),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
-                        Text("Stage ${h.stage}", style = Mono.small, color = scheme.onSurfaceVariant)
-                        Text("${Fmt.num(h.size, 2)} sh", style = Mono.small, modifier = Modifier.weight(1f))
-                        SellButton(
-                            label = if (busy) "Selling\u2026" else "Sell",
-                            enabled = !busy,
-                            onClick = { onSell(h) },
-                        )
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(Space.sm),
+                        ) {
+                            Text("Stage ${h.stage}", style = Mono.small, color = scheme.onSurfaceVariant)
+                            Text("${Fmt.num(h.size, 2)} sh", style = Mono.small, modifier = Modifier.weight(1f))
+                            SellButton(
+                                label = if (busy) "Selling\u2026" else "Sell",
+                                enabled = !busy,
+                                onClick = { onSell(h) },
+                            )
+                        }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+                            MiniStat("Entry", Fmt.cents(h.entryPrice), Modifier.weight(1f))
+                            MiniStat("Bid", Fmt.cents(bid), Modifier.weight(1f))
+                            MiniStat(
+                                "PnL",
+                                Fmt.signedUsd(pnl),
+                                Modifier.weight(1f),
+                                valueColor = pnlColor(pnl),
+                                hint = stagePct(h.entryPrice, bid),
+                            )
+                        }
+                    }
+                }
+                if (stages.isEmpty()) {
+                    // held, but nothing sellable right now (a sell is in flight, kill switch, ...): show the whole position
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+                        MiniStat("Avg", Fmt.cents(p.avgPrice), Modifier.weight(1f))
+                        MiniStat("Bid", Fmt.cents(bid), Modifier.weight(1f))
+                        MiniStat("PnL", Fmt.signedUsd(p.unrealizedPnl), Modifier.weight(1f), valueColor = pnlColor(p.unrealizedPnl))
                     }
                 }
             }
