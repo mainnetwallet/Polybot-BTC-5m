@@ -54,6 +54,7 @@ import com.mainnetwallet.polybot.ui.LocalGraph
 import com.mainnetwallet.polybot.ui.connect.ConnectScreen
 import com.mainnetwallet.polybot.ui.analytics.AnalyticsScreen
 import com.mainnetwallet.polybot.ui.logs.LogsScreen
+import com.mainnetwallet.polybot.ui.overview.EngineControls
 import com.mainnetwallet.polybot.ui.overview.OverviewScreen
 import com.mainnetwallet.polybot.ui.settings.SettingsScreen
 import com.mainnetwallet.polybot.ui.strategy.StrategyScreen
@@ -88,13 +89,13 @@ fun MainScaffold(prefs: AppPrefs, snackbar: SnackbarHostState) {
         topBar = {
             PolyTopBar(
                 live = live,
-                showModeBadge = snapshot != null,
                 onTab = onTab || route == null,
                 onBack = if (!onTab && route != null) ({ nav.popBackStack() }) else null,
                 onSettings = { nav.navigate(ROUTE_SETTINGS) { launchSingleTop = true } },
                 title = {
                     when {
-                        onTab || route == null -> ConnectionPill(feed)
+                        // Start/Stop, PAPER | LIVE and kill switch replace the old feed/mode badges.
+                        onTab || route == null -> if (snapshot != null) EngineControls() else ConnectionPill(feed)
                         route == ROUTE_CONNECTION -> Text("Connection", style = MaterialTheme.typography.titleLarge)
                         else -> Text("Settings", style = MaterialTheme.typography.titleLarge)
                     }
@@ -160,7 +161,6 @@ fun MainScaffold(prefs: AppPrefs, snackbar: SnackbarHostState) {
 @Composable
 private fun PolyTopBar(
     live: Boolean,
-    showModeBadge: Boolean,
     onTab: Boolean,
     onBack: (() -> Unit)?,
     onSettings: () -> Unit,
@@ -185,7 +185,6 @@ private fun PolyTopBar(
                     Spacer(Modifier.width(Space.sm))
                 }
                 Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) { title() }
-                if (showModeBadge) ModeBadge(live)
                 if (onTab) {
                     IconButton(onClick = onSettings) {
                         Icon(Icons.Filled.Settings, contentDescription = "Settings")
