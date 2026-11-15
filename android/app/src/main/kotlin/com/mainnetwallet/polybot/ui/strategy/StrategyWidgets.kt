@@ -1,12 +1,7 @@
 package com.mainnetwallet.polybot.ui.strategy
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -42,13 +37,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.mainnetwallet.polybot.ui.Fmt
 import com.mainnetwallet.polybot.ui.components.Label
 import com.mainnetwallet.polybot.ui.components.Pill
 import com.mainnetwallet.polybot.ui.components.ProCard
-import com.mainnetwallet.polybot.ui.components.ProStat
 import com.mainnetwallet.polybot.ui.components.ToneChip
 import com.mainnetwallet.polybot.domain.Tone
 import com.mainnetwallet.polybot.ui.theme.Mono
@@ -56,24 +50,6 @@ import com.mainnetwallet.polybot.ui.theme.Poly
 import com.mainnetwallet.polybot.ui.theme.Space
 
 private const val HairlineAlpha = 0.55f
-
-/** A dot that breathes, used next to "armed" and "active" states so they read as live. */
-@Composable
-internal fun PulseDot(color: Color, modifier: Modifier = Modifier, size: Dp = 8.dp) {
-    val transition = rememberInfiniteTransition(label = "pulse")
-    val alpha by transition.animateFloat(
-        initialValue = 0.3f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(700), RepeatMode.Reverse),
-        label = "pulse-alpha",
-    )
-    Box(
-        modifier
-            .size(size)
-            .alpha(alpha)
-            .background(color, CircleShape),
-    )
-}
 
 /** One lane of [StageTimeline]: stage [label] with the part of the market (time left, from to) it trades in. */
 internal data class StageLane(
@@ -97,11 +73,11 @@ internal fun StageTimeline(duration: Double, remaining: Double?, lanes: List<Sta
     val disabledColor = scheme.outline.copy(alpha = 0.35f)
     val track = scheme.surfaceVariant
     val nowColor = scheme.onSurface
-    val labelWidth = 28.dp
+    val labelWidth = 24.dp
 
     fun at(timeLeft: Double): Float = ((duration - timeLeft) / duration).toFloat().coerceIn(0f, 1f)
 
-    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         lanes.forEach { lane ->
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
                 Text(
@@ -114,7 +90,7 @@ internal fun StageTimeline(duration: Double, remaining: Double?, lanes: List<Sta
                 Canvas(
                     Modifier
                         .weight(1f)
-                        .height(16.dp),
+                        .height(12.dp),
                 ) {
                     val h = size.height
                     val radius = CornerRadius(h / 2f, h / 2f)
@@ -156,7 +132,7 @@ internal fun StageTimeline(duration: Double, remaining: Double?, lanes: List<Sta
 internal fun TimelineLegend(modifier: Modifier = Modifier) {
     val c = Poly.colors
     val scheme = MaterialTheme.colorScheme
-    Row(modifier, horizontalArrangement = Arrangement.spacedBy(Space.lg), verticalAlignment = Alignment.CenterVertically) {
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(Space.md), verticalAlignment = Alignment.CenterVertically) {
         LegendItem(scheme.primary, "On")
         LegendItem(c.warn, "Trading now")
         LegendItem(scheme.outline.copy(alpha = 0.35f), "Off")
@@ -218,33 +194,40 @@ internal fun StageCard(spec: StageSpec, modifier: Modifier = Modifier) {
             .semantics { stateDescription = if (expanded) "Expanded" else "Collapsed" },
         accent = accent,
         onClick = { expanded = !expanded },
+        contentPadding = Space.md,
+        spacing = Space.sm,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.md)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
             Box(
                 Modifier
-                    .size(36.dp)
+                    .size(28.dp)
                     .background(badgeBg, CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
                     spec.index.toString(),
-                    style = Mono.medium,
+                    style = Mono.body.copy(fontWeight = FontWeight.SemiBold),
                     color = badgeFg,
                 )
             }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(spec.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                Text(
+                    spec.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
                 Text(
                     spec.window,
                     style = Mono.small,
                     color = scheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
             when {
-                spec.active -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    PulseDot(c.warn)
-                    Pill("ACTIVE", c.warn, c.warnContainer)
-                }
+                spec.active -> Pill("ACTIVE", c.warn, c.warnContainer)
                 spec.enabled -> ToneChip("ON", Tone.Up)
                 else -> ToneChip("OFF", Tone.Neutral)
             }
@@ -252,12 +235,14 @@ internal fun StageCard(spec: StageSpec, modifier: Modifier = Modifier) {
                 Icons.Filled.ExpandMore,
                 contentDescription = null,
                 tint = scheme.onSurfaceVariant,
-                modifier = Modifier.rotate(chevron),
+                modifier = Modifier
+                    .size(20.dp)
+                    .rotate(chevron),
             )
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.md)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
             spec.highlights.forEach { (key, value) ->
-                ProStat(key, value, Modifier.weight(1f))
+                CompactStat(key, value, Modifier.weight(1f))
             }
         }
         AnimatedVisibility(visible = expanded) {
@@ -267,6 +252,26 @@ internal fun StageCard(spec: StageSpec, modifier: Modifier = Modifier) {
                 ParameterGroup("Exit", spec.exit)
             }
         }
+    }
+}
+
+/** Small label over a one-line mono value; sized so three fit side by side on a 360dp phone. */
+@Composable
+internal fun CompactStat(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(1.dp)) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            value,
+            style = Mono.small.copy(fontWeight = FontWeight.Medium),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -284,13 +289,13 @@ private fun ParameterRow(key: String, value: String) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(Space.md)) {
         Text(
             key,
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(1f),
         )
         Text(
             value,
-            style = Mono.body,
+            style = Mono.small,
             modifier = Modifier.weight(1f),
             textAlign = androidx.compose.ui.text.style.TextAlign.End,
         )

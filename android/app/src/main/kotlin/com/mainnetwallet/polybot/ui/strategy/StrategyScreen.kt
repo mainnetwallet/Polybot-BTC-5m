@@ -2,6 +2,7 @@ package com.mainnetwallet.polybot.ui.strategy
 
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -42,7 +43,6 @@ import com.mainnetwallet.polybot.ui.components.KeyValueRow
 import com.mainnetwallet.polybot.ui.components.PolyCard
 import com.mainnetwallet.polybot.ui.components.ProCard
 import com.mainnetwallet.polybot.ui.components.ProSectionHeader
-import com.mainnetwallet.polybot.ui.components.ProStat
 import com.mainnetwallet.polybot.ui.components.SidePill
 import com.mainnetwallet.polybot.ui.components.SkeletonCard
 import com.mainnetwallet.polybot.ui.components.ToneChip
@@ -116,8 +116,8 @@ fun StrategyScreen(modifier: Modifier = Modifier) {
             val shown = state.triggers.filter { filter.matches(it) }
             LazyColumn(
                 Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(Space.lg),
-                verticalArrangement = Arrangement.spacedBy(Space.md),
+                contentPadding = PaddingValues(Space.md),
+                verticalArrangement = Arrangement.spacedBy(Space.sm),
             ) {
                 item(key = "timeline") { TimelineCard(snap, remaining) }
                 item(key = "stages-header") {
@@ -289,7 +289,7 @@ private fun stageSpecs(snap: Snapshot, remaining: Double?): List<StageSpec> {
 private fun TimelineCard(snap: Snapshot, remaining: Double?) {
     val s = snap.strategy
     val duration = snap.market?.durationSeconds
-    ProCard {
+    ProCard(contentPadding = Space.md, spacing = Space.sm) {
         ProSectionHeader("Stage timeline", subtitle = "When each stage is allowed to trade in this market")
         if (duration == null || duration <= 0.0) {
             Text(
@@ -321,7 +321,7 @@ private fun TimelineCard(snap: Snapshot, remaining: Double?) {
 
 @Composable
 private fun RulesCard(s: StrategyState) {
-    ProCard {
+    ProCard(contentPadding = Space.md, spacing = Space.sm) {
         ProSectionHeader("Rules", subtitle = "What the engine does when signals collide")
         if (s.conflictPolicy.isNotBlank()) KeyValueRow("Conflict policy", s.conflictPolicy.replace('_', ' '))
         if (s.duplicatePolicy.isNotBlank()) KeyValueRow("Duplicate policy", s.duplicatePolicy.replace('_', ' '))
@@ -367,19 +367,20 @@ private fun TriggerCard(t: TriggerRow) {
         Tone.Down -> c.down
         else -> null
     }
-    ProCard(accent = accent) {
+    ProCard(accent = accent, contentPadding = Space.md, spacing = Space.sm) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
             SidePill(t.side)
-            ToneChip(t.decision.replace('_', ' ').ifBlank { "—" }, tone)
-            Row(Modifier.weight(1f), horizontalArrangement = Arrangement.End) {
-                Text(Fmt.time(t.createdAt), style = Mono.small, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            // The decision text can be long ("blocked max execution price"): it gets the leftover width and wraps.
+            Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                ToneChip(t.decision.replace('_', ' ').ifBlank { "—" }, tone)
             }
+            Text(Fmt.time(t.createdAt), style = Mono.small, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
-            ProStat("Ask", Fmt.centsShort(t.bestAsk), Modifier.weight(1f))
-            ProStat("Trigger", Fmt.centsShort(t.threshold), Modifier.weight(1f))
-            ProStat("Size", Fmt.num(t.askSize, 0), Modifier.weight(1f))
-            ProStat("Left", "T-" + Fmt.num(t.remainingSeconds, 1) + "s", Modifier.weight(1f))
+            CompactStat("Ask", Fmt.centsShort(t.bestAsk), Modifier.weight(1f))
+            CompactStat("Trigger", Fmt.centsShort(t.threshold), Modifier.weight(1f))
+            CompactStat("Size", Fmt.num(t.askSize, 0), Modifier.weight(1f))
+            CompactStat("Left", "T-" + Fmt.num(t.remainingSeconds, 1) + "s", Modifier.weight(1f))
         }
         if (t.reason.isNotBlank()) {
             Text(
