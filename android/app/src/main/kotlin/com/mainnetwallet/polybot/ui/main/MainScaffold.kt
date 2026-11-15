@@ -1,6 +1,12 @@
 package com.mainnetwallet.polybot.ui.main
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,7 +22,6 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -28,8 +33,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -70,7 +73,6 @@ enum class Dest(val route: String, val label: String, val icon: ImageVector) {
 const val ROUTE_SETTINGS = "settings"
 const val ROUTE_CONNECTION = "connection"
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScaffold(prefs: AppPrefs, snackbar: SnackbarHostState) {
     val graph = LocalGraph.current
@@ -81,47 +83,23 @@ fun MainScaffold(prefs: AppPrefs, snackbar: SnackbarHostState) {
     val feed by graph.repository.feedState.collectAsStateWithLifecycle()
     val live = snapshot?.bot?.isLive == true
     val onTab = Dest.entries.any { it.route == route }
-    val colors = Poly.colors
 
     Scaffold(
         topBar = {
-            Column {
-                TopAppBar(
-                    title = {
-                        when {
-                            onTab || route == null -> ConnectionPill(feed)
-                            route == ROUTE_CONNECTION -> Text("Connection")
-                            else -> Text("Settings")
-                        }
-                    },
-                    navigationIcon = {
-                        if (!onTab && route != null) {
-                            IconButton(onClick = { nav.popBackStack() }) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                            }
-                        }
-                    },
-                    actions = {
-                        if (snapshot != null) ModeBadge(live)
-                        if (onTab) {
-                            IconButton(onClick = { nav.navigate(ROUTE_SETTINGS) { launchSingleTop = true } }) {
-                                Icon(Icons.Filled.Settings, contentDescription = "Settings")
-                            }
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = if (live) colors.liveContainer else MaterialTheme.colorScheme.surface,
-                    ),
-                )
-                if (live) {
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .height(3.dp)
-                            .background(colors.live),
-                    ) {}
-                }
-            }
+            PolyTopBar(
+                live = live,
+                showModeBadge = snapshot != null,
+                onTab = onTab || route == null,
+                onBack = if (!onTab && route != null) ({ nav.popBackStack() }) else null,
+                onSettings = { nav.navigate(ROUTE_SETTINGS) { launchSingleTop = true } },
+                title = {
+                    when {
+                        onTab || route == null -> ConnectionPill(feed)
+                        route == ROUTE_CONNECTION -> Text("Connection", style = MaterialTheme.typography.titleLarge)
+                        else -> Text("Settings", style = MaterialTheme.typography.titleLarge)
+                    }
+                },
+            )
         },
         bottomBar = {
             NavigationBar {
@@ -171,6 +149,57 @@ fun MainScaffold(prefs: AppPrefs, snackbar: SnackbarHostState) {
                     )
                 }
             }
+        }
+    }
+}
+
+/**
+ * Compact top bar: one 52dp row below the status bar on the normal surface colour (no coloured fill).
+ * LIVE is shown by the solid red badge and a 3dp red line along the bottom edge; PAPER gets a hairline.
+ */
+@Composable
+private fun PolyTopBar(
+    live: Boolean,
+    showModeBadge: Boolean,
+    onTab: Boolean,
+    onBack: (() -> Unit)?,
+    onSettings: () -> Unit,
+    title: @Composable () -> Unit,
+) {
+    val colors = Poly.colors
+    Surface(color = MaterialTheme.colorScheme.surface) {
+        Column(Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .height(52.dp)
+                    .padding(horizontal = Space.sm),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (onBack != null) {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                } else {
+                    Spacer(Modifier.width(Space.sm))
+                }
+                Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) { title() }
+                if (showModeBadge) ModeBadge(live)
+                if (onTab) {
+                    IconButton(onClick = onSettings) {
+                        Icon(Icons.Filled.Settings, contentDescription = "Settings")
+                    }
+                } else {
+                    Spacer(Modifier.width(Space.md))
+                }
+            }
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(if (live) 3.dp else 1.dp)
+                    .background(if (live) colors.live else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+            )
         }
     }
 }
