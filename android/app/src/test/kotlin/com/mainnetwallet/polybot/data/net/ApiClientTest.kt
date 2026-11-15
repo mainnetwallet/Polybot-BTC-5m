@@ -74,6 +74,40 @@ class ApiClientTest {
         assertNull(calls[1].headers["X-API-Key"])
     }
 
+    @Test fun lastKnownUrlIsUsedWithoutReadingTheGist() = runTest {
+        endpoint.configure(PcTarget.Gist(GIST_ID), OLD)
+        route({ error("no gist") }) { ok() }
+        client.send("GET", "/api/state")
+        assertEquals(0, transport.gistCalls())
+        assertEquals("$OLD/api/state", transport.pcCalls().single().url)
+    }
+
+    @Test fun staleLastKnownUrlFallsBackToTheGist() = runTest {
+        endpoint.configure(PcTarget.Gist(GIST_ID), OLD)
+        route({ NEW }) { req ->
+            if (req.url.startsWith(OLD)) throw ConnectException("down") else ok()
+        }
+        client.send("GET", "/api/state")
+        assertEquals(1, transport.gistCalls())
+        assertEquals("$NEW/api/state", transport.pcCalls().last().url)
+    }
+
+    @Test fun lastKnownUrlIsIgnoredForDirectTargets() = runTest {
+        endpoint.configure(PcTarget.Direct("https://pc.example.com"), OLD)
+        route({ error("no gist") }) { ok() }
+        client.send("GET", "/api/state")
+        assertEquals("https://pc.example.com/api/state", transport.pcCalls().single().url)
+    }
+
+    @Test fun gistReadReportsTheUrlSoItCanBeRemembered() = runTest {
+        val seen = mutableListOf<String>()
+        val ep = Endpoint(transport, { now }) { seen += it }
+        ep.configure(PcTarget.Gist(GIST_ID))
+        route({ NEW }) { ok() }
+        ep.currentBase()
+        assertEquals(listOf(NEW), seen)
+    }
+
     @Test fun gistIsResolvedOnceAndCached() = runTest {
         useGist()
         route({ OLD }) { ok() }

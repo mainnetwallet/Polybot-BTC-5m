@@ -22,6 +22,10 @@ data class AppPrefs(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val haptics: Boolean = true,
     val confirmSells: Boolean = true,
+    /** The `gist:<id>` address [lastTunnelUrl] was read for; it is ignored when the saved address differs. */
+    val lastTunnelFor: String = "",
+    /** The tunnel URL the Gist gave last time, tried first on the next launch. */
+    val lastTunnelUrl: String = "",
 ) {
     val isConfigured: Boolean get() = pcUrl.isNotBlank() && token.isNotBlank()
 }
@@ -35,6 +39,8 @@ class PrefsStore(private val context: Context) {
         val theme = stringPreferencesKey("theme")
         val haptics = booleanPreferencesKey("haptics")
         val confirmSells = booleanPreferencesKey("confirm_sells")
+        val tunnelFor = stringPreferencesKey("tunnel_for")
+        val tunnelUrl = stringPreferencesKey("tunnel_url")
     }
 
     val prefs: Flow<AppPrefs> = context.polyDataStore.data
@@ -49,6 +55,8 @@ class PrefsStore(private val context: Context) {
                     ?: ThemeMode.SYSTEM,
                 haptics = p[Keys.haptics] ?: true,
                 confirmSells = p[Keys.confirmSells] ?: true,
+                lastTunnelFor = p[Keys.tunnelFor].orEmpty(),
+                lastTunnelUrl = p[Keys.tunnelUrl].orEmpty(),
             )
         }
 
@@ -58,6 +66,14 @@ class PrefsStore(private val context: Context) {
         context.polyDataStore.edit {
             it[Keys.pcUrl] = pcUrl.trim()
             it[Keys.tokenEnc] = encrypted
+        }
+    }
+
+    /** Remembers the tunnel URL read from the Gist for [pcUrl], so the next launch can skip the Gist. */
+    suspend fun saveTunnel(pcUrl: String, tunnelUrl: String) {
+        context.polyDataStore.edit {
+            if (it[Keys.tunnelFor] != pcUrl) it[Keys.tunnelFor] = pcUrl
+            if (it[Keys.tunnelUrl] != tunnelUrl) it[Keys.tunnelUrl] = tunnelUrl
         }
     }
 

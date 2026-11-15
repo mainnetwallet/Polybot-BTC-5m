@@ -20,6 +20,8 @@ sealed interface Reresolve {
 class Endpoint(
     private val transport: HttpTransport,
     private val nowMs: () -> Long = { System.currentTimeMillis() },
+    /** Called with the tunnel URL every time it is read from the Gist, so the app can remember it. */
+    private val onResolved: (String) -> Unit = {},
 ) {
     private val mutex = Mutex()
 
@@ -36,9 +38,13 @@ class Endpoint(
     /** The base URL currently in use for a Gist target (null before the first resolve). */
     val cachedBase: String? get() = cached
 
-    fun configure(newTarget: PcTarget?) {
+    /**
+     * [lastKnown] is the tunnel URL the Gist gave last time. For a Gist target it is used straight away, so the
+     * app does not wait for GitHub on every launch; if it is stale the first failed request reads the Gist.
+     */
+    fun configure(newTarget: PcTarget?, lastKnown: String? = null) {
         target = newTarget
-        cached = null
+        cached = lastKnown?.takeIf { newTarget is PcTarget.Gist && it.startsWith("https://") }
         lastResolveAt = NEVER
         backoffLevel = 0
     }
@@ -116,6 +122,7 @@ class Endpoint(
         return when (val parsed = parseGistUrl(response.body)) {
             is GistParse.Ok -> {
                 cached = parsed.baseUrl
+                onResolved(parsed.baseUrl)
                 parsed.baseUrl
             }
             is GistParse.Error -> throw ApiException(ApiException.Kind.Gist, parsed.message)

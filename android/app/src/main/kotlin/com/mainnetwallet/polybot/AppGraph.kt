@@ -53,7 +53,14 @@ class AppGraph(app: Application) {
         .build()
 
     val transport = OkHttpTransport(httpClient)
-    private val endpoint = Endpoint(transport)
+
+    @Volatile
+    private var pcUrl: String = ""
+
+    private val endpoint = Endpoint(transport, onResolved = { url ->
+        val forUrl = pcUrl
+        scope.launch { prefsStore.saveTunnel(forUrl, url) }
+    })
     val api = BotApi(ApiClient(transport, endpoint) { token })
     val connectionTester = ConnectionTester(transport)
 
@@ -101,8 +108,10 @@ class AppGraph(app: Application) {
 
     private fun applyConnection(p: AppPrefs) {
         token = p.token
+        pcUrl = p.pcUrl
         val parsed = UrlUtils.parseTarget(p.pcUrl)
-        endpoint.configure((parsed as? TargetParse.Ok)?.target)
+        val lastKnown = p.lastTunnelUrl.takeIf { p.lastTunnelFor == p.pcUrl }
+        endpoint.configure((parsed as? TargetParse.Ok)?.target, lastKnown)
         configured = p.isConfigured && parsed is TargetParse.Ok
         if (configured) {
             if (foreground) feed.restart()
