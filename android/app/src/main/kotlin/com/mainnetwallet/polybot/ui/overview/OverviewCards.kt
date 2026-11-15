@@ -162,7 +162,7 @@ fun HeroCard(
         if (market != null) {
             while (true) {
                 now = System.currentTimeMillis()
-                delay(200)
+                delay(100)
             }
         }
     }

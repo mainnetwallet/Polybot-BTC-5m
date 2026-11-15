@@ -119,7 +119,7 @@ class BotRepository(
 
     private fun applyTick(event: FeedEvent.TickEvent) {
         val tick = event.tick
-        if (tick.serverTimeMs > 0) _clockOffsetMs.value = tick.serverTimeMs.toLong() - nowMs()
+        if (tick.serverTimeMs > 0) noteServerTime(tick.serverTimeMs.toLong())
         val previous = _snapshot.value ?: return
         val merged = previous.mergeTick(tick)
         _snapshot.value = merged
@@ -129,7 +129,7 @@ class BotRepository(
     private fun applySnapshot(next: Snapshot, recordBtc: Boolean) {
         _snapshot.value = next
         lastStateMs = nowMs()
-        parseServerTime(next.serverTime)?.let { _clockOffsetMs.value = it - nowMs() }
+        parseServerTime(next.serverTime)?.let { noteServerTime(it) }
         recordBooks(next)
         if (recordBtc) recordBtcPrice(next)
         val sig = listOf(
@@ -201,6 +201,20 @@ class BotRepository(
         return next
     }
 
+    private val offsetSamples = ArrayDeque<Pair<Long, Long>>()
+
+    /**
+     * Every frame carries the server clock, but it arrives late: (server - phone) is the true offset minus the network
+     * delay of that frame, so it jumps around with every frame and made the countdown lag and stutter. A frame can only
+     * be late, never early, so the largest offset seen recently is the one from the fastest frame: the closest estimate.
+     */
+    private fun noteServerTime(serverMs: Long) {
+        val now = nowMs()
+        offsetSamples.addLast(now to (serverMs - now))
+        while (offsetSamples.isNotEmpty() && now - offsetSamples.first().first > OFFSET_WINDOW_MS) offsetSamples.removeFirst()
+        _clockOffsetMs.value = offsetSamples.maxOf { it.second }
+    }
+
     private fun parseServerTime(text: String): Long? = try {
         Instant.parse(text).toEpochMilli()
     } catch (_: Exception) {
@@ -235,6 +249,7 @@ class BotRepository(
 
     fun clearAll() {
         _snapshot.value = null
+        offsetSamples.clear()
         _history.value = PriceHistory()
         _logs.value = emptyList()
         historyMarket = null
@@ -313,6 +328,7 @@ class BotRepository(
         const val HISTORY_LIMIT = 180
         const val BTC_LIMIT = 240
         const val LOG_LIMIT = 400
+        private const val OFFSET_WINDOW_MS = 20_000L
         private const val STALE_CHECK_MS = 1_000L
         private const val STALE_STATE_MS = 2_500L
         private const val EVENT_REFRESH_GAP_MS = 400L
