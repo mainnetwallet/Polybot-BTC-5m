@@ -6,7 +6,14 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-val PolyTypography = Typography()
+private val Base = Typography()
+
+/** Material 3 defaults, but nothing smaller than 12sp (accessibility bar). */
+val PolyTypography = Typography(
+    labelMedium = Base.labelMedium.copy(fontSize = 12.sp),
+    labelSmall = Base.labelSmall.copy(fontSize = 12.sp),
+    bodySmall = Base.bodySmall.copy(fontSize = 12.sp),
+)
 
 /** Monospace + tabular digits: prices and PnL keep a fixed width while they tick. */
 object Mono {

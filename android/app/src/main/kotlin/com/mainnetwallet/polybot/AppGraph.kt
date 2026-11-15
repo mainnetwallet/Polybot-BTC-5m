@@ -57,7 +57,7 @@ class AppGraph(app: Application) {
     val api = BotApi(ApiClient(transport, endpoint) { token })
     val connectionTester = ConnectionTester(transport)
 
-    private val feed = LiveFeed(
+    private val feed: LiveFeed = LiveFeed(
         scope = scope,
         client = wsClient,
         endpoint = endpoint,
@@ -65,7 +65,7 @@ class AppGraph(app: Application) {
         onConnected = { repository.onFeedConnected() },
     )
 
-    val repository = BotRepository(scope, api, feed)
+    val repository: BotRepository = BotRepository(scope, api, feed)
 
     val prefs: StateFlow<AppPrefs?> = prefsStore.prefs.stateIn(scope, SharingStarted.Eagerly, null)
 
