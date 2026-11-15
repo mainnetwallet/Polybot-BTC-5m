@@ -116,12 +116,13 @@ private fun MiniStat(
     modifier: Modifier = Modifier,
     valueColor: Color = Color.Unspecified,
     hint: String? = null,
+    compact: Boolean = false,
 ) {
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(1.dp)) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(if (compact) 0.dp else 1.dp)) {
         Label(label)
         Text(
             value,
-            style = Mono.body.copy(fontWeight = FontWeight.Medium),
+            style = Mono.body.copy(fontWeight = FontWeight.Medium, fontSize = if (compact) 13.sp else 14.sp),
             color = valueColor,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -728,47 +729,41 @@ fun PositionBoxCard(
                 stages.forEachIndexed { i, h ->
                     val busy = sellKey(h) in selling
                     val pnl = stagePnl[i]
-                    // One compact row per stage: name + shares over entry -> bid, the stage PnL, and its Sell button.
-                    Row(
+                    // One card per stage: "Stage N", its shares and its Sell button on top, Entry / Bid / PnL under them.
+                    Column(
                         Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(8.dp))
                             .background(scheme.surfaceContainerHigh)
                             .padding(horizontal = Space.sm, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(Space.sm),
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
                     ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                "S${h.stage} \u00B7 ${Fmt.num(h.size, 2)} sh",
-                                style = Mono.small.copy(fontWeight = FontWeight.Medium),
-                                maxLines = 1,
-                            )
-                            Text(
-                                "${Fmt.cents(h.entryPrice)} \u2192 ${Fmt.cents(bid)}",
-                                style = Mono.small,
-                                color = scheme.onSurfaceVariant,
-                                maxLines = 1,
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(Space.sm),
+                        ) {
+                            Text("Stage ${h.stage}", style = Mono.small, color = scheme.onSurfaceVariant)
+                            Text("${Fmt.num(h.size, 2)} sh", style = Mono.small, modifier = Modifier.weight(1f))
+                            SellButton(
+                                label = if (busy) "\u2026" else "Sell",
+                                enabled = !busy,
+                                onClick = { onSell(h) },
+                                compact = true,
                             )
                         }
-                        Column(horizontalAlignment = Alignment.End) {
-                            Text(
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+                            MiniStat("Entry", Fmt.cents(h.entryPrice), Modifier.weight(1f), compact = true)
+                            MiniStat("Bid", Fmt.cents(bid), Modifier.weight(1f), compact = true)
+                            MiniStat(
+                                "PnL",
                                 Fmt.signedUsd(pnl),
-                                style = Mono.body.copy(fontWeight = FontWeight.Medium),
-                                color = pnlColor(pnl),
-                                maxLines = 1,
+                                Modifier.weight(1f),
+                                valueColor = pnlColor(pnl),
+                                hint = stagePct(h.entryPrice, bid),
+                                compact = true,
                             )
-                            val pct = stagePct(h.entryPrice, bid)
-                            if (pct != null) {
-                                Text(pct, style = Mono.small, color = scheme.onSurfaceVariant, maxLines = 1)
-                            }
                         }
-                        SellButton(
-                            label = if (busy) "\u2026" else "Sell",
-                            enabled = !busy,
-                            onClick = { onSell(h) },
-                            compact = true,
-                        )
                     }
                 }
                 if (stages.isEmpty()) {
