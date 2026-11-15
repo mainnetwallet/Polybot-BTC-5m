@@ -118,6 +118,21 @@ object UrlUtils {
         return isPrivateHost(host)
     }
 
+    /**
+     * The address the app is actually talking to, for showing it and opening it in a browser. A direct address is
+     * its own base URL. For `gist:<id>` it is the tunnel URL last read from the Gist ([lastTunnelUrl], valid only
+     * while [lastTunnelFor] is the saved address), or null before the first read.
+     */
+    fun serverUrl(pcUrl: String, lastTunnelFor: String, lastTunnelUrl: String): String? =
+        when (val target = (parseTarget(pcUrl) as? TargetParse.Ok)?.target) {
+            is PcTarget.Direct -> target.baseUrl
+            is PcTarget.Gist -> lastTunnelUrl.trim()
+                .takeIf { lastTunnelFor == pcUrl && it.startsWith("https://") }
+                ?.toHttpUrlOrNull()
+                ?.let(::baseOf)
+            null -> null
+        }
+
     /** https -> wss, http -> ws; the API token travels as `?token=` because browsers/OkHttp cannot set WS headers reliably. */
     fun wsUrl(baseUrl: String, token: String): String {
         val url = baseUrl.toHttpUrlOrNull() ?: error("Invalid base URL")

@@ -26,6 +26,31 @@ class UrlUtilsTest {
         assertEquals("https://pc.example.com:8443", direct("https://pc.example.com:8443/"))
     }
 
+    @Test fun serverUrlOfDirectAddressIsItsBase() {
+        assertEquals(
+            "https://abc.trycloudflare.com",
+            UrlUtils.serverUrl("https://abc.trycloudflare.com/api/state", "", ""),
+        )
+        assertEquals("http://192.168.1.20:8000", UrlUtils.serverUrl("192.168.1.20:8000", "", ""))
+    }
+
+    @Test fun serverUrlOfGistIsTheLastTunnelForThatGist() {
+        val pc = "gist:$id"
+        assertEquals(
+            "https://quiet-river.trycloudflare.com",
+            UrlUtils.serverUrl(pc, pc, " https://quiet-river.trycloudflare.com/ "),
+        )
+        // Not read yet, or read for another address, or not https: nothing to show.
+        assertEquals(null, UrlUtils.serverUrl(pc, "", ""))
+        assertEquals(null, UrlUtils.serverUrl(pc, "gist:${id.reversed()}", "https://old.trycloudflare.com"))
+        assertEquals(null, UrlUtils.serverUrl(pc, pc, "http://plain.example.com"))
+    }
+
+    @Test fun serverUrlOfInvalidAddressIsNull() {
+        assertEquals(null, UrlUtils.serverUrl("", "", ""))
+        assertEquals(null, UrlUtils.serverUrl("gist:zz", "", ""))
+    }
+
     @Test fun plainHostGetsHttpsWhenPublic() {
         assertEquals("https://pc.example.com", direct("pc.example.com"))
         assertEquals("https://pc.example.com:8443", direct("pc.example.com:8443"))

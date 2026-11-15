@@ -8,11 +8,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudOff
@@ -34,6 +36,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -46,6 +49,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -54,7 +58,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mainnetwallet.polybot.BuildConfig
+import com.mainnetwallet.polybot.data.ActionResult
 import com.mainnetwallet.polybot.data.net.FeedState
+import com.mainnetwallet.polybot.data.net.UrlUtils
 import com.mainnetwallet.polybot.data.store.ThemeMode
 import com.mainnetwallet.polybot.domain.SettingGroup
 import com.mainnetwallet.polybot.domain.SettingSection
@@ -100,15 +106,26 @@ fun SettingsHome(
     val feed by graph.repository.feedState.collectAsStateWithLifecycle()
     val live by graph.repository.snapshot.collectSelectedAsState { it?.bot?.isLive == true }
     var confirmLogout by remember { mutableStateOf(false) }
+    val uriHandler = LocalUriHandler.current
     val p = prefs ?: return
     val colors = Poly.colors
+    val serverUrl = UrlUtils.serverUrl(p.pcUrl, p.lastTunnelFor, p.lastTunnelUrl)
 
     PageFrame(vm, showSaveBar = true, modifier = modifier) { state ->
         ConnectionHero(
             pcUrl = p.pcUrl,
+            serverUrl = serverUrl,
             feed = feed,
             live = live,
             onEdit = onEditConnection,
+            onOpenServer = {
+                // Hands the URL to Android, which opens it in the phone's default browser app.
+                if (serverUrl != null) {
+                    runCatching { uriHandler.openUri(serverUrl) }.onFailure {
+                        ui.report(ActionResult(false, "No browser app found to open the link."))
+                    }
+                }
+            },
         )
 
         Column(verticalArrangement = Arrangement.spacedBy(Space.sm)) {
@@ -495,9 +512,19 @@ private fun SectionRow(section: SettingSection, state: SettingsViewModel.State, 
     )
 }
 
-/** Connection summary at the top of the hub: address, feed status, PAPER or LIVE, and the edit button. */
+/**
+ * Connection summary at the top of the hub: address, the server URL the app is using (the Cloudflare tunnel for a
+ * Gist address) with an Open button, feed status, PAPER or LIVE, and the edit button.
+ */
 @Composable
-private fun ConnectionHero(pcUrl: String, feed: FeedState, live: Boolean, onEdit: () -> Unit) {
+private fun ConnectionHero(
+    pcUrl: String,
+    serverUrl: String?,
+    feed: FeedState,
+    live: Boolean,
+    onEdit: () -> Unit,
+    onOpenServer: () -> Unit,
+) {
     val scheme = MaterialTheme.colorScheme
     val colors = Poly.colors
     val (statusLabel, statusColors) = when (feed) {
@@ -521,6 +548,23 @@ private fun ConnectionHero(pcUrl: String, feed: FeedState, live: Boolean, onEdit
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.md)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("Server URL", style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant)
+                Text(
+                    serverUrl ?: "Waiting for the tunnel URL",
+                    style = Mono.small,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            OutlinedButton(onClick = onOpenServer, enabled = serverUrl != null) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+                    Text("Open")
+                    Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
+                }
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
