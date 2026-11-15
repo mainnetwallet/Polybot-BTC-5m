@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 130" width="700" height="130" role="img" aria-label="Safe by default: paper trading first, live trading is gated">
-  <rect x="3" y="3" width="694" height="124" rx="22" fill="#ffffff" stroke="#2563eb" stroke-width="4"/>
-  <!-- shield -->
-  <path d="M75 28 L112 41 V70 C112 90 96 103 75 112 C54 103 38 90 38 70 V41 Z" fill="#2563eb"/>
-  <path d="M58 70 L70 82 L94 56" fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
-  <text x="145" y="52" font-family="Arial, Helvetica, sans-serif" font-size="22" fill="#4b5563" letter-spacing="1">SAFE BY DEFAULT</text>
-  <text x="145" y="93" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="30" fill="#1e3a8a">Paper trading first. Live is gated.</text>
-</svg>
