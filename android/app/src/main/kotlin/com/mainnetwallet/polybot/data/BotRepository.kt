@@ -43,6 +43,13 @@ class BotRepository(
     private val _logs = MutableStateFlow<List<LogRow>>(emptyList())
     val logs: StateFlow<List<LogRow>> = _logs
 
+    /**
+     * When the live window ends, on the phone's own clock. The countdown comes from the backend (`remaining_seconds`,
+     * measured against Polymarket's official time), not from comparing two clocks.
+     */
+    private val _marketEndLocalMs = MutableStateFlow<Long?>(null)
+    val marketEndLocalMs: StateFlow<Long?> = _marketEndLocalMs
+
     /** Bumps when orders, positions or the last order change, so lists can refetch right away. */
     private val _dataVersion = MutableStateFlow(0)
     val dataVersion: StateFlow<Int> = _dataVersion
@@ -123,12 +130,14 @@ class BotRepository(
         val previous = _snapshot.value ?: return
         val merged = previous.mergeTick(tick)
         _snapshot.value = merged
+        noteRemaining(merged.market?.marketId, tick.remainingSeconds)
         recordBooks(merged)
     }
 
     private fun applySnapshot(next: Snapshot, recordBtc: Boolean) {
         _snapshot.value = next
         lastStateMs = nowMs()
+        noteRemaining(next.market?.marketId, next.market?.remainingSeconds)
         parseServerTime(next.serverTime)?.let { noteServerTime(it) }
         recordBooks(next)
         if (recordBtc) recordBtcPrice(next)
@@ -201,6 +210,32 @@ class BotRepository(
         return next
     }
 
+    private val endSamples = ArrayDeque<Pair<Long, Long>>()
+    private var endMarketId: String? = null
+
+    /**
+     * The backend says "X seconds left"; that value is already old when it reaches the phone (network delay), so
+     * phone-now + X is the end time plus the delay. The delay is never negative, so the smallest end time seen in the
+     * last seconds (the fastest frame) is the closest one, and it does not jump with the network.
+     */
+    private fun noteRemaining(marketId: String?, remainingSeconds: Double?) {
+        if (marketId == null) {
+            endSamples.clear()
+            endMarketId = null
+            _marketEndLocalMs.value = null
+            return
+        }
+        if (remainingSeconds == null) return
+        val now = nowMs()
+        if (marketId != endMarketId) {
+            endSamples.clear()
+            endMarketId = marketId
+        }
+        endSamples.addLast(now to (now + (remainingSeconds * 1000.0).toLong()))
+        while (endSamples.isNotEmpty() && now - endSamples.first().first > OFFSET_WINDOW_MS) endSamples.removeFirst()
+        _marketEndLocalMs.value = endSamples.minOf { it.second }
+    }
+
     private val offsetSamples = ArrayDeque<Pair<Long, Long>>()
 
     /**
@@ -250,6 +285,9 @@ class BotRepository(
     fun clearAll() {
         _snapshot.value = null
         offsetSamples.clear()
+        endSamples.clear()
+        endMarketId = null
+        _marketEndLocalMs.value = null
         _history.value = PriceHistory()
         _logs.value = emptyList()
         historyMarket = null

@@ -34,7 +34,7 @@ fun OverviewScreen(modifier: Modifier = Modifier) {
     val ui = LocalUi.current
     val repo = graph.repository
     val snapshot by repo.snapshot.collectAsStateWithLifecycle()
-    val offsetMs by repo.clockOffsetMs.collectAsStateWithLifecycle()
+    val marketEndMs by repo.marketEndLocalMs.collectAsStateWithLifecycle()
     val history by repo.history.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
 
@@ -79,7 +79,7 @@ fun OverviewScreen(modifier: Modifier = Modifier) {
                 SkeletonCard(lines = 2)
             } else {
                 EngineNotices(snap.bot, snap.live)
-                HeroCard(snap.market, snap.btc, history.btc, snap.account, snap.strategy.inWindow, offsetMs)
+                HeroCard(snap.market, snap.btc, history.btc, snap.account, snap.strategy.inWindow, marketEndMs)
                 OddsCard(
                     up = snap.books.up,
                     down = snap.books.down,

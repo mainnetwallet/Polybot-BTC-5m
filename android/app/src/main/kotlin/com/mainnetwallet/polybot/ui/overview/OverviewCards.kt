@@ -150,7 +150,7 @@ fun HeroCard(
     btcHistory: List<Float>,
     account: AccountState,
     inWindow: Boolean,
-    offsetMs: Long,
+    endLocalMs: Long?,
     modifier: Modifier = Modifier,
 ) {
     val c = Poly.colors
@@ -166,9 +166,9 @@ fun HeroCard(
             }
         }
     }
+    // The countdown is the backend's remaining_seconds (Polymarket time), ticking smoothly on the phone between frames.
     val remaining: Double? = market?.let { m ->
-        val endMs = Fmt.parse(m.windowEnd)
-        if (endMs != null) (endMs - (now + offsetMs)) / 1000.0 else m.remainingSeconds
+        if (endLocalMs != null) (endLocalMs - now) / 1000.0 else m.remainingSeconds
     }
     val fraction: Float = if (market != null && remaining != null && market.durationSeconds > 0) {
         (remaining / market.durationSeconds).coerceIn(0.0, 1.0).toFloat()
