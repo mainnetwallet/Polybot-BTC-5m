@@ -6,7 +6,6 @@ import com.mainnetwallet.polybot.AppGraph
 import com.mainnetwallet.polybot.data.model.Analytics
 import com.mainnetwallet.polybot.data.model.Modes
 import com.mainnetwallet.polybot.data.net.ApiException
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -41,7 +40,6 @@ class AnalyticsViewModel(private val graph: AppGraph) : ViewModel() {
                     if (mode != null) {
                         _state.update { it.copy(mode = mode) }
                         load(mode)
-                        delay(1500)
                     }
                 }
         }

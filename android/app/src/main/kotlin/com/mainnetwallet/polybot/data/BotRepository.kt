@@ -65,9 +65,6 @@ class BotRepository(
     @Volatile
     private var lastStateMs = 0L
 
-    @Volatile
-    private var lastEventRefreshMs = 0L
-
     init {
         scope.launch {
             for (first in feed.events) {
@@ -114,9 +111,6 @@ class BotRepository(
             row.message.contains("sold", ignoreCase = true) || row.message.contains("STOP-LOSS", ignoreCase = true)
 
     private fun refreshSoon() {
-        val now = nowMs()
-        if (now - lastEventRefreshMs < EVENT_REFRESH_GAP_MS) return
-        lastEventRefreshMs = now
         scope.launch {
             delay(150) // let the server finish writing the fill, then read the new state
             refresh()
@@ -371,6 +365,5 @@ class BotRepository(
         private const val OFFSET_WINDOW_MS = 20_000L
         private const val STALE_CHECK_MS = 1_000L
         private const val STALE_STATE_MS = 2_500L
-        private const val EVENT_REFRESH_GAP_MS = 400L
     }
 }

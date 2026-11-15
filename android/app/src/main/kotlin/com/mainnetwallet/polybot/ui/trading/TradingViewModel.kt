@@ -12,7 +12,6 @@ import com.mainnetwallet.polybot.data.model.Snapshot
 import com.mainnetwallet.polybot.data.net.ApiException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -39,7 +38,7 @@ data class TradingSlice(
 
 private fun Snapshot.toTradingSlice() = TradingSlice(bot, account, positions, openOrders, sellable)
 
-/** Order history of the active mode. Refetches (at most about once a second) when orders or positions change. */
+/** Order history of the active mode. Refetches as soon as orders or positions change. */
 class TradingViewModel(private val graph: AppGraph) : ViewModel() {
     data class State(
         val loading: Boolean = true,
@@ -67,10 +66,7 @@ class TradingViewModel(private val graph: AppGraph) : ViewModel() {
             ) { mode, _ -> mode }
                 .conflate()
                 .collect { mode ->
-                    if (mode != null) {
-                        load(mode)
-                        delay(800)
-                    }
+                    if (mode != null) load(mode)
                 }
         }
     }

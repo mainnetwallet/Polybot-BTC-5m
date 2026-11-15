@@ -5,7 +5,6 @@ import androidx.lifecycle.viewModelScope
 import com.mainnetwallet.polybot.AppGraph
 import com.mainnetwallet.polybot.data.model.TriggerRow
 import com.mainnetwallet.polybot.data.net.ApiException
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -27,10 +26,7 @@ class StrategyViewModel(private val graph: AppGraph) : ViewModel() {
 
     init {
         viewModelScope.launch {
-            graph.repository.dataVersion.collect {
-                load()
-                delay(1000)
-            }
+            graph.repository.dataVersion.collect { load() }
         }
     }
 
