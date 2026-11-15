@@ -121,3 +121,82 @@ fun CountdownRing(
         }
     }
 }
+
+/** Ring that fills clockwise from the top up to [fraction] (0..1). [content] is centred inside it. */
+@Composable
+fun RingGauge(
+    fraction: Float,
+    color: Color,
+    modifier: Modifier = Modifier,
+    ringSize: Dp = 112.dp,
+    strokeWidth: Dp = 12.dp,
+    description: String = "Gauge",
+    content: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit = {},
+) {
+    val target = if (fraction.isNaN()) 0f else fraction.coerceIn(0f, 1f)
+    val animated by animateFloatAsState(target, tween(400), label = "gauge")
+    val track = MaterialTheme.colorScheme.surfaceVariant
+    Box(
+        modifier
+            .size(ringSize)
+            .semantics { contentDescription = description },
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(Modifier.size(ringSize)) {
+            val stroke = strokeWidth.toPx()
+            val inset = stroke / 2
+            val arcSize = Size(size.width - stroke, size.height - stroke)
+            drawArc(track, 0f, 360f, false, Offset(inset, inset), arcSize, style = Stroke(stroke))
+            if (animated > 0f) {
+                drawArc(
+                    color,
+                    -90f,
+                    360f * animated,
+                    false,
+                    Offset(inset, inset),
+                    arcSize,
+                    style = Stroke(stroke, cap = StrokeCap.Round),
+                )
+            }
+        }
+        content()
+    }
+}
+
+/**
+ * Horizontal bar around a centre line: a positive [value] grows to the right in [positive], a negative one to the
+ * left in [negative]. [maxAbs] is the value that fills one half, so several bars can share one scale.
+ */
+@Composable
+fun DivergingBar(
+    value: Double,
+    maxAbs: Double,
+    positive: Color,
+    negative: Color,
+    modifier: Modifier = Modifier,
+    height: Dp = 10.dp,
+) {
+    val track = MaterialTheme.colorScheme.surfaceVariant
+    val centre = MaterialTheme.colorScheme.outline
+    Canvas(
+        modifier
+            .fillMaxWidth()
+            .height(height),
+    ) {
+        val round = androidx.compose.ui.geometry.CornerRadius(size.height / 2f, size.height / 2f)
+        drawRoundRect(color = track, size = size, cornerRadius = round)
+        val half = size.width / 2f
+        if (maxAbs > 0.0 && value != 0.0 && !value.isNaN()) {
+            val share = (kotlin.math.abs(value) / maxAbs).coerceIn(0.0, 1.0).toFloat()
+            val w = maxOf(half * share, 3.dp.toPx())
+            drawRoundRect(
+                color = if (value > 0) positive else negative,
+                topLeft = Offset(if (value > 0) half else half - w, 0f),
+                size = Size(w, size.height),
+                cornerRadius = round,
+            )
+        }
+        val line = 1.5.dp.toPx()
+        drawRect(color = centre, topLeft = Offset(half - line / 2f, 0f), size = Size(line, size.height))
+    }
+}
