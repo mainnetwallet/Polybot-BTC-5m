@@ -1,8 +1,10 @@
 package com.mainnetwallet.polybot.ui.trading
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,17 +15,26 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.ReceiptLong
-import androidx.compose.material.icons.filled.ShowChart
+import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.SwapVert
+import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -33,15 +44,21 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mainnetwallet.polybot.data.ActionResult
 import com.mainnetwallet.polybot.data.model.OrderRow
 import com.mainnetwallet.polybot.data.model.PositionRow
 import com.mainnetwallet.polybot.data.model.SellableHolding
+import com.mainnetwallet.polybot.data.model.Snapshot
 import com.mainnetwallet.polybot.domain.Tone
 import com.mainnetwallet.polybot.domain.orderKind
 import com.mainnetwallet.polybot.domain.resultLabel
@@ -50,13 +67,17 @@ import com.mainnetwallet.polybot.ui.Fmt
 import com.mainnetwallet.polybot.ui.LocalGraph
 import com.mainnetwallet.polybot.ui.LocalUi
 import com.mainnetwallet.polybot.ui.components.EmptyState
+import com.mainnetwallet.polybot.ui.components.IconBadge
 import com.mainnetwallet.polybot.ui.components.KeyValueRow
 import com.mainnetwallet.polybot.ui.components.Label
-import com.mainnetwallet.polybot.ui.components.PolyCard
-import com.mainnetwallet.polybot.ui.components.SectionTitle
+import com.mainnetwallet.polybot.ui.components.PnlBadge
+import com.mainnetwallet.polybot.ui.components.ProCard
+import com.mainnetwallet.polybot.ui.components.ProHero
+import com.mainnetwallet.polybot.ui.components.ProSectionHeader
+import com.mainnetwallet.polybot.ui.components.ProStat
+import com.mainnetwallet.polybot.ui.components.SegmentedTabs
 import com.mainnetwallet.polybot.ui.components.SidePill
 import com.mainnetwallet.polybot.ui.components.SkeletonCard
-import com.mainnetwallet.polybot.ui.components.StatTile
 import com.mainnetwallet.polybot.ui.components.ToneChip
 import com.mainnetwallet.polybot.ui.components.pnlColor
 import com.mainnetwallet.polybot.ui.graphViewModel
@@ -89,6 +110,9 @@ fun TradingScreen(modifier: Modifier = Modifier) {
     var target by remember { mutableStateOf<SellTarget?>(null) }
     var detail by remember { mutableStateOf<OrderRow?>(null) }
     var confirmClear by remember { mutableStateOf(false) }
+    var tab by rememberSaveable { mutableStateOf(0) }
+    var filter by rememberSaveable { mutableStateOf(0) }
+    val historyFilter = HistoryFilter.entries.getOrElse(filter) { HistoryFilter.All }
 
     val snap = snapshot
     val live = snap?.bot?.isLive == true
@@ -132,83 +156,131 @@ fun TradingScreen(modifier: Modifier = Modifier) {
                 SkeletonCard(lines = 4)
             }
         } else {
+            val shownOrders = state.orders.filter { historyFilter.matches(it) }
             LazyColumn(
                 Modifier.fillMaxSize(),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(Space.lg),
+                contentPadding = PaddingValues(Space.lg),
                 verticalArrangement = Arrangement.spacedBy(Space.md),
             ) {
-                item {
-                    PolyCard {
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.lg)) {
-                            StatTile("Balance", Fmt.usdGrouped(snap.account.balance), Modifier.weight(1f))
-                            StatTile("Daily PnL", Fmt.signedUsd(snap.account.dailyPnl), Modifier.weight(1f), valueColor = pnlColor(snap.account.dailyPnl))
-                            StatTile("Open orders", snap.openOrders.size.toString(), Modifier.weight(1f))
-                        }
-                    }
-                }
+                item { AccountHero(snap, live) }
 
-                item { SectionTitle("Sell now") }
                 item {
-                    SellableCard(
-                        holdings = snap.sellable,
-                        busy = busy,
-                        live = live,
-                        onSellStage = { h -> request(SellTarget.Stage(h.marketId, h.side, h.stage, h.size)) },
-                        onSellAll = { marketId, stages -> request(SellTarget.All(marketId, stages)) },
+                    SegmentedTabs(
+                        labels = TabLabels,
+                        selected = tab,
+                        onSelect = { tab = it },
+                        counts = listOf(snap.positions.size, snap.openOrders.size, 0),
                     )
                 }
 
-                item { SectionTitle("Open positions") }
-                if (snap.positions.isEmpty()) {
-                    item {
-                        PolyCard {
-                            EmptyState(
-                                "No open positions",
-                                "Filled buys show up here until the market settles.",
-                                icon = Icons.Filled.Inventory2,
+                when (tab) {
+                    // ---- positions + instant sell -------------------------------------------------------------
+                    0 -> {
+                        if (snap.sellable.isNotEmpty()) {
+                            item { ProSectionHeader("Quick sell", subtitle = "Sell shares at the market, per stage") }
+                            item {
+                                QuickSell(
+                                    holdings = snap.sellable,
+                                    busy = busy,
+                                    live = live,
+                                    onSellStage = { h -> request(SellTarget.Stage(h.marketId, h.side, h.stage, h.size)) },
+                                    onSellAll = { marketId, stages -> request(SellTarget.All(marketId, stages)) },
+                                )
+                            }
+                        }
+                        item { ProSectionHeader("Open positions", subtitle = "Held until the market settles") }
+                        if (snap.positions.isEmpty()) {
+                            item {
+                                ProCard {
+                                    EmptyState(
+                                        "No open positions",
+                                        "Filled buys show up here until the market settles.",
+                                        icon = Icons.Filled.Inventory2,
+                                    )
+                                }
+                            }
+                        } else {
+                            items(snap.positions, key = { "pos-${it.id}" }) { PositionCard(it) }
+                        }
+                    }
+
+                    // ---- orders that are still working --------------------------------------------------------
+                    1 -> {
+                        item { ProSectionHeader("Open orders", subtitle = "Waiting on the exchange") }
+                        if (snap.openOrders.isEmpty()) {
+                            item {
+                                ProCard {
+                                    EmptyState(
+                                        "No open orders",
+                                        "Orders that are still working appear here.",
+                                        icon = Icons.Filled.ReceiptLong,
+                                    )
+                                }
+                            }
+                        } else {
+                            items(snap.openOrders, key = { "open-${it.id}" }) { order ->
+                                OrderRowItem(order, onClick = { detail = order })
+                            }
+                        }
+                    }
+
+                    // ---- history ------------------------------------------------------------------------------
+                    else -> {
+                        item {
+                            ProSectionHeader(
+                                "Order history",
+                                subtitle = "Latest ${state.orders.size} orders",
+                                trailing = {
+                                    TextButton(
+                                        onClick = { confirmClear = true },
+                                        enabled = state.orders.isNotEmpty() && !busy,
+                                    ) {
+                                        Icon(Icons.Filled.DeleteSweep, contentDescription = null, modifier = Modifier.padding(end = 4.dp))
+                                        Text("Clear")
+                                    }
+                                },
                             )
                         }
-                    }
-                } else {
-                    items(snap.positions, key = { "pos-${it.id}" }) { PositionCard(it) }
-                }
-
-                if (snap.openOrders.isNotEmpty()) {
-                    item { SectionTitle("Open orders") }
-                    items(snap.openOrders, key = { "open-${it.id}" }) { order ->
-                        OrderCard(order, onClick = { detail = order })
-                    }
-                }
-
-                item {
-                    SectionTitle("Order history") {
-                        TextButton(
-                            onClick = { confirmClear = true },
-                            enabled = state.orders.isNotEmpty() && !busy,
-                        ) {
-                            Icon(Icons.Filled.DeleteSweep, contentDescription = null, modifier = Modifier.padding(end = 4.dp))
-                            Text("Clear")
+                        item {
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+                                HistoryFilter.entries.forEachIndexed { index, f ->
+                                    FilterChip(
+                                        selected = index == filter,
+                                        onClick = { filter = index },
+                                        label = { Text(f.label, maxLines = 1) },
+                                    )
+                                }
+                            }
                         }
-                    }
-                }
-                when {
-                    state.loading -> item { SkeletonCard(lines = 3) }
-                    state.error != null && state.orders.isEmpty() -> item {
-                        PolyCard {
-                            EmptyState("Could not load the history", state.error, icon = Icons.Filled.ReceiptLong)
+                        when {
+                            state.loading -> item { SkeletonCard(lines = 3) }
+                            state.error != null && state.orders.isEmpty() -> item {
+                                ProCard {
+                                    EmptyState("Could not load the history", state.error, icon = Icons.Filled.ReceiptLong)
+                                }
+                            }
+                            state.orders.isEmpty() -> item {
+                                ProCard {
+                                    EmptyState(
+                                        "No orders yet",
+                                        "Orders appear here as soon as the engine places one.",
+                                        icon = Icons.Filled.ReceiptLong,
+                                    )
+                                }
+                            }
+                            shownOrders.isEmpty() -> item {
+                                ProCard {
+                                    EmptyState(
+                                        "No matching orders",
+                                        "Try another filter.",
+                                        icon = Icons.Filled.ReceiptLong,
+                                    )
+                                }
+                            }
+                            else -> items(shownOrders, key = { "hist-${it.id}" }) { order ->
+                                OrderRowItem(order, onClick = { detail = order })
+                            }
                         }
-                    }
-                    state.orders.isEmpty() -> item {
-                        PolyCard {
-                            EmptyState(
-                                "No orders yet",
-                                "Orders appear here as soon as the engine places one.",
-                                icon = Icons.Filled.ReceiptLong,
-                            )
-                        }
-                    }
-                    else -> items(state.orders, key = { "hist-${it.id}" }) { order ->
-                        OrderCard(order, onClick = { detail = order })
                     }
                 }
             }
@@ -270,8 +342,57 @@ fun TradingScreen(modifier: Modifier = Modifier) {
     detail?.let { order -> OrderDetailSheet(order, onDismiss = { detail = null }) }
 }
 
+private val TabLabels = listOf("Positions", "Open orders", "History")
+
+private enum class HistoryFilter(val label: String) {
+    All("All"),
+    Buys("Buys"),
+    Sells("Sells"),
+    Issues("Issues");
+
+    fun matches(o: OrderRow): Boolean = when (this) {
+        All -> true
+        Buys -> o.action == "BUY"
+        Sells -> o.action == "SELL"
+        Issues -> !o.error.isNullOrBlank() || statusTone(o.status) == Tone.Down
+    }
+}
+
+// ---- account hero -----------------------------------------------------------------------------------------------
+
 @Composable
-private fun SellableCard(
+private fun AccountHero(snap: Snapshot, live: Boolean) {
+    val account = snap.account
+    val base = account.balance - account.dailyPnl
+    val dailyPct: Double? = if (base > 0.0) account.dailyPnl / base * 100.0 else null
+    val dailyText = if (dailyPct != null) {
+        Fmt.signedUsd(account.dailyPnl) + "  " + Fmt.signedPercent(dailyPct)
+    } else {
+        Fmt.signedUsd(account.dailyPnl)
+    }
+    ProHero {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Label("Balance", Modifier.weight(1f))
+            ToneChip(snap.bot.mode.uppercase(), if (live) Tone.Down else Tone.Info)
+        }
+        Text(Fmt.usdGrouped(account.balance), style = Mono.xlarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+            PnlBadge(text = dailyText, value = account.dailyPnl)
+            Text("today", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.lg)) {
+            ProStat("Unrealized", Fmt.signedUsd(account.unrealizedPnl), Modifier.weight(1f), pnlColor(account.unrealizedPnl))
+            ProStat("Realized", Fmt.signedUsd(account.realizedPnl), Modifier.weight(1f), pnlColor(account.realizedPnl))
+            ProStat("Trades", account.tradesToday.toString(), Modifier.weight(1f))
+        }
+    }
+}
+
+// ---- quick sell -------------------------------------------------------------------------------------------------
+
+@Composable
+private fun QuickSell(
     holdings: List<SellableHolding>,
     busy: Boolean,
     live: Boolean,
@@ -279,22 +400,30 @@ private fun SellableCard(
     onSellAll: (String, Int) -> Unit,
 ) {
     val c = Poly.colors
-    PolyCard(borderColor = if (live && holdings.isNotEmpty()) c.live else null) {
-        if (holdings.isEmpty()) {
-            EmptyState(
-                "Nothing to sell",
-                "Shares that can be sold at the market appear here, per stage.",
-                icon = Icons.Filled.ShowChart,
-            )
-        } else {
-            holdings.groupBy { it.marketId }.forEach { (marketId, group) ->
-                Label("Market ${Fmt.shortId(marketId)}")
-                group.forEach { h ->
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.md)) {
+    Column(verticalArrangement = Arrangement.spacedBy(Space.md)) {
+        holdings.groupBy { it.marketId }.forEach { (marketId, group) ->
+            ProCard(accent = if (live) c.live else null) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Label("Market ${Fmt.shortId(marketId)}", Modifier.weight(1f))
+                    if (live) ToneChip("LIVE", Tone.Down)
+                }
+                group.forEachIndexed { index, h ->
+                    if (index > 0) {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    }
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(Space.md),
+                    ) {
                         SidePill(h.side)
                         Column(Modifier.weight(1f)) {
-                            Text("Stage ${h.stage}", style = MaterialTheme.typography.titleSmall)
-                            Text("${Fmt.num(h.size, 2)} shares", style = Mono.small, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("Stage ${h.stage}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                "${Fmt.num(h.size, 2)} sh  ·  entry ${Fmt.cents(h.entryPrice)}",
+                                style = Mono.small,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
                         OutlinedButton(onClick = { onSellStage(h) }, enabled = !busy) { Text("Sell now") }
                     }
@@ -313,10 +442,19 @@ private fun SellableCard(
     }
 }
 
+// ---- positions --------------------------------------------------------------------------------------------------
+
 @Composable
 private fun PositionCard(p: PositionRow) {
-    PolyCard {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+    val c = Poly.colors
+    val isUp = p.side.equals("up", ignoreCase = true)
+    val roi: Double? = if (p.costBasis > 0.0) p.unrealizedPnl / p.costBasis * 100.0 else null
+    ProCard(accent = if (isUp) c.up else c.down) {
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Space.sm),
+        ) {
             SidePill(p.side)
             ToneChip(
                 if (p.awaitingSettlement) "SETTLING" else p.status.uppercase().replace('_', ' '),
@@ -326,55 +464,132 @@ private fun PositionCard(p: PositionRow) {
                 Text(Fmt.shortId(p.marketId), style = Mono.small, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Label("Unrealized PnL")
+                Text(
+                    Fmt.signedUsd(p.unrealizedPnl),
+                    style = Mono.large,
+                    color = pnlColor(p.unrealizedPnl),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            PnlBadge(text = Fmt.signedPercent(roi), value = roi)
+        }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.lg)) {
-            StatTile("Size", Fmt.num(p.size, 2), Modifier.weight(1f))
-            StatTile("Avg price", Fmt.cents(p.avgPrice), Modifier.weight(1f))
-            StatTile("Cost", Fmt.usd(p.costBasis), Modifier.weight(1f))
+            ProStat("Size", Fmt.num(p.size, 2), Modifier.weight(1f))
+            ProStat("Avg price", Fmt.cents(p.avgPrice), Modifier.weight(1f))
+            ProStat("Cost", Fmt.usd(p.costBasis), Modifier.weight(1f))
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.lg)) {
-            StatTile("Unrealized", Fmt.signedUsd(p.unrealizedPnl), Modifier.weight(1f), valueColor = pnlColor(p.unrealizedPnl))
-            StatTile("Realized", Fmt.signedUsd(p.realizedPnl), Modifier.weight(1f), valueColor = pnlColor(p.realizedPnl))
-            StatTile("Fees", Fmt.usd(p.fees, 3), Modifier.weight(1f))
+            ProStat("Realized", Fmt.signedUsd(p.realizedPnl), Modifier.weight(1f), pnlColor(p.realizedPnl))
+            ProStat("Fees", Fmt.usd(p.fees, 3), Modifier.weight(1f))
+            ProStat("Payout if win", Fmt.usd(p.size), Modifier.weight(1f))
         }
         if (!p.resolution.isNullOrBlank()) {
-            Text("Resolved: ${p.resolution}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                "Resolved: ${p.resolution}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
 
+// ---- orders -----------------------------------------------------------------------------------------------------
+
+private class OrderLook(val icon: ImageVector, val fg: Color, val bg: Color)
+
 @Composable
-private fun OrderCard(order: OrderRow, onClick: () -> Unit) {
+private fun orderLook(kind: String?): OrderLook {
+    val c = Poly.colors
+    val s = MaterialTheme.colorScheme
+    return when (kind) {
+        "BUY" -> OrderLook(Icons.Filled.Add, s.onPrimaryContainer, s.primaryContainer)
+        "TAKE PROFIT" -> OrderLook(Icons.Filled.ArrowUpward, c.up, c.upContainer)
+        "STOP LOSS" -> OrderLook(Icons.Filled.ArrowDownward, c.down, c.downContainer)
+        "MANUAL SELL" -> OrderLook(Icons.Filled.TouchApp, c.warn, c.warnContainer)
+        "SELL" -> OrderLook(Icons.Filled.Remove, s.onSurfaceVariant, s.surfaceVariant)
+        else -> OrderLook(Icons.Filled.SwapVert, s.onSurfaceVariant, s.surfaceVariant)
+    }
+}
+
+private fun kindTitle(kind: String?): String =
+    kind?.lowercase()?.replaceFirstChar { it.uppercase() } ?: "Order"
+
+private fun resultTone(result: String): Tone = when (result) {
+    "WIN" -> Tone.Up
+    "LOSS" -> Tone.Down
+    "BUY" -> Tone.Info
+    else -> Tone.Warn
+}
+
+@Composable
+private fun OrderRowItem(order: OrderRow, onClick: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    val kind = orderKind(order.action, order.reason)
+    val look = orderLook(kind)
     val result = resultLabel(order.action, order.filledSize, order.result)
-    PolyCard(Modifier.clickable(onClick = onClick)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
-            orderKind(order.action, order.reason)?.let { kind ->
-                ToneChip(kind, if (kind == "STOP LOSS") Tone.Down else if (kind == "TAKE PROFIT") Tone.Up else if (kind == "MANUAL SELL") Tone.Warn else Tone.Info)
-            }
-            SidePill(order.side)
-            if (order.stage != null) Text("S${order.stage}", style = Mono.small, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Row(Modifier.weight(1f), horizontalArrangement = Arrangement.End) {
-                Text(Fmt.time(order.createdAt), style = Mono.small, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
-            ToneChip(order.status.replace('_', ' '), statusTone(order.status))
-            if (result != null) {
-                val tone = when (result) {
-                    "WIN" -> Tone.Up
-                    "LOSS" -> Tone.Down
-                    "BUY" -> Tone.Info
-                    else -> Tone.Warn
+    val pnl = order.resultPnl
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        color = scheme.surfaceContainer,
+        border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.45f)),
+    ) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .padding(horizontal = Space.md, vertical = Space.md),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Space.md),
+        ) {
+            IconBadge(look.icon, look.fg, look.bg)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+                    Text(
+                        kindTitle(kind),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                    )
+                    SidePill(order.side)
+                    if (order.stage != null) {
+                        Text("S${order.stage}", style = Mono.small, color = scheme.onSurfaceVariant)
+                    }
                 }
-                val pnl = order.resultPnl
-                ToneChip(if (pnl != null) "$result ${Fmt.signedUsd(pnl)}" else result, tone)
+                Text(
+                    "${Fmt.num(order.filledSize, 2)} sh @ ${Fmt.cents(order.avgFillPrice)}",
+                    style = Mono.small,
+                    color = scheme.onSurfaceVariant,
+                )
+                if (!order.error.isNullOrBlank()) {
+                    Text(
+                        order.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Poly.colors.down,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
-        }
-        Text(
-            "${Fmt.num(order.filledSize, 2)} sh @ ${Fmt.cents(order.avgFillPrice)}  ·  fee ${Fmt.usd(order.fee, 3)}",
-            style = Mono.small,
-        )
-        if (!order.error.isNullOrBlank()) {
-            Text(order.error, style = MaterialTheme.typography.bodySmall, color = Poly.colors.down)
+            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (pnl != null) {
+                    Text(
+                        Fmt.signedUsd(pnl),
+                        style = Mono.body.copy(fontWeight = FontWeight.SemiBold),
+                        color = pnlColor(pnl),
+                    )
+                } else if (result != null) {
+                    ToneChip(result, resultTone(result))
+                } else {
+                    ToneChip(order.status.replace('_', ' '), statusTone(order.status))
+                }
+                Text(Fmt.time(order.createdAt), style = Mono.small, color = scheme.onSurfaceVariant)
+            }
         }
     }
 }
@@ -382,6 +597,9 @@ private fun OrderCard(order: OrderRow, onClick: () -> Unit) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun OrderDetailSheet(order: OrderRow, onDismiss: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    val kind = orderKind(order.action, order.reason)
+    val look = orderLook(kind)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -392,37 +610,72 @@ private fun OrderDetailSheet(order: OrderRow, onDismiss: () -> Unit) {
                 .verticalScroll(rememberScrollState())
                 .navigationBarsPadding()
                 .padding(horizontal = Space.lg, vertical = Space.sm),
-            verticalArrangement = Arrangement.spacedBy(Space.sm),
+            verticalArrangement = Arrangement.spacedBy(Space.md),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
-                Text("Order #${order.id}", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Space.md),
+            ) {
+                IconBadge(look.icon, look.fg, look.bg, size = 48.dp)
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(kindTitle(kind), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "Order #${order.id}  ·  ${Fmt.dateTime(order.createdAt)}",
+                        style = Mono.small,
+                        color = scheme.onSurfaceVariant,
+                    )
+                }
                 SidePill(order.side)
             }
-            KeyValueRow("Time", Fmt.dateTime(order.createdAt))
-            KeyValueRow("Kind", orderKind(order.action, order.reason) ?: "—")
-            KeyValueRow("Stage", order.stage?.toString() ?: "—")
-            KeyValueRow("Status", order.status.replace('_', ' '))
-            KeyValueRow("Market", Fmt.shortId(order.marketId, 10, 6))
-            KeyValueRow("Requested", "${Fmt.usd(order.requestedNotional)} @ ${Fmt.cents(order.requestedPrice)}")
-            KeyValueRow("Submitted price", Fmt.cents(order.submittedPrice))
-            KeyValueRow("Filled", "${Fmt.num(order.filledSize, 4)} sh")
-            KeyValueRow("Avg fill", Fmt.cents(order.avgFillPrice))
-            KeyValueRow("Fee", Fmt.usd(order.fee, 4))
-            KeyValueRow("Latency", if (order.latencyMs == null) "—" else Fmt.num(order.latencyMs, 0) + " ms")
-            KeyValueRow("Result", order.result ?: "—")
-            KeyValueRow("Result PnL", Fmt.signedUsd(order.resultPnl), valueColor = pnlColor(order.resultPnl))
-            KeyValueRow("Exchange id", Fmt.shortId(order.exchangeOrderId, 14, 6))
+
+            ProCard {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Label("Result PnL")
+                        Text(
+                            Fmt.signedUsd(order.resultPnl),
+                            style = Mono.large,
+                            color = pnlColor(order.resultPnl),
+                            maxLines = 1,
+                        )
+                    }
+                    ToneChip(order.status.replace('_', ' '), statusTone(order.status))
+                }
+            }
+
+            ProCard {
+                Label("Execution")
+                KeyValueRow("Requested", "${Fmt.usd(order.requestedNotional)} @ ${Fmt.cents(order.requestedPrice)}")
+                KeyValueRow("Submitted price", Fmt.cents(order.submittedPrice))
+                KeyValueRow("Filled", "${Fmt.num(order.filledSize, 4)} sh")
+                KeyValueRow("Avg fill", Fmt.cents(order.avgFillPrice))
+                KeyValueRow("Fee", Fmt.usd(order.fee, 4))
+                KeyValueRow("Latency", if (order.latencyMs == null) "—" else Fmt.num(order.latencyMs, 0) + " ms")
+            }
+
+            ProCard {
+                Label("Reference")
+                KeyValueRow("Stage", order.stage?.toString() ?: "—")
+                KeyValueRow("Market", Fmt.shortId(order.marketId, 10, 6))
+                KeyValueRow("Exchange id", Fmt.shortId(order.exchangeOrderId, 14, 6))
+                KeyValueRow("Result", order.result ?: "—")
+            }
+
             if (!order.reason.isNullOrBlank()) {
-                Label("Reason")
-                Text(order.reason, style = MaterialTheme.typography.bodyMedium)
+                ProCard {
+                    Label("Reason")
+                    Text(order.reason, style = MaterialTheme.typography.bodyMedium)
+                }
             }
             if (!order.error.isNullOrBlank()) {
-                Label("Error")
-                Text(order.error, style = MaterialTheme.typography.bodyMedium, color = Poly.colors.down)
+                ProCard(accent = Poly.colors.down) {
+                    Label("Error")
+                    Text(order.error, style = MaterialTheme.typography.bodyMedium, color = Poly.colors.down)
+                }
             }
-            Row(Modifier.fillMaxWidth().padding(vertical = Space.sm), horizontalArrangement = Arrangement.End) {
-                TextButton(onClick = onDismiss) { Text("Close") }
-            }
+
+            FilledTonalButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("Close") }
         }
     }
 }
