@@ -399,9 +399,15 @@ class TradingBot:
                 results = await self.orders.handle_exits(
                     market, self.data.books, self._mode, self.runtime.get()
                 )
+                acted = False
                 for result in results:
                     if result.status not in {"SKIPPED", "BLOCKED"}:
                         self._last_order = result.as_dict()
+                        acted = True
+                if acted:
+                    # a stop-loss / take-profit just went through: tell the dashboards now so the
+                    # closed position leaves the screen at once, not on the next periodic push
+                    await self._broadcast_state()
         except asyncio.CancelledError:
             raise
         except Exception as exc:

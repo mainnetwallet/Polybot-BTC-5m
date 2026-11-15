@@ -13,6 +13,7 @@ import com.mainnetwallet.polybot.domain.mergeTick
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.Instant
 
@@ -53,15 +54,64 @@ class BotRepository(
     private var lastDownStamp = 0.0
     private var signature = 0
 
+    @Volatile
+    private var lastStateMs = 0L
+
+    @Volatile
+    private var lastEventRefreshMs = 0L
+
     init {
         scope.launch {
-            for (event in feed.events) {
-                when (event) {
-                    is FeedEvent.StateEvent -> applySnapshot(event.snapshot, recordBtc = true)
-                    is FeedEvent.TickEvent -> applyTick(event)
-                    is FeedEvent.LogEvent -> appendLog(event.row)
+            for (first in feed.events) {
+                // If frames piled up (slow link, app was busy), only the newest state matters: an old state would
+                // keep showing a position that was already closed. Logs are all kept, ticks only after the last state.
+                val batch = ArrayList<FeedEvent>()
+                batch.add(first)
+                while (true) {
+                    val next = feed.events.tryReceive().getOrNull() ?: break
+                    batch.add(next)
+                }
+                val lastState = batch.indexOfLast { it is FeedEvent.StateEvent }
+                var needRefresh = false
+                batch.forEachIndexed { i, event ->
+                    when (event) {
+                        is FeedEvent.StateEvent -> if (i == lastState) applySnapshot(event.snapshot, recordBtc = true)
+                        is FeedEvent.TickEvent -> if (i > lastState) applyTick(event)
+                        is FeedEvent.LogEvent -> {
+                            appendLog(event.row)
+                            if (isTradeEvent(event.row)) needRefresh = true
+                        }
+                    }
+                }
+                if (needRefresh) refreshSoon()
+            }
+        }
+        // Safety net: the socket normally sends a full state twice a second. If none arrived for a while although the
+        // feed says it is live, re-read the state over REST (the same thing pull-to-refresh does).
+        scope.launch {
+            while (true) {
+                delay(STALE_CHECK_MS)
+                if (feed.state.value == FeedState.Live && _snapshot.value != null &&
+                    nowMs() - lastStateMs > STALE_STATE_MS
+                ) {
+                    refresh()
                 }
             }
+        }
+    }
+
+    /** A fill, an exit (stop-loss / take-profit) or an order: positions just changed, do not wait for the next push. */
+    private fun isTradeEvent(row: LogRow): Boolean =
+        row.category == "fill" || row.category == "order_submit" || row.category == "order" ||
+            row.message.contains("sold", ignoreCase = true) || row.message.contains("STOP-LOSS", ignoreCase = true)
+
+    private fun refreshSoon() {
+        val now = nowMs()
+        if (now - lastEventRefreshMs < EVENT_REFRESH_GAP_MS) return
+        lastEventRefreshMs = now
+        scope.launch {
+            delay(150) // let the server finish writing the fill, then read the new state
+            refresh()
         }
     }
 
@@ -78,6 +128,7 @@ class BotRepository(
 
     private fun applySnapshot(next: Snapshot, recordBtc: Boolean) {
         _snapshot.value = next
+        lastStateMs = nowMs()
         parseServerTime(next.serverTime)?.let { _clockOffsetMs.value = it - nowMs() }
         recordBooks(next)
         if (recordBtc) recordBtcPrice(next)
@@ -262,5 +313,8 @@ class BotRepository(
         const val HISTORY_LIMIT = 180
         const val BTC_LIMIT = 240
         const val LOG_LIMIT = 400
+        private const val STALE_CHECK_MS = 1_000L
+        private const val STALE_STATE_MS = 2_500L
+        private const val EVENT_REFRESH_GAP_MS = 400L
     }
 }
