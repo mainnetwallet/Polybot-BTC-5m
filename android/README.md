@@ -20,7 +20,8 @@ trading logic or backend behaviour.
    home add `QUICK_TUNNEL=1` plus `GIST_TOKEN=<classic token with ONLY the gist scope>`. Run `start.bat`; it prints
    `In the app enter: gist:<id>`. Details: "Android app and remote access" in the root [README](../README.md).
 2. **Install the app.** Download the `polybot-apk` artifact of the latest green run of the *Android APK*
-   workflow (Actions tab), unzip it and install `polybot-<version>-release.apk` (or `-debug.apk`) on the phone.
+   workflow (Actions tab), unzip it and install `polybot-<version>-debug.apk` on the phone (the minified
+   `-release.apk` is in artifact `polybot-apk-release`).
    Allow "install unknown apps" for the app you open it with. Builds are signed with the same key, so a newer
    build installs over an older one.
 3. **Connect.** In the app enter the PC URL (`gist:<id>`, a `gist.github.com` URL, `https://...` or a LAN
@@ -46,7 +47,8 @@ Requires JDK 17 and the Android SDK (platform 37 = Android 17, build-tools 36.0.
 
 ```
 cd android
-./gradlew lintDebug testDebugUnitTest assembleDebug assembleRelease
+./gradlew assembleDebug                                   # quick: just the installable APK
+./gradlew lintDebug testDebugUnitTest assembleRelease     # full checks + minified release APK
 ```
 
 APKs end up in `app/build/outputs/apk/{debug,release}/`. Optional properties: `-PversionCode=N -PversionName=X.Y.Z`.
@@ -57,14 +59,19 @@ layer, JSON fixtures from real backend output, tick merge and settings validatio
 
 | Trigger | What happens |
 | --- | --- |
-| push to `main` touching `android/**` or the workflow | lint, unit tests, debug + release APK, upload artifact |
+| push to `main` touching `android/**` or the workflow | fast debug APK, plus lint, unit tests and release APK in parallel |
 | pull request touching `android/**` | same |
 | manual (`workflow_dispatch`) | same |
 | tag `app-v*` (for example `app-v1.0.0`) | same, then a GitHub Release with the APKs attached |
 
 * Version code = `github.run_number`; version name = tag without `app-v`, otherwise `0.1.<run_number>`.
-* Artifact `polybot-apk` (30 days) holds `polybot-<version>-debug.apk` and `-release.apk`; the lint and test
-  reports are in `android-reports`.
+* Two jobs run in parallel. **Build APK (fast)** builds only the debug APK (no lint, tests or R8) and uploads it as
+  artifact `polybot-apk` (`polybot-<version>-debug.apk`); with a warm Gradle cache it is ready in about a minute.
+  **Lint, tests and release APK** runs `lintDebug testDebugUnitTest assembleRelease` and uploads
+  `polybot-apk-release` (`polybot-<version>-release.apk`) plus the reports in `android-reports`. Install the debug APK
+  for day-to-day use; both are signed with the same shared key unless the release secrets are set.
+* The Gradle cache is written by runs on `main` and read by pull requests, so the very first run after a cache
+  reset (or after a Gradle/AGP version change) is slower.
 * To publish a release: `git tag app-v1.0.0 && git push origin app-v1.0.0`.
 
 ### Signing
