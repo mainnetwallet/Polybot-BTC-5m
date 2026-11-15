@@ -156,101 +156,45 @@ fun TradingScreen(modifier: Modifier = Modifier) {
             }
         } else {
             val shownOrders = remember(state.orders, historyFilter) { state.orders.filter { historyFilter.matches(it) } }
-            LazyColumn(
-                Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(Space.lg),
-                verticalArrangement = Arrangement.spacedBy(Space.md),
-            ) {
-                item { AccountHero(snap, live) }
-
-                item {
-                    SegmentedTabs(
-                        labels = TabLabels,
-                        selected = tab,
-                        onSelect = { tab = it },
-                        counts = listOf(snap.positions.size, snap.openOrders.size, 0),
-                    )
-                }
-
-                when (tab) {
-                    // ---- positions + instant sell -------------------------------------------------------------
-                    0 -> {
-                        if (snap.sellable.isNotEmpty()) {
-                            item { ProSectionHeader("Quick sell", subtitle = "Sell shares at the market, per stage") }
-                            item {
-                                QuickSell(
-                                    holdings = snap.sellable,
-                                    busy = busy,
-                                    live = live,
-                                    onSellStage = { h -> request(SellTarget.Stage(h.marketId, h.side, h.stage, h.size)) },
-                                    onSellAll = { marketId, stages -> request(SellTarget.All(marketId, stages)) },
+            if (tab == HISTORY_TAB) {
+                // History: balance, tabs and filters stay put; only the order list below them scrolls.
+                Column(Modifier.fillMaxSize()) {
+                    Column(
+                        Modifier.padding(start = Space.lg, end = Space.lg, top = Space.lg),
+                        verticalArrangement = Arrangement.spacedBy(Space.md),
+                    ) {
+                        AccountHero(snap, live, compact = true)
+                        TradingTabs(snap, tab) { tab = it }
+                        ProSectionHeader(
+                            "Order history",
+                            subtitle = "Latest ${state.orders.size} orders",
+                            trailing = {
+                                TextButton(
+                                    onClick = { confirmClear = true },
+                                    enabled = state.orders.isNotEmpty() && !busy,
+                                ) {
+                                    Icon(Icons.Filled.DeleteSweep, contentDescription = null, modifier = Modifier.padding(end = 4.dp))
+                                    Text("Clear")
+                                }
+                            },
+                        )
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+                            HistoryFilter.entries.forEachIndexed { index, f ->
+                                FilterChip(
+                                    selected = index == filter,
+                                    onClick = { filter = index },
+                                    label = { Text(f.label, maxLines = 1) },
                                 )
                             }
                         }
-                        item { ProSectionHeader("Open positions", subtitle = "Held until the market settles") }
-                        if (snap.positions.isEmpty()) {
-                            item {
-                                ProCard {
-                                    EmptyState(
-                                        "No open positions",
-                                        "Filled buys show up here until the market settles.",
-                                        icon = Icons.Filled.Inventory2,
-                                    )
-                                }
-                            }
-                        } else {
-                            items(snap.positions, key = { "pos-${it.id}" }, contentType = { "position" }) { PositionCard(it) }
-                        }
                     }
-
-                    // ---- orders that are still working --------------------------------------------------------
-                    1 -> {
-                        item { ProSectionHeader("Open orders", subtitle = "Waiting on the exchange") }
-                        if (snap.openOrders.isEmpty()) {
-                            item {
-                                ProCard {
-                                    EmptyState(
-                                        "No open orders",
-                                        "Orders that are still working appear here.",
-                                        icon = Icons.Filled.ReceiptLong,
-                                    )
-                                }
-                            }
-                        } else {
-                            items(snap.openOrders, key = { "open-${it.id}" }, contentType = { "order" }) { order ->
-                                OrderRowItem(order, onClick = { detail = order })
-                            }
-                        }
-                    }
-
-                    // ---- history ------------------------------------------------------------------------------
-                    else -> {
-                        item {
-                            ProSectionHeader(
-                                "Order history",
-                                subtitle = "Latest ${state.orders.size} orders",
-                                trailing = {
-                                    TextButton(
-                                        onClick = { confirmClear = true },
-                                        enabled = state.orders.isNotEmpty() && !busy,
-                                    ) {
-                                        Icon(Icons.Filled.DeleteSweep, contentDescription = null, modifier = Modifier.padding(end = 4.dp))
-                                        Text("Clear")
-                                    }
-                                },
-                            )
-                        }
-                        item {
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
-                                HistoryFilter.entries.forEachIndexed { index, f ->
-                                    FilterChip(
-                                        selected = index == filter,
-                                        onClick = { filter = index },
-                                        label = { Text(f.label, maxLines = 1) },
-                                    )
-                                }
-                            }
-                        }
+                    LazyColumn(
+                        Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                        contentPadding = PaddingValues(Space.lg),
+                        verticalArrangement = Arrangement.spacedBy(Space.md),
+                    ) {
                         when {
                             state.loading -> item { SkeletonCard(lines = 3) }
                             state.error != null && state.orders.isEmpty() -> item {
@@ -277,6 +221,63 @@ fun TradingScreen(modifier: Modifier = Modifier) {
                                 }
                             }
                             else -> items(shownOrders, key = { "hist-${it.id}" }, contentType = { "order" }) { order ->
+                                OrderRowItem(order, onClick = { detail = order })
+                            }
+                        }
+                    }
+                }
+            } else {
+                LazyColumn(
+                    Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(Space.lg),
+                    verticalArrangement = Arrangement.spacedBy(Space.md),
+                ) {
+                    item { AccountHero(snap, live) }
+                    item { TradingTabs(snap, tab) { tab = it } }
+
+                    if (tab == 0) {
+                        // ---- positions + instant sell -----------------------------------------------------------
+                        if (snap.sellable.isNotEmpty()) {
+                            item { ProSectionHeader("Quick sell", subtitle = "Sell shares at the market, per stage") }
+                            item {
+                                QuickSell(
+                                    holdings = snap.sellable,
+                                    busy = busy,
+                                    live = live,
+                                    onSellStage = { h -> request(SellTarget.Stage(h.marketId, h.side, h.stage, h.size)) },
+                                    onSellAll = { marketId, stages -> request(SellTarget.All(marketId, stages)) },
+                                )
+                            }
+                        }
+                        item { ProSectionHeader("Open positions", subtitle = "Held until the market settles") }
+                        if (snap.positions.isEmpty()) {
+                            item {
+                                ProCard {
+                                    EmptyState(
+                                        "No open positions",
+                                        "Filled buys show up here until the market settles.",
+                                        icon = Icons.Filled.Inventory2,
+                                    )
+                                }
+                            }
+                        } else {
+                            items(snap.positions, key = { "pos-${it.id}" }, contentType = { "position" }) { PositionCard(it) }
+                        }
+                    } else {
+                        // ---- orders that are still working ------------------------------------------------------
+                        item { ProSectionHeader("Open orders", subtitle = "Waiting on the exchange") }
+                        if (snap.openOrders.isEmpty()) {
+                            item {
+                                ProCard {
+                                    EmptyState(
+                                        "No open orders",
+                                        "Orders that are still working appear here.",
+                                        icon = Icons.Filled.ReceiptLong,
+                                    )
+                                }
+                            }
+                        } else {
+                            items(snap.openOrders, key = { "open-${it.id}" }, contentType = { "order" }) { order ->
                                 OrderRowItem(order, onClick = { detail = order })
                             }
                         }
@@ -342,6 +343,17 @@ fun TradingScreen(modifier: Modifier = Modifier) {
 }
 
 private val TabLabels = listOf("Positions", "Open orders", "History")
+private const val HISTORY_TAB = 2
+
+@Composable
+private fun TradingTabs(snap: TradingSlice, tab: Int, onSelect: (Int) -> Unit) {
+    SegmentedTabs(
+        labels = TabLabels,
+        selected = tab,
+        onSelect = onSelect,
+        counts = listOf(snap.positions.size, snap.openOrders.size, 0),
+    )
+}
 
 private enum class HistoryFilter(val label: String) {
     All("All"),
@@ -360,7 +372,7 @@ private enum class HistoryFilter(val label: String) {
 // ---- account hero -----------------------------------------------------------------------------------------------
 
 @Composable
-private fun AccountHero(snap: TradingSlice, live: Boolean) {
+private fun AccountHero(snap: TradingSlice, live: Boolean, compact: Boolean = false) {
     val account = snap.account
     val base = account.balance - account.dailyPnl
     val dailyPct: Double? = if (base > 0.0) account.dailyPnl / base * 100.0 else null
@@ -379,11 +391,13 @@ private fun AccountHero(snap: TradingSlice, live: Boolean) {
             PnlBadge(text = dailyText, value = account.dailyPnl)
             Text("today", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.lg)) {
-            ProStat("Unrealized", Fmt.signedUsd(account.unrealizedPnl), Modifier.weight(1f), pnlColor(account.unrealizedPnl))
-            ProStat("Realized", Fmt.signedUsd(account.realizedPnl), Modifier.weight(1f), pnlColor(account.realizedPnl))
-            ProStat("Trades", account.tradesToday.toString(), Modifier.weight(1f))
+        if (!compact) {
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.lg)) {
+                ProStat("Unrealized", Fmt.signedUsd(account.unrealizedPnl), Modifier.weight(1f), pnlColor(account.unrealizedPnl))
+                ProStat("Realized", Fmt.signedUsd(account.realizedPnl), Modifier.weight(1f), pnlColor(account.realizedPnl))
+                ProStat("Trades", account.tradesToday.toString(), Modifier.weight(1f))
+            }
         }
     }
 }
