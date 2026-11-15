@@ -58,61 +58,68 @@ fun OverviewScreen(modifier: Modifier = Modifier) {
     }
 
     val snap = snapshot
-    PullToRefreshBox(
-        isRefreshing = refreshing,
-        onRefresh = {
-            refreshing = true
-            scope.launch {
-                val result = repo.refresh()
-                refreshing = false
-                if (!result.ok) ui.message(result.message, long = true)
-            }
-        },
-        modifier = modifier.fillMaxSize(),
-    ) {
-        Column(
-            Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(Space.lg),
-            verticalArrangement = Arrangement.spacedBy(Space.md),
-        ) {
-            if (snap == null) {
-                SkeletonCard(lines = 4)
-                SkeletonCard(lines = 3)
-                SkeletonCard(lines = 3)
-            } else {
-                MarketCard(snap.market, snap.strategy.inWindow, offsetMs)
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.md)) {
-                    SideCard("UP", snap.books.up, snap.strategy.upArmed, history.up, Modifier.weight(1f))
-                    SideCard("DOWN", snap.books.down, snap.strategy.downArmed, history.down, Modifier.weight(1f))
+    // Cards fill the screen; the engine controls are pinned underneath so they never scroll away.
+    Column(modifier.fillMaxSize()) {
+        PullToRefreshBox(
+            isRefreshing = refreshing,
+            onRefresh = {
+                refreshing = true
+                scope.launch {
+                    val result = repo.refresh()
+                    refreshing = false
+                    if (!result.ok) ui.message(result.message, long = true)
                 }
-                BtcCard(snap.btc, history.btc)
-                BotCard(
-                    bot = snap.bot,
-                    live = snap.live,
-                    busy = busy,
-                    onStart = {
-                        ui.tap()
-                        if (snap.bot.isLive) dialog = OverviewDialog.StartLive else perform { repo.startBot("") }
-                    },
-                    onStop = {
-                        ui.tap()
-                        perform { repo.stopBot() }
-                    },
-                    onMode = { mode ->
-                        ui.tap()
-                        if (mode == Modes.LIVE) dialog = OverviewDialog.SwitchLive else perform { repo.switchMode(mode, "") }
-                    },
-                    onKill = { active ->
-                        ui.tap()
-                        // Engaging is one tap on purpose (it is the emergency stop); clearing asks first.
-                        if (active) perform { repo.killSwitch(true) } else dialog = OverviewDialog.ClearKill
-                    },
-                )
-                AccountCard(snap.account)
-                LastOrderCard(snap.lastOrder)
+            },
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+        ) {
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = Space.md, vertical = Space.md),
+                verticalArrangement = Arrangement.spacedBy(Space.sm),
+            ) {
+                if (snap == null) {
+                    SkeletonCard(lines = 3)
+                    SkeletonCard(lines = 2)
+                    SkeletonCard(lines = 2)
+                } else {
+                    MarketCard(snap.market, snap.strategy.inWindow, offsetMs)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+                        SideCard("UP", snap.books.up, snap.strategy.upArmed, history.up, Modifier.weight(1f))
+                        SideCard("DOWN", snap.books.down, snap.strategy.downArmed, history.down, Modifier.weight(1f))
+                    }
+                    BtcCard(snap.btc, history.btc)
+                    AccountCard(snap.account)
+                    LastOrderCard(snap.lastOrder)
+                }
             }
+        }
+        if (snap != null) {
+            EngineDock(
+                bot = snap.bot,
+                live = snap.live,
+                busy = busy,
+                onStart = {
+                    ui.tap()
+                    if (snap.bot.isLive) dialog = OverviewDialog.StartLive else perform { repo.startBot("") }
+                },
+                onStop = {
+                    ui.tap()
+                    perform { repo.stopBot() }
+                },
+                onMode = { mode ->
+                    ui.tap()
+                    if (mode == Modes.LIVE) dialog = OverviewDialog.SwitchLive else perform { repo.switchMode(mode, "") }
+                },
+                onKill = { active ->
+                    ui.tap()
+                    // Engaging is one tap on purpose (it is the emergency stop); clearing asks first.
+                    if (active) perform { repo.killSwitch(true) } else dialog = OverviewDialog.ClearKill
+                },
+            )
         }
     }
 
