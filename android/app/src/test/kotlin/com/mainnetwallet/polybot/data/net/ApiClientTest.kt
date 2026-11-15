@@ -101,7 +101,7 @@ class ApiClientTest {
 
     @Test fun gistReadReportsTheUrlSoItCanBeRemembered() = runTest {
         val seen = mutableListOf<String>()
-        val ep = Endpoint(transport, { now }) { seen += it }
+        val ep = Endpoint(transport, onResolved = { seen += it }, nowMs = { now })
         ep.configure(PcTarget.Gist(GIST_ID))
         route({ NEW }) { ok() }
         ep.currentBase()

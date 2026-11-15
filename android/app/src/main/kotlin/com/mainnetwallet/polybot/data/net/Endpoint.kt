@@ -19,9 +19,10 @@ sealed interface Reresolve {
  */
 class Endpoint(
     private val transport: HttpTransport,
-    private val nowMs: () -> Long = { System.currentTimeMillis() },
     /** Called with the tunnel URL every time it is read from the Gist, so the app can remember it. */
     private val onResolved: (String) -> Unit = {},
+    // Keep the clock last: tests pass it as a trailing lambda (`Endpoint(transport) { now }`).
+    private val nowMs: () -> Long = { System.currentTimeMillis() },
 ) {
     private val mutex = Mutex()
 
