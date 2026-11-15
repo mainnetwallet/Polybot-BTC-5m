@@ -128,7 +128,7 @@ def test_risk_blocks_without_btc_data_ask_and_window():
 
 
 def test_stage0_holding_does_not_block_stage1_open_position_cap():
-    config = make_config(**STAGE0, max_open_positions=1)
+    config = make_config(**STAGE0, max_open_positions=1, stage2_seconds=20, stage3_seconds=10)
     stage1 = _fresh(next(s for s in evaluate(45, 0.90, 0.10).signals if s.stage == 1))
     blocked = make_ctx(remaining=45, open_positions=1, exposed_sides=frozenset({"UP"}))
     assert RiskManager().check(stage1, blocked, config).reason == "max_open_positions"
@@ -380,7 +380,7 @@ async def test_stage0_retry_loop_stays_awake_right_after_the_buy():
 
 async def test_stage0_sell_only_sells_stage0_shares_not_stage1():
     """Stage 0 bought UP, then stage 1 bought UP in the final window: the +5 % sell takes ONLY stage 0's shares."""
-    stack = build_stack(make_config(**STAGE0, trade_amount_usdc=4.0))
+    stack = build_stack(make_config(**STAGE0, trade_amount_usdc=4.0, stage2_seconds=20, stage3_seconds=10))
     market = make_market(remaining=150)
     books = books_for(market, up_ask=0.80, down_ask=0.10)
     await _stage0_buy(stack, market, books)
@@ -418,7 +418,7 @@ async def test_stage0_sell_only_sells_stage0_shares_not_stage1():
 
 
 async def test_stage0_sell_pnl_uses_stage0_cost_not_blended_average():
-    stack = build_stack(make_config(**STAGE0, trade_amount_usdc=4.0))
+    stack = build_stack(make_config(**STAGE0, trade_amount_usdc=4.0, stage2_seconds=20, stage3_seconds=10))
     market = make_market(remaining=150)
     books = books_for(market, up_ask=0.80, down_ask=0.10)
     await _stage0_buy(stack, market, books)

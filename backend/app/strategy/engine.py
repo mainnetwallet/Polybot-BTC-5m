@@ -14,14 +14,14 @@ Entries are staged. Each stage may place ONE buy per market:
 * stage 1: inside the final window, best_ask >= trigger_threshold (default 0.80).
   If the ask is not there yet the strategy keeps watching and fires the moment it
   gets there, any time before the market ends.
-* stage 2: stage2_end_seconds (default 30) < remaining <= stage2_seconds (default 50) and
-  best_ask >= stage2_threshold (default 0.90). From stage2_end_seconds on stage 3 takes over.
+* stage 2: stage3_seconds (default 30) < remaining <= stage2_seconds (default 50) and
+  best_ask >= stage2_threshold (default 0.88). From stage3_seconds on stage 3 takes over.
 * stage 3: remaining <= stage3_seconds (default 30) and best_ask >= stage3_threshold
   (default 0.90).
 
-This module only produces the signals. The risk manager chains them: stage 1 can only buy while
-more than stage3_seconds remain, stage 2 needs stage 1 to have bought before stage2_seconds
-remained, and stage 3 is independent (see RiskManager._check_stage_chain).
+The windows follow each other: stage 1 ends where stage 2 starts, stage 2 ends where stage 3 starts
+(RuntimeSettings.stage_end_seconds). Stages are independent: none needs another to have bought.
+This module only produces the signals; see RiskManager._check_stage_chain for the stage 1 cutoff.
 
 The thresholds are triggers, never limit prices. Signals carry the live ask so the
 executor buys at the market instead of posting a fixed-price order.
@@ -122,7 +122,7 @@ class FinalWindowStrategy:
         for stage, max_remaining, threshold in stage_plan(config):
             if remaining > max_remaining:
                 continue
-            if stage == 2 and config.stage2_end_seconds > 0 and remaining <= config.stage2_end_seconds:
+            if stage == 2 and remaining <= config.stage_end_seconds(2):
                 continue  # stage 2 ends where stage 3 begins
             for side, market_side_token, book, ask in (
                 ("UP", market.up_token_id, up, up_ask),

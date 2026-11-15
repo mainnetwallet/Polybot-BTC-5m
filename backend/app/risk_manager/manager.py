@@ -45,16 +45,18 @@ class RiskManager:
     def _check_stage_chain(signal: Signal, ctx: RiskContext, config: RuntimeSettings) -> RiskDecision | None:
         """Entry timing per stage (always on). Stages are independent: no stage needs another one.
 
-        * stage 1: can only buy while MORE than stage3_seconds (30s) remain; this is its own cutoff.
+        * stage 1: can only buy while MORE than stage_end_seconds(1) remain, i.e. until stage 2 starts
+          (stage2_seconds, default 50). Stage 2 takes over from there.
         * stage 2 and stage 3: buy whenever their own rules (time, ask, price gap, ...) are met,
           whether or not stage 1 (or 2) bought or was stopped out.
         """
         if signal.stage == 1:
-            if not ctx.stage1_bought and ctx.remaining_seconds <= config.stage3_seconds:
+            stage1_end = config.stage_end_seconds(1)
+            if not ctx.stage1_bought and stage1_end > 0 and ctx.remaining_seconds <= stage1_end:
                 return RiskDecision(
                     False,
                     "stage1_missed",
-                    f"stage 1 did not buy before the last {config.stage3_seconds}s; stage 1 is off this market",
+                    f"stage 1 did not buy before the last {stage1_end:g}s; stage 1 is off this market",
                 )
         return None
 

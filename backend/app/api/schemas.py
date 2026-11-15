@@ -55,7 +55,6 @@ class SettingsPatch(BaseModel):
     stage2_enabled: bool | None = None
     stage3_enabled: bool | None = None
     stage2_seconds: int | None = Field(default=None, ge=1, le=300)
-    stage2_end_seconds: int | None = Field(default=None, ge=0, le=299)
     stage2_threshold: float | None = Field(default=None, ge=0.01, le=0.999)
     stage3_seconds: int | None = Field(default=None, ge=1, le=300)
     stage3_threshold: float | None = Field(default=None, ge=0.01, le=0.999)

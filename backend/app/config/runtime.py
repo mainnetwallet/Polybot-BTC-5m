@@ -22,7 +22,6 @@ OVERRIDABLE_KEYS = (
     "stage2_enabled",
     "stage3_enabled",
     "stage2_seconds",
-    "stage2_end_seconds",
     "stage2_threshold",
     "stage3_seconds",
     "stage3_threshold",
@@ -83,9 +82,6 @@ class RuntimeSettings(BaseModel):
     stage2_enabled: bool = True
     stage3_enabled: bool = True
     stage2_seconds: int = Field(default=50, ge=1, le=300)
-    # Stage 2 stops buying once this many seconds (or fewer) are left: stage 3 takes over from there.
-    # Stage 2 therefore buys while stage2_end_seconds < remaining <= stage2_seconds. 0 = no cutoff.
-    stage2_end_seconds: int = Field(default=30, ge=0, le=299)
     stage2_threshold: float = Field(default=0.90, ge=0.01, le=0.999)
     stage3_seconds: int = Field(default=30, ge=1, le=300)
     stage3_threshold: float = Field(default=0.90, ge=0.01, le=0.999)
@@ -167,8 +163,20 @@ class RuntimeSettings(BaseModel):
             raise ValueError("max_execution_price must be >= trigger_threshold")
         if self.max_execution_price < max(self.stage2_threshold, self.stage3_threshold):
             raise ValueError("max_execution_price must be >= the stage 2/3 thresholds")
-        if self.stage2_end_seconds >= self.stage2_seconds:
-            raise ValueError("stage2_end_seconds must be less than stage2_seconds")
+        # Stage windows follow each other: stage 1 starts at final_window_seconds and ends where stage 2
+        # starts, stage 2 ends where stage 3 starts. So the start times of the enabled stages must fall.
+        starts = [
+            (stage, label, float(value))
+            for stage, label, value in (
+                (1, "final_window_seconds", self.final_window_seconds),
+                (2, "stage2_seconds", self.stage2_seconds),
+                (3, "stage3_seconds", self.stage3_seconds),
+            )
+            if self.stage_enabled(stage)
+        ]
+        for (_, prev_label, prev_value), (_, label, value) in zip(starts, starts[1:]):
+            if value >= prev_value:
+                raise ValueError(f"{label} ({value:g}) must be lower than {prev_label} ({prev_value:g}): each stage starts after the one before")
         if self.stage0_end_seconds >= self.stage0_start_seconds:
             raise ValueError("stage0_end_seconds must be less than stage0_start_seconds")
         if self.stage0_min_ask > self.stage0_max_ask:
@@ -180,6 +188,20 @@ class RuntimeSettings(BaseModel):
         if self.stage2_sell_price <= self.stage2_threshold:
             raise ValueError("stage2_sell_price must be greater than stage2_threshold")
         return self
+
+    def stage_end_seconds(self, stage: int) -> float:
+        """Seconds left at which `stage` stops buying: where the next enabled stage starts.
+
+        Stage 1 ends where stage 2 starts (stage2_seconds, default 50), stage 2 ends where stage 3 starts
+        (stage3_seconds, default 30). A switched-off stage is skipped; 0 = until the market ends.
+        """
+        if stage == 0:
+            return float(self.stage0_end_seconds)
+        starts = {2: self.stage2_seconds, 3: self.stage3_seconds}
+        for nxt in range(stage + 1, 4):
+            if self.stage_enabled(nxt):
+                return float(starts[nxt])
+        return 0.0
 
     def stage_enabled(self, stage: int) -> bool:
         """True when `stage` (0-3) is switched on. A switched-off stage buys and sells nothing."""

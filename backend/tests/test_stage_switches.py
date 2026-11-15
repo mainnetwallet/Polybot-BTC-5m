@@ -29,19 +29,23 @@ def test_all_stages_are_on_by_default():
     assert all(config.stage_enabled(stage) for stage in ALL_STAGES)
 
 
+STAGE_TIME = {1: 55, 2: 40, 3: 20}  # seconds left inside each stage's own window (test final window = 60s)
+
+
 @pytest.mark.parametrize("stage", ALL_STAGES)
 def test_switched_off_stage_produces_no_signal_and_the_others_still_do(stage):
-    # stage2_end_seconds=0: no stage 2 cutoff, so all three stages are active at 25s
-    on = evaluate(25, up=0.95, down=0.05, stage2_end_seconds=0)
-    assert _stages(on) == {1, 2, 3}
-    off = evaluate(25, up=0.95, down=0.05, stage2_end_seconds=0, **{f"stage{stage}_enabled": False})
-    assert _stages(off) == {1, 2, 3} - {stage}
+    # each stage buys inside its own window: stage 1 at 55s, stage 2 at 40s, stage 3 at 20s left
+    remaining = STAGE_TIME[stage]
+    assert stage in _stages(evaluate(remaining, up=0.95, down=0.05))
+    off = evaluate(remaining, up=0.95, down=0.05, **{f"stage{stage}_enabled": False})
+    assert stage not in _stages(off)
 
 
 @pytest.mark.parametrize("stage", ALL_STAGES)
 def test_risk_manager_rejects_a_switched_off_stage_even_if_a_signal_arrives(stage):
-    signal = next(s for s in evaluate(25, up=0.95, down=0.05, stage2_end_seconds=0).signals if s.stage == stage)
-    ctx = make_ctx(remaining=25, btc_price=100_150.0, price_to_beat=100_000.0, stage1_bought=True)
+    remaining = STAGE_TIME[stage]
+    signal = next(s for s in evaluate(remaining, up=0.95, down=0.05).signals if s.stage == stage)
+    ctx = make_ctx(remaining=remaining, btc_price=100_150.0, price_to_beat=100_000.0, stage1_bought=True)
     on = make_config(**{f"stage{stage}_enabled": True})
     off = make_config(**{f"stage{stage}_enabled": False})
     assert RiskManager().check(signal, ctx, on).reason != f"stage{stage}_disabled"
@@ -60,7 +64,7 @@ def test_stage_switches_can_be_patched_through_the_api():
 
 async def test_switched_off_stage_sells_nothing_but_manual_sell_still_works():
     stops = dict(stage1_stop_loss_pct=15.0, stage1_sell_enabled=True)
-    stack = build_stack(make_config(**STAGE0, **stops, trade_amount_usdc=4.0))
+    stack = build_stack(make_config(**STAGE0, **stops, trade_amount_usdc=4.0, stage2_seconds=20, stage3_seconds=10))
     market = make_market(remaining=45)
     books = books_for(market, up_ask=0.88, down_ask=0.10)
     results = await _stage_buy(stack, market, books, 1)

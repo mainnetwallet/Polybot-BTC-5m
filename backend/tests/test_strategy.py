@@ -131,5 +131,34 @@ def test_stage2_window_is_50s_to_30s_then_stage3_takes_over():
     assert 2 not in _stages(evaluate(30, up=0.95, down=0.05))
     assert 3 in _stages(evaluate(30, up=0.95, down=0.05))
     assert 2 not in _stages(evaluate(10, up=0.95, down=0.05))
-    # 0 = no cutoff: stage 2 keeps buying until the end
-    assert 2 in _stages(evaluate(10, up=0.95, down=0.05, stage2_end_seconds=0))
+
+
+def test_stage_windows_follow_the_start_times_90_70_40():
+    # stage 1 starts at 90, stage 2 at 70, stage 3 at 40: each ends where the next starts
+    cfg = dict(final_window_seconds=90, stage2_seconds=70, stage3_seconds=40, stage2_threshold=0.88)
+    assert 2 not in _stages(evaluate(75, up=0.95, down=0.05, **cfg))
+    assert 2 in _stages(evaluate(70, up=0.95, down=0.05, **cfg))
+    assert 2 in _stages(evaluate(41, up=0.95, down=0.05, **cfg))
+    assert 2 not in _stages(evaluate(40, up=0.95, down=0.05, **cfg))
+    assert 3 in _stages(evaluate(40, up=0.95, down=0.05, **cfg))
+    assert 3 not in _stages(evaluate(41, up=0.95, down=0.05, **cfg))
+
+
+def test_stage_end_seconds_is_where_the_next_enabled_stage_starts():
+    cfg = make_config(final_window_seconds=90, stage2_seconds=70, stage3_seconds=40)
+    assert (cfg.stage_end_seconds(1), cfg.stage_end_seconds(2), cfg.stage_end_seconds(3)) == (70, 40, 0)
+    # a switched-off stage is skipped: stage 1 then runs until stage 3 starts
+    no2 = make_config(final_window_seconds=90, stage2_seconds=70, stage3_seconds=40, stage2_enabled=False)
+    assert no2.stage_end_seconds(1) == 40
+    # no later stage on: until the market ends
+    only1 = make_config(stage2_enabled=False, stage3_enabled=False)
+    assert only1.stage_end_seconds(1) == 0
+
+
+def test_stage_start_times_must_fall():
+    import pytest
+
+    with pytest.raises(Exception, match="stage2_seconds"):
+        make_config(final_window_seconds=60, stage2_seconds=70)
+    with pytest.raises(Exception, match="stage3_seconds"):
+        make_config(stage2_seconds=40, stage3_seconds=40)

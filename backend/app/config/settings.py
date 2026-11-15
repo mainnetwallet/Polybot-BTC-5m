@@ -73,8 +73,7 @@ class Settings(BaseSettings):
     stage2_enabled: bool = True
     stage3_enabled: bool = True
     stage2_seconds: int = 50
-    stage2_end_seconds: int = 30  # stage 2 buys from 50s until 30s left, then stage 3 takes over (0 = no cutoff)
-    stage2_threshold: float = 0.90
+    stage2_threshold: float = 0.88
     stage3_seconds: int = 30
     stage3_threshold: float = 0.90
     max_execution_price: float = 0.98
