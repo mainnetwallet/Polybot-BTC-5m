@@ -97,7 +97,7 @@ layer, JSON fixtures from real backend output, tick merge and settings validatio
 * The network security config allows cleartext only because LAN use needs it; plain `http` outside private
   ranges shows a warning banner.
 * LIVE mode is always marked in red; starting the bot or switching to Live needs the typed confirmation phrase
-  (default `GO LIVE`), manual sells in Live are confirmed, and every destructive action asks first.
+  (default `GO LIVE`), manual sells ask for confirmation unless you turn that off in Settings (default off, applies to paper and live), and every destructive action asks first.
 
 ## Limitations
 

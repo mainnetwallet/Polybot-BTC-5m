@@ -138,8 +138,8 @@ fun SettingsHome(
                 RowDivider()
                 SettingsToggleRow(
                     icon = Icons.Filled.CheckCircle,
-                    title = "Confirm paper sells",
-                    hint = "Ask before a manual sell in paper mode. Live sells always ask.",
+                    title = "Confirm sells",
+                    hint = "Ask before a manual sell, in paper and live mode. Off sells immediately.",
                     checked = p.confirmSells,
                     onChange = { scope.launch { graph.prefsStore.setConfirmSells(it) } },
                 )

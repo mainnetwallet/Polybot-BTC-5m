@@ -131,10 +131,11 @@ fun TradingScreen(modifier: Modifier = Modifier) {
         }
     }
 
-    // Live sells always get the confirm sheet; paper sells ask unless the person turned that off in Settings.
+    // Manual sells (paper and live) get the confirm sheet unless the person turned that off in Settings (default: off).
+    // Until the preferences have loaded (null) it still asks, which is the safe side.
     fun request(t: SellTarget) {
         ui.tap()
-        if (live || prefs?.confirmSells != false) target = t else execute(t)
+        if (prefs?.confirmSells != false) target = t else execute(t)
     }
 
     PolyPullToRefresh(
