@@ -2,7 +2,6 @@ package com.mainnetwallet.polybot.ui.overview
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -86,12 +85,15 @@ fun OverviewScreen(modifier: Modifier = Modifier) {
                     SkeletonCard(lines = 2)
                     SkeletonCard(lines = 2)
                 } else {
-                    MarketCard(snap.market, snap.strategy.inWindow, offsetMs)
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
-                        SideCard("UP", snap.books.up, snap.strategy.upArmed, history.up, Modifier.weight(1f))
-                        SideCard("DOWN", snap.books.down, snap.strategy.downArmed, history.down, Modifier.weight(1f))
-                    }
-                    BtcCard(snap.btc, history.btc)
+                    HeroCard(snap.market, snap.btc, history.btc, snap.strategy.inWindow, offsetMs)
+                    OddsCard(
+                        up = snap.books.up,
+                        down = snap.books.down,
+                        upArmed = snap.strategy.upArmed,
+                        downArmed = snap.strategy.downArmed,
+                        upHistory = history.up,
+                        downHistory = history.down,
+                    )
                     AccountCard(snap.account)
                     LastOrderCard(snap.lastOrder)
                 }
