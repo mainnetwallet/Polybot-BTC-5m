@@ -41,6 +41,14 @@ object Fmt {
         return String.format(Locale.US, "%.${digits}f", v!!)
     }
 
+    /** A percentage with an explicit sign, e.g. +2.4% / -0.8%. */
+    fun signedPercent(v: Double?, digits: Int = 1): String {
+        if (!ok(v)) return "—"
+        val x = v!!
+        val sign = if (x > 0) "+" else if (x < 0) "-" else ""
+        return sign + String.format(Locale.US, "%.${digits}f", Math.abs(x)) + "%"
+    }
+
     fun num(v: Double?, digits: Int = 2): String {
         if (!ok(v)) return "—"
         return String.format(Locale.US, "%.${digits}f", v!!)
