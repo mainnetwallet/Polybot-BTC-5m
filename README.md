@@ -1,4 +1,31 @@
-# Polybot - Polymarket BTC 5m bot
+<p align="center">
+  <img src="docs/banner.svg" alt="Polybot - Polymarket BTC 5m bot" width="720">
+</p>
+
+<p align="center">
+  <a href="https://github.com/mainnetwallet/Polybot-BTC-5m/releases/latest"><img alt="latest APK release" src="https://img.shields.io/github/v/release/mainnetwallet/Polybot-BTC-5m?display_name=tag&label=release&color=2563eb"></a>
+  <a href="https://github.com/mainnetwallet/Polybot-BTC-5m/actions/workflows/android-apk.yml"><img alt="Android build" src="https://img.shields.io/github/actions/workflow/status/mainnetwallet/Polybot-BTC-5m/android-apk.yml?branch=main&label=android%20build"></a>
+  <img alt="mode" src="https://img.shields.io/badge/mode-paper%20by%20default-22c55e">
+</p>
+
+<p align="center">
+  <img alt="Python 3.11+" src="https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white">
+  <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white">
+  <img alt="React" src="https://img.shields.io/badge/React-20232A?logo=react&logoColor=61DAFB">
+  <img alt="Kotlin" src="https://img.shields.io/badge/Kotlin-7F52FF?logo=kotlin&logoColor=white">
+  <img alt="Jetpack Compose" src="https://img.shields.io/badge/Jetpack%20Compose-4285F4?logo=jetpackcompose&logoColor=white">
+</p>
+
+<p align="center">
+  <a href="#quick-start-powershell">Quick start</a> ·
+  <a href="android/README.md">Android app</a> ·
+  <a href="#android-app-and-remote-access">Remote access</a> ·
+  <a href="#how-it-works">How it works</a>
+</p>
+
+<p align="center">
+  <img src="docs/safe-by-default.svg" alt="Safe by default: paper trading first, live trading is gated" width="460">
+</p>
 
 Local Windows app for Polymarket BTC up/down 5-minute markets: Python (FastAPI) backend, React dashboard and a native Android app (`android/`). **Paper trading is the default**; live trading is disabled until you pass explicit safety gates.
 
