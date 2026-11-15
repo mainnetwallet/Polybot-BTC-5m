@@ -68,7 +68,6 @@ import com.mainnetwallet.polybot.ui.theme.Mono
 import com.mainnetwallet.polybot.ui.theme.Poly
 import com.mainnetwallet.polybot.ui.theme.Space
 import kotlinx.coroutines.delay
-import kotlin.math.roundToInt
 
 // Overview layout, top to bottom: hero (countdown, BTC and account numbers), odds (UP | DOWN) and the position
 // box with its instant Sell buttons. The engine controls live in the top bar.
@@ -184,11 +183,11 @@ fun HeroCard(
         border = BorderStroke(1.dp, accent.copy(alpha = 0.35f)),
     ) {
         Box(Modifier.background(Brush.verticalGradient(listOf(accent.copy(alpha = 0.16f), Color.Transparent)))) {
-            Column(Modifier.padding(Space.lg), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.padding(horizontal = Space.md, vertical = Space.sm), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .heightIn(min = 24.dp),
+                        .heightIn(min = 20.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(Space.sm),
                 ) {
@@ -209,7 +208,7 @@ fun HeroCard(
                     Column(Modifier.weight(1f)) {
                         Text(
                             if (remaining == null) "--:--" else Fmt.clock(remaining),
-                            style = Mono.xlarge,
+                            style = Mono.xlarge.copy(fontSize = 30.sp),
                             color = if (market == null) scheme.onSurfaceVariant else accent,
                             maxLines = 1,
                         )
@@ -218,7 +217,7 @@ fun HeroCard(
                         Label("BTC")
                         Text(
                             Fmt.usdGrouped(btc?.price),
-                            style = Mono.large.copy(fontSize = 22.sp),
+                            style = Mono.large.copy(fontSize = 19.sp),
                             maxLines = 1,
                         )
                         val feedText: String
@@ -256,7 +255,7 @@ fun HeroCard(
                 Box(
                     Modifier
                         .fillMaxWidth()
-                        .height(6.dp)
+                        .height(4.dp)
                         .background(scheme.surfaceVariant, RoundedCornerShape(50)),
                 ) {
                     Box(
@@ -297,7 +296,7 @@ fun HeroCard(
                 Sparkline(
                     btcHistory,
                     scheme.primary,
-                    height = 32.dp,
+                    height = 18.dp,
                     reference = btc?.priceToBeat?.toFloat(),
                     description = "BTC price chart",
                 )
@@ -314,13 +313,13 @@ fun HeroCard(
                 ) {
                     Column(Modifier.weight(1f)) {
                         Label("Balance")
-                        Text(Fmt.usdGrouped(account.balance), style = Mono.large.copy(fontSize = 20.sp), maxLines = 1)
+                        Text(Fmt.usdGrouped(account.balance), style = Mono.large.copy(fontSize = 17.sp), maxLines = 1)
                     }
                     Column(Modifier.weight(1f), horizontalAlignment = Alignment.End) {
                         Label("Daily PnL")
                         Text(
                             Fmt.signedUsd(account.dailyPnl),
-                            style = Mono.large.copy(fontSize = 20.sp),
+                            style = Mono.large.copy(fontSize = 17.sp),
                             color = pnlColor(account.dailyPnl),
                             maxLines = 1,
                         )
@@ -355,14 +354,6 @@ fun OddsCard(
         null
     }
     CompactCard(modifier) {
-        CardHeader("Ask split") {
-            val pct = if (upShare == null) null else (upShare * 100).roundToInt()
-            Text(
-                if (pct == null) "\u2014" else "UP $pct% / DOWN ${100 - pct}%",
-                style = Mono.small,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
         SplitBar(upShare ?: 0.5f)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
             OddsTile("UP", up, upArmed, upHistory, Modifier.weight(1f))
@@ -378,7 +369,7 @@ private fun SplitBar(upShare: Float, modifier: Modifier = Modifier) {
     Row(
         modifier
             .fillMaxWidth()
-            .height(6.dp)
+            .height(4.dp)
             .clip(RoundedCornerShape(50)),
         horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
@@ -408,11 +399,11 @@ private fun OddsTile(side: String, book: BookSnapshot?, armed: Boolean, history:
         color = if (up) c.upContainer else c.downContainer,
         border = if (armed) BorderStroke(1.5.dp, c.warn) else null,
     ) {
-        Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 24.dp),
+                    .heightIn(min = 20.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(side.uppercase(), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = tone)
@@ -422,7 +413,7 @@ private fun OddsTile(side: String, book: BookSnapshot?, armed: Boolean, history:
             FlashBackground(book?.bestAsk) {
                 Text(
                     Fmt.cents(book?.bestAsk),
-                    style = Mono.large.copy(fontSize = 26.sp),
+                    style = Mono.large.copy(fontSize = 22.sp),
                     color = tone,
                     modifier = Modifier.padding(horizontal = 4.dp),
                 )
@@ -443,7 +434,7 @@ private fun OddsTile(side: String, book: BookSnapshot?, armed: Boolean, history:
                     maxLines = 1,
                 )
             }
-            Sparkline(history, tone, height = 20.dp, description = "$side ask history")
+            Sparkline(history, tone, height = 14.dp, description = "$side ask history")
         }
     }
 }
