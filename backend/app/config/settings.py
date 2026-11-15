@@ -142,6 +142,13 @@ class Settings(BaseSettings):
     # stage0_stop_loss_pct. 0 = off (the normal stage 0 stop-loss applies to every buy price).
     stage0_high_buy_price: float = 0.90
     stage0_high_buy_stop_loss_pct: float = 15.0
+    # Last-seconds stop-loss for stage 3: once `stage3_last_seconds` or fewer seconds remain, stage 3
+    # shares use this (tight) percentage instead of stage3_stop_loss_pct. 0 = off.
+    # Middle tier: with `stage3_mid_seconds` or fewer seconds left (more than stage3_last_seconds).
+    stage3_mid_seconds: int = 20
+    stage3_mid_stop_loss_pct: float = 3.0
+    stage3_last_seconds: int = 10
+    stage3_last_seconds_stop_loss_pct: float = 2.0
     # Buys at stage0_high_buy_price (0.90) or more are only allowed once this percent of the stage 0 window
     # (start -> end) has passed: 50 with the 200s -> 100s window = from 150s left. 0 = the whole window.
     stage0_high_buy_after_pct: float = 50.0

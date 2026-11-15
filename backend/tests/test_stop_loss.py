@@ -367,3 +367,41 @@ async def test_stage_1_2_3_in_one_market_each_stops_out_alone():
         position = session.execute(select(Position)).scalar_one()
     assert position.size < 0.03  # only sub-cent rounding dust of the three stages is left to settle
     assert all(manager.load_stage0_holding("paper", m1.market_id, st) is None for st in (1, 2, 3))
+
+
+def test_stage3_last_seconds_stop_loss_overrides_the_normal_stage3_percentage():
+    config = make_config(**STOPS, stage3_last_seconds=10, stage3_last_seconds_stop_loss_pct=2.0)
+    normal = config.stop_loss_pct_for(3, 0.95)
+    # more than 10 s left: the normal stage 3 percentage
+    assert config.stop_loss_pct_for(3, 0.95, 11) == normal
+    # 10 s or less left: 2 %
+    assert config.stop_loss_pct_for(3, 0.95, 10) == 2.0
+    assert config.stop_loss_pct_for(3, 0.95, 3) == 2.0
+    assert config.stop_loss_price_for(3, 0.95, 8) == pytest.approx(0.931)
+    # other stages are not affected; unknown remaining time keeps the old behaviour
+    assert config.stop_loss_pct_for(1, 0.85, 5) == 15.0
+    assert config.stop_loss_pct_for(3, 0.95) == normal
+    # 0 = off
+    off = make_config(**STOPS, stage3_last_seconds=10, stage3_last_seconds_stop_loss_pct=0.0)
+    assert off.stop_loss_pct_for(3, 0.95, 5) == normal
+
+
+def test_stage3_stop_loss_steps_down_5_3_2_by_seconds_left():
+    config = make_config(
+        **STOPS,
+        stage3_mid_seconds=20, stage3_mid_stop_loss_pct=3.0,
+        stage3_last_seconds=10, stage3_last_seconds_stop_loss_pct=2.0,
+    )
+    assert config.stop_loss_pct_for(3, 0.95, 30) == 5.0
+    assert config.stop_loss_pct_for(3, 0.95, 20.5) == 5.0
+    assert config.stop_loss_pct_for(3, 0.95, 20) == 3.0
+    assert config.stop_loss_pct_for(3, 0.95, 10.5) == 3.0
+    assert config.stop_loss_pct_for(3, 0.95, 10) == 2.0
+    assert config.stop_loss_pct_for(3, 0.95, 1) == 2.0
+    assert config.stop_loss_price_for(3, 0.95, 15) == pytest.approx(0.9215)
+    assert config.stop_loss_pct_for(3, 0.95) == 5.0  # unknown time: normal
+    assert config.stop_loss_pct_for(2, 0.90, 5) == 5.0  # other stages untouched
+    # mid tier off: 5 % until the last tier
+    no_mid = make_config(**STOPS, stage3_mid_stop_loss_pct=0.0, stage3_last_seconds=10, stage3_last_seconds_stop_loss_pct=2.0)
+    assert no_mid.stop_loss_pct_for(3, 0.95, 15) == 5.0
+    assert no_mid.stop_loss_pct_for(3, 0.95, 8) == 2.0

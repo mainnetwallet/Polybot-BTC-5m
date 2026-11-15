@@ -63,6 +63,10 @@ OVERRIDABLE_KEYS = (
     "stage0_high_buy_price",
     "stage0_high_buy_stop_loss_pct",
     "stage0_high_buy_after_pct",
+    "stage3_mid_seconds",
+    "stage3_mid_stop_loss_pct",
+    "stage3_last_seconds",
+    "stage3_last_seconds_stop_loss_pct",
 )
 
 
@@ -134,6 +138,14 @@ class RuntimeSettings(BaseModel):
     # Buys at stage0_high_buy_price or more wait until this percent of the stage 0 window (start -> end)
     # has passed (50 with 200s -> 100s = from 150s left; 0 = the whole window).
     stage0_high_buy_after_pct: float = Field(default=50.0, ge=0.0, le=100.0)
+    # Last-seconds stop-loss for stage 3: with `stage3_last_seconds` or fewer seconds left, stage 3 shares
+    # use stage3_last_seconds_stop_loss_pct (percent below cost) instead of stage3_stop_loss_pct. 0 = off.
+    # Middle tier for stage 3: with `stage3_mid_seconds` or fewer seconds left (and more than
+    # `stage3_last_seconds`), stage 3 shares use stage3_mid_stop_loss_pct. 0 = off.
+    stage3_mid_seconds: int = Field(default=20, ge=0, le=300)
+    stage3_mid_stop_loss_pct: float = Field(default=0.0, ge=0.0, le=99.0)
+    stage3_last_seconds: int = Field(default=10, ge=0, le=300)
+    stage3_last_seconds_stop_loss_pct: float = Field(default=0.0, ge=0.0, le=99.0)
     paper_fill_ratio: float = Field(gt=0.0, le=1.0)
     paper_fee_exponent: float = Field(ge=0.0, le=5.0)
     paper_starting_balance: float = Field(gt=0.0)
@@ -206,12 +218,37 @@ class RuntimeSettings(BaseModel):
         """Take-profit price for stage 2 shares (same price whatever they cost); None = off."""
         return self.stage2_sell_price if self.stage2_sell_enabled else None
 
-    def stop_loss_pct_for(self, stage: int, cost_per_share: float | None = None) -> float:
+    def stop_loss_pct_for(
+        self,
+        stage: int,
+        cost_per_share: float | None = None,
+        remaining_seconds: float | None = None,
+    ) -> float:
         """Stop-loss percentage configured for `stage` (0 = off).
+
+        Stage 3 steps down as the market ends: stage3_stop_loss_pct (5), then stage3_mid_stop_loss_pct
+        with `stage3_mid_seconds` or fewer seconds left (3), then stage3_last_seconds_stop_loss_pct
+        with `stage3_last_seconds` or fewer seconds left (2). A tier set to 0 is skipped.
 
         Stage 0 shares that cost stage0_high_buy_price or more use stage0_high_buy_stop_loss_pct
         (when it is above 0) instead of stage0_stop_loss_pct.
         """
+        if (
+            stage == 3
+            and remaining_seconds is not None
+            and self.stage3_last_seconds_stop_loss_pct > 0
+            and 0 < self.stage3_last_seconds
+            and remaining_seconds <= self.stage3_last_seconds
+        ):
+            return self.stage3_last_seconds_stop_loss_pct
+        if (
+            stage == 3
+            and remaining_seconds is not None
+            and self.stage3_mid_stop_loss_pct > 0
+            and 0 < self.stage3_mid_seconds
+            and remaining_seconds <= self.stage3_mid_seconds
+        ):
+            return self.stage3_mid_stop_loss_pct
         if (
             stage == 0
             and cost_per_share is not None
@@ -226,13 +263,18 @@ class RuntimeSettings(BaseModel):
             3: self.stage3_stop_loss_pct,
         }.get(stage, 0.0)
 
-    def stop_loss_price_for(self, stage: int, cost_per_share: float | None) -> float | None:
+    def stop_loss_price_for(
+        self,
+        stage: int,
+        cost_per_share: float | None,
+        remaining_seconds: float | None = None,
+    ) -> float | None:
         """Best-bid level at or below which `stage`'s shares are sold; None = no stop-loss.
 
         cost * (1 - pct / 100) with the average price paid per share. An unknown cost has no
         reference price, so there is no stop for those shares.
         """
-        pct = self.stop_loss_pct_for(stage, cost_per_share)
+        pct = self.stop_loss_pct_for(stage, cost_per_share, remaining_seconds)
         if pct <= 0 or cost_per_share is None or cost_per_share <= 0:
             return None
         return cost_per_share * (1.0 - pct / 100.0)

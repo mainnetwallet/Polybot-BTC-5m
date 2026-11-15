@@ -1069,7 +1069,8 @@ class OrderManager:
                     sell_price = config.stage2_sell_price_for(holding.cost)
                 else:
                     sell_price = None  # stage 3 has no take-profit: held to settlement unless its stop-loss fires
-                stop_price = config.stop_loss_price_for(stage, holding.cost)
+                remaining_s = market.remaining_seconds()
+                stop_price = config.stop_loss_price_for(stage, holding.cost, remaining_s)
                 if bid is None:
                     return []
                 if stop_price is not None and bid <= stop_price + 1e-9:
@@ -1102,7 +1103,7 @@ class OrderManager:
                 asyncio.to_thread(self._reserve_sell_order, mode, market, holding, key, sell_size, bid, kind)
             )
             stop_note = (
-                f" (stop-loss: bid <= {stop_price:.3f}, {config.stop_loss_pct_for(stage, holding.cost):g}% under cost)"
+                f" (stop-loss: bid <= {stop_price:.3f}, {config.stop_loss_pct_for(stage, holding.cost, remaining_s):g}% under cost)"
                 if kind == "stop_loss"
                 else ""
             )
