@@ -454,7 +454,13 @@ fun AccountCard(account: AccountState, modifier: Modifier = Modifier) {
 
 /** Two big segments: PAPER | LIVE. */
 @Composable
-fun ModeToggle(selected: String, enabled: Boolean, onSelect: (String) -> Unit, modifier: Modifier = Modifier) {
+fun ModeToggle(
+    selected: String,
+    enabled: Boolean,
+    onSelect: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    compact: Boolean = false,
+) {
     val c = Poly.colors
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -493,7 +499,7 @@ fun ModeToggle(selected: String, enabled: Boolean, onSelect: (String) -> Unit, m
                         fontWeight = FontWeight.SemiBold,
                         style = MaterialTheme.typography.labelLarge,
                         modifier = Modifier
-                            .padding(vertical = 10.dp)
+                            .padding(vertical = if (compact) 6.dp else 10.dp)
                             .fillMaxWidth(),
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                     )
@@ -503,9 +509,9 @@ fun ModeToggle(selected: String, enabled: Boolean, onSelect: (String) -> Unit, m
     }
 }
 
-/** A one-line message above the controls (risk halt, kill switch on). */
+/** A one-line message (risk halt, kill switch on). */
 @Composable
-private fun DockNotice(text: String, color: Color, container: Color) {
+private fun NoticeRow(text: String, color: Color, container: Color) {
     Surface(shape = RoundedCornerShape(10.dp), color = container, modifier = Modifier.fillMaxWidth()) {
         Row(
             Modifier.padding(horizontal = Space.md, vertical = Space.sm),
@@ -518,7 +524,32 @@ private fun DockNotice(text: String, color: Color, container: Color) {
     }
 }
 
-/** Square kill switch button: one tap engages it (emergency stop), a second tap asks to clear it. */
+/** Risk halt, kill switch and "live not ready" messages for the Overview. Draws nothing when there is none. */
+@Composable
+fun EngineNotices(bot: BotState, live: LiveReadiness, modifier: Modifier = Modifier) {
+    val c = Poly.colors
+    val hasRisk = !bot.riskHalt.isNullOrBlank()
+    val liveNotReady = !live.ready && live.reasons.isNotEmpty()
+    if (!hasRisk && !bot.killSwitch && !liveNotReady) return
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Space.sm)) {
+        if (hasRisk) {
+            NoticeRow("Risk halt: ${bot.riskHalt}", c.warn, c.warnContainer)
+        } else if (bot.killSwitch) {
+            NoticeRow("Kill switch is on. New orders are blocked until you clear it.", c.down, c.downContainer)
+        }
+        if (liveNotReady) {
+            Text(
+                "Live is not ready: " + live.reasons.joinToString("; "),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+/** Kill switch button: one tap engages it (emergency stop), a second tap asks to clear it. */
 @Composable
 private fun KillButton(active: Boolean, enabled: Boolean, onToggle: (Boolean) -> Unit, modifier: Modifier = Modifier) {
     val c = Poly.colors
@@ -526,7 +557,7 @@ private fun KillButton(active: Boolean, enabled: Boolean, onToggle: (Boolean) ->
     val content = if (active) Color.White else MaterialTheme.colorScheme.onErrorContainer
     Surface(
         modifier = modifier
-            .size(width = 60.dp, height = 48.dp)
+            .size(width = 52.dp, height = 40.dp)
             .toggleable(value = active, enabled = enabled, role = Role.Switch, onValueChange = onToggle),
         shape = RoundedCornerShape(12.dp),
         color = container,
@@ -537,20 +568,19 @@ private fun KillButton(active: Boolean, enabled: Boolean, onToggle: (Boolean) ->
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            Icon(Icons.Filled.Warning, contentDescription = null, modifier = Modifier.size(18.dp))
-            Text(if (active) "CLEAR" else "KILL", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+            Icon(Icons.Filled.Warning, contentDescription = null, modifier = Modifier.size(16.dp))
+            Text(if (active) "CLEAR" else "KILL", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
         }
     }
 }
 
 /**
- * Engine controls pinned at the bottom of the Overview: Start/Stop, PAPER | LIVE and the kill switch in
- * one row, so they are always reachable without scrolling. Risk halts and "live not ready" show above.
+ * Engine controls in one 40dp row: Start/Stop, PAPER | LIVE and the kill switch. They live in the top bar,
+ * so they are reachable from every tab. The state and the confirmation dialogs are in [EngineControls].
  */
 @Composable
-fun EngineDock(
+fun EngineControlsRow(
     bot: BotState,
-    live: LiveReadiness,
     busy: Boolean,
     onStart: () -> Unit,
     onStop: () -> Unit,
@@ -559,72 +589,46 @@ fun EngineDock(
     modifier: Modifier = Modifier,
 ) {
     val c = Poly.colors
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        shadowElevation = 8.dp,
+    Row(
+        modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(
-            Modifier.padding(horizontal = Space.md, vertical = Space.sm),
-            verticalArrangement = Arrangement.spacedBy(Space.sm),
-        ) {
-            if (!bot.riskHalt.isNullOrBlank()) {
-                DockNotice("Risk halt: ${bot.riskHalt}", c.warn, c.warnContainer)
-            } else if (bot.killSwitch) {
-                DockNotice("Kill switch is on. New orders are blocked until you clear it.", c.down, c.downContainer)
-            }
-            if (!live.ready && live.reasons.isNotEmpty()) {
-                Text(
-                    "Live is not ready: " + live.reasons.joinToString("; "),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(Space.sm),
-                verticalAlignment = Alignment.CenterVertically,
+        if (bot.running) {
+            Button(
+                onClick = onStop,
+                enabled = !busy,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                    contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                ),
+                contentPadding = PaddingValues(horizontal = Space.sm),
+                modifier = Modifier
+                    .weight(1f)
+                    .height(40.dp),
             ) {
-                if (bot.running) {
-                    Button(
-                        onClick = onStop,
-                        enabled = !busy,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.errorContainer,
-                            contentColor = MaterialTheme.colorScheme.onErrorContainer,
-                        ),
-                        contentPadding = PaddingValues(horizontal = Space.sm),
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(48.dp),
-                    ) {
-                        Icon(Icons.Filled.Stop, contentDescription = null, modifier = Modifier.size(20.dp))
-                        Text(" Stop", maxLines = 1)
-                    }
+                Icon(Icons.Filled.Stop, contentDescription = null, modifier = Modifier.size(18.dp))
+                Text(" Stop", maxLines = 1)
+            }
+        } else {
+            Button(
+                onClick = onStart,
+                enabled = !busy && !bot.killSwitch,
+                colors = if (bot.isLive) {
+                    ButtonDefaults.buttonColors(containerColor = c.live, contentColor = Color.White)
                 } else {
-                    Button(
-                        onClick = onStart,
-                        enabled = !busy && !bot.killSwitch,
-                        colors = if (bot.isLive) {
-                            ButtonDefaults.buttonColors(containerColor = c.live, contentColor = Color.White)
-                        } else {
-                            ButtonDefaults.buttonColors()
-                        },
-                        contentPadding = PaddingValues(horizontal = Space.sm),
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(48.dp),
-                    ) {
-                        Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
-                        Text(" Start", maxLines = 1)
-                    }
-                }
-                ModeToggle(selected = bot.mode, enabled = !busy, onSelect = onMode, modifier = Modifier.weight(1.4f))
-                KillButton(active = bot.killSwitch, enabled = !busy, onToggle = onKill)
+                    ButtonDefaults.buttonColors()
+                },
+                contentPadding = PaddingValues(horizontal = Space.sm),
+                modifier = Modifier
+                    .weight(1f)
+                    .height(40.dp),
+            ) {
+                Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                Text(" Start", maxLines = 1)
             }
         }
+        ModeToggle(selected = bot.mode, enabled = !busy, onSelect = onMode, modifier = Modifier.weight(1.5f), compact = true)
+        KillButton(active = bot.killSwitch, enabled = !busy, onToggle = onKill)
     }
 }
