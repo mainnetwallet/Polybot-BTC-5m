@@ -63,6 +63,7 @@ fun ConnectScreen(
     initialToken: String,
     modifier: Modifier = Modifier,
     firstRun: Boolean = true,
+    embedded: Boolean = false,
     onDone: () -> Unit = {},
 ) {
     val graph = LocalGraph.current
@@ -83,11 +84,12 @@ fun ConnectScreen(
     val addressError = if (url.isNotBlank() && parsed is TargetParse.Invalid) parsed.reason else null
     val canSave = parsed is TargetParse.Ok && token.isNotBlank() && !saving && !testing
 
+    // Embedded in the main scaffold the insets are already handled by the bars around it.
+    val insets = if (embedded) Modifier.imePadding() else Modifier.safeDrawingPadding().imePadding()
     Column(
         modifier
             .fillMaxSize()
-            .safeDrawingPadding()
-            .imePadding()
+            .then(insets)
             .verticalScroll(rememberScrollState())
             .padding(Space.lg),
         verticalArrangement = Arrangement.spacedBy(Space.lg),
