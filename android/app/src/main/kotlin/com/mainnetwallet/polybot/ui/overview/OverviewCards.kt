@@ -54,11 +54,14 @@ import com.mainnetwallet.polybot.data.model.BtcState
 import com.mainnetwallet.polybot.data.model.LiveReadiness
 import com.mainnetwallet.polybot.data.model.MarketSnapshot
 import com.mainnetwallet.polybot.data.model.Modes
+import com.mainnetwallet.polybot.data.model.PositionRow
+import com.mainnetwallet.polybot.data.model.SellableHolding
 import com.mainnetwallet.polybot.ui.Fmt
 import com.mainnetwallet.polybot.ui.components.Dot
 import com.mainnetwallet.polybot.ui.components.FlashBackground
 import com.mainnetwallet.polybot.ui.components.Label
 import com.mainnetwallet.polybot.ui.components.Pill
+import com.mainnetwallet.polybot.ui.components.SidePill
 import com.mainnetwallet.polybot.ui.components.Sparkline
 import com.mainnetwallet.polybot.ui.components.pnlColor
 import com.mainnetwallet.polybot.ui.theme.Mono
@@ -67,8 +70,8 @@ import com.mainnetwallet.polybot.ui.theme.Space
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
-// Overview layout, top to bottom: hero (countdown + BTC), odds (UP | DOWN), account, last order, and the
-// engine controls pinned in a dock at the bottom, so it fits one phone screen with little or no scrolling.
+// Overview layout, top to bottom: hero (countdown, BTC and account numbers), odds (UP | DOWN) and the position
+// box with its instant Sell buttons. The engine controls live in the top bar.
 
 /** Compact card used on the Overview: 12dp padding, 6dp between children. */
 @Composable
@@ -137,14 +140,16 @@ private fun MiniStat(
 }
 
 /**
- * Hero card: the 5-minute window countdown, the BTC price and its gap to the price to beat, in one place.
- * The clock follows the server, not the phone. The card tints amber inside the final window.
+ * Hero card: the 5-minute window countdown, the BTC price and its gap to the price to beat, and the account
+ * numbers (balance, PnL, trades) in one place. The clock follows the server, not the phone.
+ * The card tints amber inside the final window.
  */
 @Composable
 fun HeroCard(
     market: MarketSnapshot?,
     btc: BtcState?,
     btcHistory: List<Float>,
+    account: AccountState,
     inWindow: Boolean,
     offsetMs: Long,
     modifier: Modifier = Modifier,
@@ -171,7 +176,6 @@ fun HeroCard(
     } else {
         0f
     }
-    val title = if (market == null) "Waiting for the next window" else market.slug.ifBlank { Fmt.shortId(market.marketId) }
 
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -188,14 +192,11 @@ fun HeroCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(Space.sm),
                 ) {
-                    Text(
-                        title,
-                        style = Mono.small,
-                        color = scheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
-                    )
+                    Label(if (market == null) "Waiting for the next window" else "Closes in", Modifier.weight(1f))
+                    if (account.positionsAwaitingSettlement > 0) {
+                        val redeem = if (account.pendingRedeems > 0) " \u00B7 ${account.pendingRedeems} redeem" else ""
+                        Pill("${account.positionsAwaitingSettlement} settling$redeem", scheme.onSurfaceVariant, scheme.surfaceVariant)
+                    }
                     if (market != null) {
                         if (inWindow) {
                             Pill("FINAL WINDOW", c.warn, c.warnContainer)
@@ -206,7 +207,6 @@ fun HeroCard(
                 }
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
                     Column(Modifier.weight(1f)) {
-                        Label(if (market == null) "Window" else "Closes in")
                         Text(
                             if (remaining == null) "--:--" else Fmt.clock(remaining),
                             style = Mono.xlarge,
@@ -297,10 +297,40 @@ fun HeroCard(
                 Sparkline(
                     btcHistory,
                     scheme.primary,
-                    height = 36.dp,
+                    height = 32.dp,
                     reference = btc?.priceToBeat?.toFloat(),
                     description = "BTC price chart",
                 )
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(scheme.outlineVariant.copy(alpha = 0.6f)),
+                )
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(Space.sm),
+                    verticalAlignment = Alignment.Bottom,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Label("Balance")
+                        Text(Fmt.usdGrouped(account.balance), style = Mono.large.copy(fontSize = 20.sp), maxLines = 1)
+                    }
+                    Column(Modifier.weight(1f), horizontalAlignment = Alignment.End) {
+                        Label("Daily PnL")
+                        Text(
+                            Fmt.signedUsd(account.dailyPnl),
+                            style = Mono.large.copy(fontSize = 20.sp),
+                            color = pnlColor(account.dailyPnl),
+                            maxLines = 1,
+                        )
+                    }
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+                    MiniStat("Realized", Fmt.signedUsd(account.realizedPnl), Modifier.weight(1f), valueColor = pnlColor(account.realizedPnl))
+                    MiniStat("Unrealized", Fmt.signedUsd(account.unrealizedPnl), Modifier.weight(1f), valueColor = pnlColor(account.unrealizedPnl))
+                    MiniStat("Trades", account.tradesToday.toString(), Modifier.weight(1f))
+                }
             }
         }
     }
@@ -414,40 +444,6 @@ private fun OddsTile(side: String, book: BookSnapshot?, armed: Boolean, history:
                 )
             }
             Sparkline(history, tone, height = 20.dp, description = "$side ask history")
-        }
-    }
-}
-
-/** Balance and daily PnL big, the rest in one row. Settling positions show as a chip in the header. */
-@Composable
-fun AccountCard(account: AccountState, modifier: Modifier = Modifier) {
-    val scheme = MaterialTheme.colorScheme
-    CompactCard(modifier) {
-        CardHeader("Account \u00B7 " + account.mode.uppercase()) {
-            if (account.positionsAwaitingSettlement > 0) {
-                val redeem = if (account.pendingRedeems > 0) " \u00B7 ${account.pendingRedeems} redeem" else ""
-                Pill("${account.positionsAwaitingSettlement} settling$redeem", scheme.onSurfaceVariant, scheme.surfaceVariant)
-            }
-        }
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
-            Column(Modifier.weight(1f)) {
-                Label("Balance")
-                Text(Fmt.usdGrouped(account.balance), style = Mono.large.copy(fontSize = 24.sp), maxLines = 1)
-            }
-            Column(horizontalAlignment = Alignment.End) {
-                Label("Daily PnL")
-                Text(
-                    Fmt.signedUsd(account.dailyPnl),
-                    style = Mono.large.copy(fontSize = 24.sp),
-                    color = pnlColor(account.dailyPnl),
-                    maxLines = 1,
-                )
-            }
-        }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
-            MiniStat("Realized", Fmt.signedUsd(account.realizedPnl), Modifier.weight(1f), valueColor = pnlColor(account.realizedPnl))
-            MiniStat("Unrealized", Fmt.signedUsd(account.unrealizedPnl), Modifier.weight(1f), valueColor = pnlColor(account.unrealizedPnl))
-            MiniStat("Trades", account.tradesToday.toString(), Modifier.weight(1f))
         }
     }
 }
@@ -630,5 +626,120 @@ fun EngineControlsRow(
         }
         ModeToggle(selected = bot.mode, enabled = !busy, onSelect = onMode, modifier = Modifier.weight(1.5f), compact = true)
         KillButton(active = bot.killSwitch, enabled = !busy, onToggle = onKill)
+    }
+}
+
+/** Key used in the "selling" set while a Sell all request is on its way. */
+internal const val SELL_ALL_KEY = "__all__"
+
+/** Key of one stage row in the "selling" set, used to block a second tap on the same row while its request is on the way. */
+internal fun sellKey(h: SellableHolding): String = "${h.marketId}:${h.side}:${h.stage}"
+
+@Composable
+private fun SellButton(label: String, enabled: Boolean, onClick: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = scheme.errorContainer,
+            contentColor = scheme.onErrorContainer,
+        ),
+        modifier = Modifier.heightIn(min = 36.dp),
+    ) {
+        Text(label, style = MaterialTheme.typography.labelLarge, maxLines = 1)
+    }
+}
+
+/**
+ * Position box: what is held in the live market, one block per side (shares, average price, best bid, PnL)
+ * with one row per stage under it, each with its own Sell button, plus Sell all in the header.
+ * A tap sells at the market right away: there is no confirm dialog or sheet and no extra delay. `selling`
+ * only disables a button while its own request is on the way, so a double tap cannot send it twice.
+ */
+@Composable
+fun PositionBoxCard(
+    marketId: String?,
+    positions: List<PositionRow>,
+    sellable: List<SellableHolding>,
+    upBook: BookSnapshot?,
+    downBook: BookSnapshot?,
+    selling: Set<String>,
+    onSell: (SellableHolding) -> Unit,
+    onSellAll: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val open = if (marketId == null) {
+        emptyList()
+    } else {
+        positions
+            .filter { it.marketId == marketId && it.status == "open" && it.size > 0 }
+            .sortedByDescending { it.side.equals("UP", ignoreCase = true) }
+    }
+    val sellableHere = if (marketId == null) emptyList() else sellable.filter { it.marketId == marketId }
+    val sellingAll = SELL_ALL_KEY in selling
+
+    CompactCard(modifier) {
+        CardHeader("Position") {
+            if (marketId != null && sellableHere.isNotEmpty()) {
+                SellButton(
+                    label = if (sellingAll) "Selling\u2026" else "Sell all",
+                    enabled = !sellingAll,
+                    onClick = { onSellAll(marketId) },
+                )
+            }
+        }
+        if (open.isEmpty()) {
+            Text(
+                "No open position in this market",
+                style = MaterialTheme.typography.bodySmall,
+                color = scheme.onSurfaceVariant,
+            )
+        } else {
+            open.forEach { p ->
+                val bid = (if (p.side.equals("UP", ignoreCase = true)) upBook else downBook)?.bestBid
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Space.sm),
+                ) {
+                    SidePill(p.side)
+                    Text(
+                        "${Fmt.num(p.size, 2)} sh",
+                        style = Mono.small,
+                        color = scheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+                    MiniStat("Avg", Fmt.cents(p.avgPrice), Modifier.weight(1f))
+                    MiniStat("Bid", Fmt.cents(bid), Modifier.weight(1f))
+                    MiniStat(
+                        "PnL",
+                        Fmt.signedUsd(p.unrealizedPnl),
+                        Modifier.weight(1f),
+                        valueColor = pnlColor(p.unrealizedPnl),
+                    )
+                }
+                sellableHere.filter { it.side.equals(p.side, ignoreCase = true) }.forEach { h ->
+                    val busy = sellKey(h) in selling
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(Space.sm),
+                    ) {
+                        Text("Stage ${h.stage}", style = Mono.small, color = scheme.onSurfaceVariant)
+                        Text("${Fmt.num(h.size, 2)} sh", style = Mono.small, modifier = Modifier.weight(1f))
+                        SellButton(
+                            label = if (busy) "Selling\u2026" else "Sell",
+                            enabled = !busy,
+                            onClick = { onSell(h) },
+                        )
+                    }
+                }
+            }
+        }
     }
 }
