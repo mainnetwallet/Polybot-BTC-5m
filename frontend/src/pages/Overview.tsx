@@ -317,7 +317,8 @@ function PositionPanel({ orders }: { orders: OrderRow[] }) {
       continue;
     }
     for (const h of stages) {
-      const entry = stageEntryPrice(orders, p.market_id, p.side, h.stage);
+      // the server's own per-stage average cost first (instant, no order list needed), the filled buys as a fallback
+      const entry = h.entry_price ?? stageEntryPrice(orders, p.market_id, p.side, h.stage);
       rows.push({
         key: `${h.market_id}:${h.side}:${h.stage}`,
         side: p.side,
