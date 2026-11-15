@@ -1,6 +1,5 @@
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
 }
@@ -16,12 +15,12 @@ val hasReleaseKey: Boolean = releaseKeystorePath != null
 
 android {
     namespace = "com.mainnetwallet.polybot"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.mainnetwallet.polybot"
         minSdk = 26
-        targetSdk = 36
+        targetSdk = 37
         versionCode = appVersionCode
         versionName = appVersionName
     }
@@ -67,11 +66,6 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
-    }
-
-    sourceSets {
-        getByName("main").java.srcDirs("src/main/kotlin")
-        getByName("test").java.srcDirs("src/test/kotlin")
     }
 
     lint {
