@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.mainnetwallet.polybot.ui.Fmt
@@ -95,6 +96,8 @@ fun CountdownRing(
     ringSize: Dp = 148.dp,
     color: Color = MaterialTheme.colorScheme.primary,
     caption: String = "left in this market",
+    strokeWidth: Dp = 10.dp,
+    valueStyle: TextStyle = Mono.large,
 ) {
     val fraction = if (totalSeconds <= 0) 0f else (remainingSeconds / totalSeconds).coerceIn(0.0, 1.0).toFloat()
     val animated by animateFloatAsState(fraction, tween(250), label = "ring")
@@ -106,14 +109,14 @@ fun CountdownRing(
         contentAlignment = Alignment.Center,
     ) {
         Canvas(Modifier.size(ringSize)) {
-            val stroke = 10.dp.toPx()
+            val stroke = strokeWidth.toPx()
             val inset = stroke / 2
             val arcSize = Size(size.width - stroke, size.height - stroke)
             drawArc(track, 0f, 360f, false, Offset(inset, inset), arcSize, style = Stroke(stroke))
             drawArc(color, -90f, 360f * animated, false, Offset(inset, inset), arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
         }
         androidx.compose.foundation.layout.Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(Fmt.clock(remainingSeconds), style = Mono.large)
+            Text(Fmt.clock(remainingSeconds), style = valueStyle)
             Text(caption, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }

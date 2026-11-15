@@ -1,16 +1,26 @@
 package com.mainnetwallet.polybot.ui.overview
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Warning
@@ -19,7 +29,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -29,186 +38,416 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.mainnetwallet.polybot.data.model.AccountState
 import com.mainnetwallet.polybot.data.model.BookSnapshot
 import com.mainnetwallet.polybot.data.model.BotState
 import com.mainnetwallet.polybot.data.model.BtcState
-import com.mainnetwallet.polybot.data.model.LastOrder
 import com.mainnetwallet.polybot.data.model.LiveReadiness
 import com.mainnetwallet.polybot.data.model.MarketSnapshot
 import com.mainnetwallet.polybot.data.model.Modes
 import com.mainnetwallet.polybot.ui.Fmt
-import com.mainnetwallet.polybot.ui.components.CountdownRing
-import com.mainnetwallet.polybot.ui.components.EmptyState
+import com.mainnetwallet.polybot.ui.components.Dot
 import com.mainnetwallet.polybot.ui.components.FlashBackground
-import com.mainnetwallet.polybot.ui.components.KeyValueRow
 import com.mainnetwallet.polybot.ui.components.Label
 import com.mainnetwallet.polybot.ui.components.Pill
-import com.mainnetwallet.polybot.ui.components.PolyCard
-import com.mainnetwallet.polybot.ui.components.SectionTitle
-import com.mainnetwallet.polybot.ui.components.SidePill
 import com.mainnetwallet.polybot.ui.components.Sparkline
-import com.mainnetwallet.polybot.ui.components.StatTile
 import com.mainnetwallet.polybot.ui.components.pnlColor
 import com.mainnetwallet.polybot.ui.theme.Mono
 import com.mainnetwallet.polybot.ui.theme.Poly
 import com.mainnetwallet.polybot.ui.theme.Space
 import kotlinx.coroutines.delay
+import kotlin.math.roundToInt
 
-/** Countdown ring for the current 5-minute window. The clock follows the server, not the phone. */
+// Overview layout, top to bottom: hero (countdown + BTC), odds (UP | DOWN), account, last order, and the
+// engine controls pinned in a dock at the bottom, so it fits one phone screen with little or no scrolling.
+
+/** Compact card used on the Overview: 12dp padding, 6dp between children. */
 @Composable
-fun MarketCard(market: MarketSnapshot?, inWindow: Boolean, offsetMs: Long, modifier: Modifier = Modifier) {
-    val c = Poly.colors
-    PolyCard(modifier) {
-        if (market == null) {
-            EmptyState(
-                title = "No active market",
-                hint = "Waiting for the next 5-minute BTC window.",
-                icon = Icons.Filled.HourglassEmpty,
+private fun CompactCard(
+    modifier: Modifier = Modifier,
+    borderColor: Color? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        border = borderColor?.let { BorderStroke(1.dp, it) },
+    ) {
+        Column(
+            modifier = Modifier.padding(Space.md),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+            content = content,
+        )
+    }
+}
+
+/** Small caps title on the left, status on the right. Fixed min height so the card does not jump. */
+@Composable
+private fun CardHeader(title: String, trailing: @Composable RowScope.() -> Unit = {}) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = 24.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Space.sm),
+    ) {
+        Label(title, Modifier.weight(1f))
+        trailing()
+    }
+}
+
+/** Label over a value; one line, so three of them fit in a row. */
+@Composable
+private fun MiniStat(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+    valueColor: Color = Color.Unspecified,
+    hint: String? = null,
+) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(1.dp)) {
+        Label(label)
+        Text(
+            value,
+            style = Mono.body.copy(fontWeight = FontWeight.Medium),
+            color = valueColor,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (hint != null) {
+            Text(
+                hint,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
-        } else {
-            var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-            LaunchedEffect(market.marketId) {
-                while (true) {
-                    now = System.currentTimeMillis()
-                    delay(200)
-                }
-            }
-            val endMs = Fmt.parse(market.windowEnd)
-            val remaining = if (endMs != null) (endMs - (now + offsetMs)) / 1000.0 else market.remainingSeconds
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(Space.lg),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                CountdownRing(
-                    remainingSeconds = remaining,
-                    totalSeconds = market.durationSeconds,
-                    color = if (inWindow) c.warn else MaterialTheme.colorScheme.primary,
-                )
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.sm)) {
-                    Label("Current market")
-                    Text(
-                        market.slug.ifBlank { Fmt.shortId(market.marketId) },
-                        style = Mono.small,
-                        maxLines = 2,
-                    )
-                    if (inWindow) {
-                        Pill("FINAL WINDOW", c.warn, c.warnContainer)
-                    } else {
-                        Pill("OBSERVING", MaterialTheme.colorScheme.onSecondaryContainer, MaterialTheme.colorScheme.secondaryContainer)
-                    }
-                    Text(
-                        "Closes ${Fmt.time(market.windowEnd)}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
         }
     }
 }
 
-/** One outcome: best ask (flashes on change), bid, sizes, armed flag and a small ask history. */
+/**
+ * Hero card: the 5-minute window countdown, the BTC price and its gap to the price to beat, in one place.
+ * The clock follows the server, not the phone. The card tints amber inside the final window.
+ */
 @Composable
-fun SideCard(
-    side: String,
-    book: BookSnapshot?,
-    armed: Boolean,
-    history: List<Float>,
+fun HeroCard(
+    market: MarketSnapshot?,
+    btc: BtcState?,
+    btcHistory: List<Float>,
+    inWindow: Boolean,
+    offsetMs: Long,
     modifier: Modifier = Modifier,
 ) {
     val c = Poly.colors
-    val up = side.equals("up", ignoreCase = true)
-    val tone = if (up) c.up else c.down
-    PolyCard(modifier, borderColor = if (armed) c.warn else null) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            SidePill(side)
-            Row(Modifier.weight(1f), horizontalArrangement = Arrangement.End) {
-                if (armed) Pill("ARMED", c.warn, c.warnContainer)
+    val scheme = MaterialTheme.colorScheme
+    val accent = if (inWindow) c.warn else scheme.primary
+
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(market?.marketId) {
+        if (market != null) {
+            while (true) {
+                now = System.currentTimeMillis()
+                delay(200)
             }
         }
-        Label("Best ask")
-        FlashBackground(book?.bestAsk) {
-            Text(Fmt.cents(book?.bestAsk), style = Mono.large, color = tone, modifier = Modifier.padding(horizontal = 4.dp))
+    }
+    val remaining: Double? = market?.let { m ->
+        val endMs = Fmt.parse(m.windowEnd)
+        if (endMs != null) (endMs - (now + offsetMs)) / 1000.0 else m.remainingSeconds
+    }
+    val fraction: Float = if (market != null && remaining != null && market.durationSeconds > 0) {
+        (remaining / market.durationSeconds).coerceIn(0.0, 1.0).toFloat()
+    } else {
+        0f
+    }
+    val title = if (market == null) "Waiting for the next window" else market.slug.ifBlank { Fmt.shortId(market.marketId) }
+
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        color = scheme.surfaceContainer,
+        border = BorderStroke(1.dp, accent.copy(alpha = 0.35f)),
+    ) {
+        Box(Modifier.background(Brush.verticalGradient(listOf(accent.copy(alpha = 0.16f), Color.Transparent)))) {
+            Column(Modifier.padding(Space.lg), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 24.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Space.sm),
+                ) {
+                    Text(
+                        title,
+                        style = Mono.small,
+                        color = scheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (market != null) {
+                        if (inWindow) {
+                            Pill("FINAL WINDOW", c.warn, c.warnContainer)
+                        } else {
+                            Pill("OBSERVING", scheme.onSecondaryContainer, scheme.secondaryContainer)
+                        }
+                    }
+                }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+                    Column(Modifier.weight(1f)) {
+                        Label(if (market == null) "Window" else "Closes in")
+                        Text(
+                            if (remaining == null) "--:--" else Fmt.clock(remaining),
+                            style = Mono.xlarge,
+                            color = if (market == null) scheme.onSurfaceVariant else accent,
+                            maxLines = 1,
+                        )
+                    }
+                    Column(horizontalAlignment = Alignment.End) {
+                        Label("BTC")
+                        Text(
+                            Fmt.usdGrouped(btc?.price),
+                            style = Mono.large.copy(fontSize = 22.sp),
+                            maxLines = 1,
+                        )
+                        val feedText: String
+                        val feedColor: Color
+                        when {
+                            btc == null || !btc.enabled -> {
+                                feedText = "off"
+                                feedColor = scheme.onSurfaceVariant
+                            }
+                            !btc.connected -> {
+                                feedText = "disconnected"
+                                feedColor = c.down
+                            }
+                            btc.stale -> {
+                                feedText = "stale"
+                                feedColor = c.warn
+                            }
+                            else -> {
+                                feedText = "live"
+                                feedColor = c.up
+                            }
+                        }
+                        val ageMs = btc?.ageMs
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Dot(feedColor, size = 6.dp)
+                            Text(
+                                if (ageMs == null) feedText else feedText + " " + Fmt.num(ageMs / 1000.0, 1) + " s",
+                                style = Mono.small,
+                                color = scheme.onSurfaceVariant,
+                                maxLines = 1,
+                            )
+                        }
+                    }
+                }
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(6.dp)
+                        .background(scheme.surfaceVariant, RoundedCornerShape(50)),
+                ) {
+                    Box(
+                        Modifier
+                            .fillMaxWidth(fraction)
+                            .fillMaxHeight()
+                            .background(accent, RoundedCornerShape(50)),
+                    )
+                }
+                if (btc != null) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(Space.sm),
+                    ) {
+                        val diff = btc.diff
+                        if (diff != null) {
+                            if (diff > 0) {
+                                Pill("Gap " + Fmt.signedUsd(diff), c.up, c.upContainer)
+                            } else if (diff < 0) {
+                                Pill("Gap " + Fmt.signedUsd(diff), c.down, c.downContainer)
+                            } else {
+                                Pill("Gap " + Fmt.signedUsd(diff), scheme.onSurfaceVariant, scheme.surfaceVariant)
+                            }
+                        }
+                        Text(
+                            "To beat " + Fmt.usdGrouped(btc.priceToBeat),
+                            style = Mono.small,
+                            color = scheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    if (!btc.lastError.isNullOrBlank()) {
+                        Text(btc.lastError, style = MaterialTheme.typography.bodySmall, color = c.down, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+                Sparkline(
+                    btcHistory,
+                    scheme.primary,
+                    height = 36.dp,
+                    reference = btc?.priceToBeat?.toFloat(),
+                    description = "BTC price chart",
+                )
+            }
         }
-        KeyValueRow("Bid", Fmt.cents(book?.bestBid))
-        KeyValueRow("Ask size", Fmt.num(book?.askSize, 0))
-        KeyValueRow("Bid size", Fmt.num(book?.bidSize, 0))
-        Sparkline(history, tone, height = 40.dp, description = "$side ask history")
     }
 }
 
-/** BTC price against the price to beat, with the gap, a sparkline and a feed health flag. */
+/** UP and DOWN side by side under a split bar. Each tile: best ask (flashes), bid, size, armed flag, ask history. */
 @Composable
-fun BtcCard(btc: BtcState?, history: List<Float>, modifier: Modifier = Modifier) {
-    val c = Poly.colors
-    PolyCard(modifier) {
-        SectionTitle("BTC") {
-            when {
-                btc == null || !btc.enabled -> Pill("OFF", MaterialTheme.colorScheme.onSurfaceVariant, MaterialTheme.colorScheme.surfaceVariant)
-                !btc.connected -> Pill("DISCONNECTED", c.down, c.downContainer)
-                btc.stale -> Pill("STALE", c.warn, c.warnContainer)
-                else -> Pill("LIVE", c.up, c.upContainer)
-            }
-        }
-        if (btc == null) {
+fun OddsCard(
+    up: BookSnapshot?,
+    down: BookSnapshot?,
+    upArmed: Boolean,
+    downArmed: Boolean,
+    upHistory: List<Float>,
+    downHistory: List<Float>,
+    modifier: Modifier = Modifier,
+) {
+    val upAsk = up?.bestAsk
+    val downAsk = down?.bestAsk
+    val upShare: Float? = if (upAsk != null && downAsk != null && upAsk + downAsk > 0.0) {
+        (upAsk / (upAsk + downAsk)).toFloat()
+    } else {
+        null
+    }
+    CompactCard(modifier) {
+        CardHeader("Ask split") {
+            val pct = if (upShare == null) null else (upShare * 100).roundToInt()
             Text(
-                "No BTC data yet.",
-                style = MaterialTheme.typography.bodyMedium,
+                if (pct == null) "\u2014" else "UP $pct% / DOWN ${100 - pct}%",
+                style = Mono.small,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-        } else {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.lg)) {
-                StatTile("Price", Fmt.usdGrouped(btc.price), Modifier.weight(1f))
-                StatTile("Price to beat", Fmt.usdGrouped(btc.priceToBeat), Modifier.weight(1f))
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.lg)) {
-                StatTile(
-                    "Gap",
-                    if (btc.diff == null) "—" else Fmt.signedUsd(btc.diff),
-                    Modifier.weight(1f),
-                    valueColor = pnlColor(btc.diff),
-                    hint = if (btc.diff == null) null else if (btc.diff > 0) "above" else if (btc.diff < 0) "below" else "level",
-                )
-                StatTile(
-                    "Age",
-                    if (btc.ageMs == null) "—" else Fmt.num(btc.ageMs / 1000.0, 1) + " s",
-                    Modifier.weight(1f),
-                    valueColor = if (btc.stale) c.warn else androidx.compose.ui.graphics.Color.Unspecified,
-                )
-            }
-            Sparkline(history, MaterialTheme.colorScheme.primary, height = 56.dp, reference = btc.priceToBeat?.toFloat(), description = "BTC price chart")
-            if (!btc.lastError.isNullOrBlank()) {
-                Text(btc.lastError, style = MaterialTheme.typography.bodySmall, color = c.down)
-            }
+        }
+        SplitBar(upShare ?: 0.5f)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+            OddsTile("UP", up, upArmed, upHistory, Modifier.weight(1f))
+            OddsTile("DOWN", down, downArmed, downHistory, Modifier.weight(1f))
         }
     }
 }
 
 @Composable
+private fun SplitBar(upShare: Float, modifier: Modifier = Modifier) {
+    val c = Poly.colors
+    val w = upShare.coerceIn(0.03f, 0.97f)
+    Row(
+        modifier
+            .fillMaxWidth()
+            .height(6.dp)
+            .clip(RoundedCornerShape(50)),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Box(
+            Modifier
+                .weight(w)
+                .fillMaxHeight()
+                .background(c.up),
+        )
+        Box(
+            Modifier
+                .weight(1f - w)
+                .fillMaxHeight()
+                .background(c.down),
+        )
+    }
+}
+
+@Composable
+private fun OddsTile(side: String, book: BookSnapshot?, armed: Boolean, history: List<Float>, modifier: Modifier = Modifier) {
+    val c = Poly.colors
+    val up = side.equals("up", ignoreCase = true)
+    val tone = if (up) c.up else c.down
+    Surface(
+        modifier = modifier,
+        shape = MaterialTheme.shapes.medium,
+        color = if (up) c.upContainer else c.downContainer,
+        border = if (armed) BorderStroke(1.5.dp, c.warn) else null,
+    ) {
+        Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 24.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(side.uppercase(), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = tone)
+                Spacer(Modifier.weight(1f))
+                if (armed) Pill("ARMED", c.warn, c.warnContainer)
+            }
+            FlashBackground(book?.bestAsk) {
+                Text(
+                    Fmt.cents(book?.bestAsk),
+                    style = Mono.large.copy(fontSize = 26.sp),
+                    color = tone,
+                    modifier = Modifier.padding(horizontal = 4.dp),
+                )
+            }
+            Row(Modifier.fillMaxWidth()) {
+                Text(
+                    "Bid " + Fmt.cents(book?.bestBid),
+                    style = Mono.small,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    "Size " + Fmt.num(book?.askSize, 0),
+                    style = Mono.small,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                )
+            }
+            Sparkline(history, tone, height = 20.dp, description = "$side ask history")
+        }
+    }
+}
+
+/** Balance and daily PnL big, the rest in one row. Settling positions show as a chip in the header. */
+@Composable
 fun AccountCard(account: AccountState, modifier: Modifier = Modifier) {
-    PolyCard(modifier) {
-        SectionTitle("Account") { Text(account.mode.uppercase(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.lg)) {
-            StatTile("Balance", Fmt.usdGrouped(account.balance), Modifier.weight(1f))
-            StatTile("Daily PnL", Fmt.signedUsd(account.dailyPnl), Modifier.weight(1f), valueColor = pnlColor(account.dailyPnl))
+    val scheme = MaterialTheme.colorScheme
+    CompactCard(modifier) {
+        CardHeader("Account \u00B7 " + account.mode.uppercase()) {
+            if (account.positionsAwaitingSettlement > 0) {
+                val redeem = if (account.pendingRedeems > 0) " \u00B7 ${account.pendingRedeems} redeem" else ""
+                Pill("${account.positionsAwaitingSettlement} settling$redeem", scheme.onSurfaceVariant, scheme.surfaceVariant)
+            }
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.lg)) {
-            StatTile("Realized", Fmt.signedUsd(account.realizedPnl), Modifier.weight(1f), valueColor = pnlColor(account.realizedPnl))
-            StatTile("Unrealized", Fmt.signedUsd(account.unrealizedPnl), Modifier.weight(1f), valueColor = pnlColor(account.unrealizedPnl))
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+            Column(Modifier.weight(1f)) {
+                Label("Balance")
+                Text(Fmt.usdGrouped(account.balance), style = Mono.large.copy(fontSize = 24.sp), maxLines = 1)
+            }
+            Column(horizontalAlignment = Alignment.End) {
+                Label("Daily PnL")
+                Text(
+                    Fmt.signedUsd(account.dailyPnl),
+                    style = Mono.large.copy(fontSize = 24.sp),
+                    color = pnlColor(account.dailyPnl),
+                    maxLines = 1,
+                )
+            }
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.lg)) {
-            StatTile("Trades today", account.tradesToday.toString(), Modifier.weight(1f))
-            StatTile(
-                "Awaiting settlement",
-                account.positionsAwaitingSettlement.toString(),
-                Modifier.weight(1f),
-                hint = if (account.pendingRedeems > 0) "${account.pendingRedeems} pending redeem" else null,
-            )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+            MiniStat("Realized", Fmt.signedUsd(account.realizedPnl), Modifier.weight(1f), valueColor = pnlColor(account.realizedPnl))
+            MiniStat("Unrealized", Fmt.signedUsd(account.unrealizedPnl), Modifier.weight(1f), valueColor = pnlColor(account.unrealizedPnl))
+            MiniStat("Trades", account.tradesToday.toString(), Modifier.weight(1f))
         }
     }
 }
@@ -264,9 +503,52 @@ fun ModeToggle(selected: String, enabled: Boolean, onSelect: (String) -> Unit, m
     }
 }
 
-/** Engine controls: Start/Stop, Paper/Live, kill switch and what is stopping the bot. */
+/** A one-line message above the controls (risk halt, kill switch on). */
 @Composable
-fun BotCard(
+private fun DockNotice(text: String, color: Color, container: Color) {
+    Surface(shape = RoundedCornerShape(10.dp), color = container, modifier = Modifier.fillMaxWidth()) {
+        Row(
+            Modifier.padding(horizontal = Space.md, vertical = Space.sm),
+            horizontalArrangement = Arrangement.spacedBy(Space.sm),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Filled.Warning, contentDescription = null, tint = color, modifier = Modifier.size(18.dp))
+            Text(text, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+/** Square kill switch button: one tap engages it (emergency stop), a second tap asks to clear it. */
+@Composable
+private fun KillButton(active: Boolean, enabled: Boolean, onToggle: (Boolean) -> Unit, modifier: Modifier = Modifier) {
+    val c = Poly.colors
+    val container = if (active) c.live else MaterialTheme.colorScheme.errorContainer
+    val content = if (active) Color.White else MaterialTheme.colorScheme.onErrorContainer
+    Surface(
+        modifier = modifier
+            .size(width = 60.dp, height = 48.dp)
+            .toggleable(value = active, enabled = enabled, role = Role.Switch, onValueChange = onToggle),
+        shape = RoundedCornerShape(12.dp),
+        color = container,
+        contentColor = content,
+    ) {
+        Column(
+            Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Icon(Icons.Filled.Warning, contentDescription = null, modifier = Modifier.size(18.dp))
+            Text(if (active) "CLEAR" else "KILL", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+/**
+ * Engine controls pinned at the bottom of the Overview: Start/Stop, PAPER | LIVE and the kill switch in
+ * one row, so they are always reachable without scrolling. Risk halts and "live not ready" show above.
+ */
+@Composable
+fun EngineDock(
     bot: BotState,
     live: LiveReadiness,
     busy: Boolean,
@@ -277,104 +559,71 @@ fun BotCard(
     modifier: Modifier = Modifier,
 ) {
     val c = Poly.colors
-    PolyCard(modifier, borderColor = if (bot.isLive) c.live else null) {
-        SectionTitle("Engine") {
-            when {
-                bot.killSwitch -> Pill("KILL SWITCH", c.down, c.downContainer)
-                bot.running -> Pill("RUNNING", c.up, c.upContainer)
-                else -> Pill("STOPPED", MaterialTheme.colorScheme.onSurfaceVariant, MaterialTheme.colorScheme.surfaceVariant)
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shadowElevation = 8.dp,
+    ) {
+        Column(
+            Modifier.padding(horizontal = Space.md, vertical = Space.sm),
+            verticalArrangement = Arrangement.spacedBy(Space.sm),
+        ) {
+            if (!bot.riskHalt.isNullOrBlank()) {
+                DockNotice("Risk halt: ${bot.riskHalt}", c.warn, c.warnContainer)
+            } else if (bot.killSwitch) {
+                DockNotice("Kill switch is on. New orders are blocked until you clear it.", c.down, c.downContainer)
             }
-        }
-        if (bot.running) {
-            Button(
-                onClick = onStop,
-                enabled = !busy,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer,
-                    contentColor = MaterialTheme.colorScheme.onErrorContainer,
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
-            ) {
-                Icon(Icons.Filled.Stop, contentDescription = null, modifier = Modifier.size(20.dp))
-                Text("  Stop engine")
-            }
-        } else {
-            Button(
-                onClick = onStart,
-                enabled = !busy && !bot.killSwitch,
-                colors = if (bot.isLive) {
-                    ButtonDefaults.buttonColors(containerColor = c.live, contentColor = androidx.compose.ui.graphics.Color.White)
-                } else {
-                    ButtonDefaults.buttonColors()
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
-            ) {
-                Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
-                Text(if (bot.isLive) "  Start LIVE engine" else "  Start paper engine")
-            }
-        }
-        Label("Mode")
-        ModeToggle(selected = bot.mode, enabled = !busy, onSelect = onMode)
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("Kill switch", style = MaterialTheme.typography.titleSmall)
+            if (!live.ready && live.reasons.isNotEmpty()) {
                 Text(
-                    "Stops the bot and blocks new orders until cleared.",
+                    "Live is not ready: " + live.reasons.joinToString("; "),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
-            Switch(checked = bot.killSwitch, onCheckedChange = onKill, enabled = !busy)
-        }
-        if (!bot.riskHalt.isNullOrBlank()) {
-            Surface(shape = RoundedCornerShape(12.dp), color = c.warnContainer) {
-                Row(
-                    Modifier.padding(Space.md),
-                    horizontalArrangement = Arrangement.spacedBy(Space.md),
-                    verticalAlignment = Alignment.Top,
-                ) {
-                    Icon(Icons.Filled.Warning, contentDescription = null, tint = c.warn)
-                    Column {
-                        Text("Risk halt", style = MaterialTheme.typography.titleSmall)
-                        Text(bot.riskHalt, style = MaterialTheme.typography.bodyMedium)
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(Space.sm),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (bot.running) {
+                    Button(
+                        onClick = onStop,
+                        enabled = !busy,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                            contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                        ),
+                        contentPadding = PaddingValues(horizontal = Space.sm),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp),
+                    ) {
+                        Icon(Icons.Filled.Stop, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Text(" Stop", maxLines = 1)
+                    }
+                } else {
+                    Button(
+                        onClick = onStart,
+                        enabled = !busy && !bot.killSwitch,
+                        colors = if (bot.isLive) {
+                            ButtonDefaults.buttonColors(containerColor = c.live, contentColor = Color.White)
+                        } else {
+                            ButtonDefaults.buttonColors()
+                        },
+                        contentPadding = PaddingValues(horizontal = Space.sm),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp),
+                    ) {
+                        Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Text(" Start", maxLines = 1)
                     }
                 }
-            }
-        }
-        if (!live.ready && live.reasons.isNotEmpty()) {
-            Text(
-                "Live is not ready: " + live.reasons.joinToString("; "),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-@Composable
-fun LastOrderCard(order: LastOrder?, modifier: Modifier = Modifier) {
-    val c = Poly.colors
-    PolyCard(modifier) {
-        SectionTitle("Last order") { if (order != null) SidePill(order.side) }
-        if (order == null) {
-            Text(
-                "No order yet. Start the engine and wait for an ask to reach the trigger inside the final window.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        } else {
-            KeyValueRow("Status", order.status.replace('_', ' '))
-            KeyValueRow("Filled", "${Fmt.num(order.filledSize, 2)} sh @ ${Fmt.cents(order.avgPrice)}")
-            KeyValueRow("Time", Fmt.time(order.ts))
-            if (order.reason.isNotBlank()) {
-                Text(order.reason, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            if (!order.error.isNullOrBlank()) {
-                Text(order.error, style = MaterialTheme.typography.bodyMedium, color = c.down)
+                ModeToggle(selected = bot.mode, enabled = !busy, onSelect = onMode, modifier = Modifier.weight(1.4f))
+                KillButton(active = bot.killSwitch, enabled = !busy, onToggle = onKill)
             }
         }
     }
