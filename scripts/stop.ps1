@@ -91,6 +91,10 @@ function Test-TrackedProcess([int]$ProcessId, [string]$Name) {
     if ($Name -eq "frontend") {
         return ($cmd.Contains("npm") -and $cmd.Contains("run") -and $cmd.Contains("dev")) -or $cmd.Contains("vite")
     }
+    if ($Name -eq "cloudflared") {
+        # Only the quick tunnel that start.ps1 launched for this project (QUICK_TUNNEL=1).
+        return ([string]$info.Name -ieq "cloudflared.exe") -and $cmd.Contains("tunnel") -and $cmd.Contains("localhost:8000")
+    }
     return $false
 }
 
@@ -135,7 +139,7 @@ if (Test-PortOpen 8000) {
     Start-Sleep -Milliseconds 800
 }
 
-foreach ($name in @("frontend", "backend")) {
+foreach ($name in @("cloudflared", "frontend", "backend")) {
     $processId = Read-Pid $name
     if ($processId -le 0) {
         continue

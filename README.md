@@ -277,6 +277,43 @@ This keeps `.env` and `data\polymarket_bot.db`. To clear paper history only, use
 
 ---
 
+## Android app and remote access
+
+The repository contains a native Android app (`android/`, Kotlin + Jetpack Compose) with its own UI. It talks to the
+same REST API and WebSocket as the dashboard and does not change any trading logic. A GitHub Actions workflow
+(`.github/workflows/android-apk.yml`) builds the APK; see [android/README.md](android/README.md) for installing it.
+
+To use the app away from home (Wi-Fi or mobile data) the PC publishes a free Cloudflare quick tunnel. The tunnel
+URL changes on every start, so the start script writes the current URL into a secret GitHub Gist and the app
+reads it from there.
+
+1. **Set an API token.** In `.env` set `API_TOKEN` to a long random value (for example 32+ random characters).
+   The app sends it as `X-API-Key` (REST) and `?token=` (WebSocket). Keep `HOST=127.0.0.1` (cloudflared connects
+   locally, nothing else needs direct access) and change the default `ADMIN_PASSWORD`.
+2. **Create a Gist token.** GitHub > Settings > Developer settings > Personal access tokens > Tokens (classic) >
+   Generate new token, tick **only** the `gist` scope. Put it in `.env` as `GIST_TOKEN=...`.
+3. **Enable the tunnel.** Add `QUICK_TUNNEL=1` to `.env` (the commented lines are in `.env.example`).
+4. **Run `start.bat`.** The first run installs `cloudflared` with winget if it is missing, starts the tunnel,
+   creates the secret Gist, appends `GIST_ID=...` to `.env` and prints `In the app enter: gist:<id>`.
+   Later runs reuse the same Gist and only update its `pc-url.txt` file.
+5. **In the app** enter `gist:<id>` as PC URL and your `API_TOKEN`, tap *Test connection*, then *Save*.
+   After a PC restart the link changes; the app notices the failed connection, re-reads the Gist and reconnects
+   on its own.
+
+`stop.bat` (or Ctrl+C in the start window) stops the tunnel together with the server. Without `QUICK_TUNNEL=1`
+the start script behaves exactly as before. If `API_TOKEN` or `GIST_TOKEN` is empty the tunnel is not started
+and the reason is printed.
+
+Security notes:
+
+* A secret Gist id behaves like an unlisted link: anyone who knows it can read the tunnel URL. The real protection
+  is `API_TOKEN`; every endpoint except `/healthz` and `/api/health` requires it. Do not share the Gist id or the
+  token, and use a long random token.
+* The `GIST_TOKEN` can only touch your Gists, but treat it like a password. It lives in `.env`, which is not
+  committed.
+* Optional later upgrade: a custom domain with a Cloudflare Named Tunnel gives a fixed URL. The app already
+  accepts a plain `https://...` URL, so no app change is needed.
+
 ## How it works
 
 ```text
