@@ -37,4 +37,13 @@ class FormatTest {
         assertEquals("—", Fmt.centsShort(null))
         assertEquals("—", Fmt.centsShort(Double.NaN))
     }
+
+    @Test
+    fun signedPointsCarriesAnExplicitSign() {
+        assertEquals("+4.5 pts", Fmt.signedPoints(4.5))
+        assertEquals("-3.0 pts", Fmt.signedPoints(-3.0))
+        assertEquals("0.0 pts", Fmt.signedPoints(0.0))
+        assertEquals("—", Fmt.signedPoints(null))
+        assertEquals("—", Fmt.signedPoints(Double.NaN))
+    }
 }

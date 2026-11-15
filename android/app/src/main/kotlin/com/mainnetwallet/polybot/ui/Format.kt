@@ -55,6 +55,14 @@ object Fmt {
         return sign + String.format(Locale.US, "%.${digits}f", Math.abs(x)) + "%"
     }
 
+    /** A difference in percentage points with an explicit sign, e.g. +4.5 pts. */
+    fun signedPoints(v: Double?, digits: Int = 1): String {
+        if (!ok(v)) return "—"
+        val x = v!!
+        val sign = if (x > 0) "+" else if (x < 0) "-" else ""
+        return sign + String.format(Locale.US, "%.${digits}f", Math.abs(x)) + " pts"
+    }
+
     fun num(v: Double?, digits: Int = 2): String {
         if (!ok(v)) return "—"
         return String.format(Locale.US, "%.${digits}f", v!!)
