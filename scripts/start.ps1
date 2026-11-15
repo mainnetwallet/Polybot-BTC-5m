@@ -120,6 +120,224 @@ function Remove-PidFile([string]$Name) {
     }
 }
 
+# ---------------------------------------------------------------------------
+# Optional: Cloudflare quick tunnel + secret Gist link publisher (for the Android app).
+# Everything below only runs when QUICK_TUNNEL=1 is set in .env. Without it the start-up is unchanged.
+#   QUICK_TUNNEL=1   start a free Cloudflare quick tunnel to http://localhost:8000
+#   GIST_TOKEN=...   GitHub classic token with ONLY the "gist" scope
+#   GIST_ID=...      created on the first run and appended to .env automatically
+# The tunnel URL changes on every run; the app reads the current one from the secret Gist ("gist:<id>").
+# ---------------------------------------------------------------------------
+function Read-DotEnv {
+    $result = @{}
+    $path = Join-Path $Root ".env"
+    if (-not (Test-Path $path)) {
+        return $result
+    }
+    foreach ($line in Get-Content -Path $path) {
+        if ($line.TrimStart().StartsWith("#")) {
+            continue
+        }
+        if ($line -match '^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$') {
+            $result[$Matches[1]] = $Matches[2].Trim('"').Trim("'")
+        }
+    }
+    return $result
+}
+
+# Sets KEY=value in .env (replaces an existing uncommented line, otherwise appends). UTF-8 without BOM,
+# so non-ASCII characters in the file's comments survive.
+function Set-DotEnvValue([string]$Key, [string]$Value) {
+    $path = Join-Path $Root ".env"
+    $utf8 = New-Object System.Text.UTF8Encoding($false)
+    $text = ""
+    if (Test-Path $path) {
+        $text = [System.IO.File]::ReadAllText($path)
+    }
+    $pattern = '(?m)^[ \t]*' + [regex]::Escape($Key) + '[ \t]*=[^\r\n]*'
+    if ([regex]::IsMatch($text, $pattern)) {
+        $text = ([regex]$pattern).Replace($text, "$Key=$Value", 1)
+    }
+    else {
+        if ($text.Length -gt 0 -and -not $text.EndsWith("`n")) {
+            $text += [Environment]::NewLine
+        }
+        $text += "$Key=$Value" + [Environment]::NewLine
+    }
+    [System.IO.File]::WriteAllText($path, $text, $utf8)
+}
+
+function Read-SharedText([string]$Path) {
+    try {
+        $fs = [System.IO.File]::Open($Path, "Open", "Read", "ReadWrite")
+        try {
+            return (New-Object System.IO.StreamReader($fs)).ReadToEnd()
+        }
+        finally {
+            $fs.Dispose()
+        }
+    }
+    catch {
+        return ""
+    }
+}
+
+# Writes the tunnel URL to the file pc-url.txt of the secret Gist. Creates the Gist on the first run
+# (or when the stored one no longer exists) and stores its id in .env. Returns the Gist id.
+function Publish-Gist([string]$Url, [string]$Token, [string]$GistId) {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+    $headers = @{ Authorization = "Bearer $Token"; "User-Agent" = "polybot-btc-5m"; Accept = "application/vnd.github+json" }
+    $files = @{ "pc-url.txt" = @{ content = $Url } }
+    if ($GistId) {
+        $body = @{ files = $files } | ConvertTo-Json -Depth 5
+        try {
+            Invoke-RestMethod -Method Patch -Uri "https://api.github.com/gists/$GistId" -Headers $headers `
+                -Body ([Text.Encoding]::UTF8.GetBytes($body)) -ContentType "application/json; charset=utf-8" | Out-Null
+            return $GistId
+        }
+        catch {
+            $code = 0
+            if ($_.Exception.Response) {
+                $code = [int]$_.Exception.Response.StatusCode
+            }
+            if ($code -ne 404) {
+                throw
+            }
+            Write-Host "    Gist $GistId no longer exists; creating a new secret Gist." -ForegroundColor Yellow
+        }
+    }
+    $body = @{ description = "polybot-btc-5m link"; public = $false; files = $files } | ConvertTo-Json -Depth 5
+    $created = Invoke-RestMethod -Method Post -Uri "https://api.github.com/gists" -Headers $headers `
+        -Body ([Text.Encoding]::UTF8.GetBytes($body)) -ContentType "application/json; charset=utf-8"
+    Set-DotEnvValue "GIST_ID" ([string]$created.id)
+    return [string]$created.id
+}
+
+function Stop-Tunnel {
+    $path = Join-Path $Pids "cloudflared.pid"
+    if (-not (Test-Path $path)) {
+        return
+    }
+    $raw = Get-Content -Path $path -TotalCount 1 -ErrorAction SilentlyContinue
+    $value = 0
+    if ([int]::TryParse(([string]$raw).Trim(), [ref]$value) -and $value -gt 0) {
+        $info = Get-CimInstance Win32_Process -Filter "ProcessId=$value" -ErrorAction SilentlyContinue
+        if ($info -and ([string]$info.Name) -ieq "cloudflared.exe") {
+            Stop-Tracked $value
+        }
+    }
+    Remove-PidFile "cloudflared"
+}
+
+# Returns @{ Url; GistId } or $null when the tunnel is off, refused or failed. Never aborts the start-up.
+function Start-QuickTunnel {
+    $cfg = Read-DotEnv
+    if ($cfg["QUICK_TUNNEL"] -ne "1") {
+        return $null
+    }
+
+    Write-Step "Quick tunnel requested (QUICK_TUNNEL=1)"
+
+    # Safety: never publish an API that has no token. The Android app authenticates with API_TOKEN.
+    if (-not $cfg["API_TOKEN"] -or -not $cfg["API_TOKEN"].Trim()) {
+        Write-Host "    Tunnel NOT started: API_TOKEN is empty in .env." -ForegroundColor Red
+        Write-Host "    Without a token anyone who learns the tunnel link could control the bot." -ForegroundColor Red
+        Write-Host "    Set a long random API_TOKEN in .env and run start.bat again." -ForegroundColor Yellow
+        return $null
+    }
+    if (-not $cfg["GIST_TOKEN"] -or -not $cfg["GIST_TOKEN"].Trim()) {
+        Write-Host "    Tunnel NOT started: GIST_TOKEN is empty in .env." -ForegroundColor Red
+        Write-Host "    Without it the app cannot learn the new link after each restart. Create a classic GitHub token with ONLY the 'gist' scope." -ForegroundColor Yellow
+        return $null
+    }
+
+    # Reminders (cloudflared connects to localhost, so the API must stay on loopback).
+    $hostValue = [string]$cfg["HOST"]
+    if ($hostValue -and @("127.0.0.1", "localhost", "::1") -notcontains $hostValue.Trim().ToLower()) {
+        Write-Host "    WARNING: HOST=$hostValue in .env. Keep HOST=127.0.0.1: cloudflared connects locally and nothing else should reach the API directly." -ForegroundColor Yellow
+    }
+    else {
+        Write-Host "    HOST must stay 127.0.0.1 (cloudflared connects locally)." -ForegroundColor DarkGray
+    }
+    if ([string]$cfg["ADMIN_PASSWORD"] -ceq "ChangeMe-123") {
+        Write-Host "    WARNING: ADMIN_PASSWORD is still the example default. Change it in .env." -ForegroundColor Yellow
+    }
+
+    if (-not (Get-Command cloudflared -ErrorAction SilentlyContinue)) {
+        Write-Host "    Installing cloudflared with winget..." -ForegroundColor Yellow
+        & winget.exe install --id Cloudflare.cloudflared -e --accept-source-agreements --accept-package-agreements
+        $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [Environment]::GetEnvironmentVariable("Path", "User")
+    }
+    $cloudflared = Get-Command cloudflared -ErrorAction SilentlyContinue
+    if (-not $cloudflared) {
+        Write-Host "    cloudflared is not available yet. Open a NEW terminal and run start.bat again (the bot itself is running without the tunnel)." -ForegroundColor Yellow
+        return $null
+    }
+
+    # A tunnel from an earlier run would keep the old URL alive; replace it.
+    Stop-Tunnel
+
+    $tunnelLog = Join-Path $Logs "cloudflared.log"
+    $tunnelOut = Join-Path $Logs "cloudflared.out.log"
+    Remove-Item $tunnelLog, $tunnelOut -ErrorAction SilentlyContinue
+    $proc = Start-Process -FilePath $cloudflared.Source `
+        -ArgumentList @("tunnel", "--no-autoupdate", "--url", "http://localhost:8000") `
+        -RedirectStandardInput $NullInput `
+        -RedirectStandardError $tunnelLog `
+        -RedirectStandardOutput $tunnelOut `
+        -WindowStyle Hidden -PassThru
+    Save-Pid "cloudflared" $proc.Id
+    Write-Host "    cloudflared PID $($proc.Id)" -ForegroundColor DarkGray
+
+    # cloudflared prints the link to stderr. Ignore api.trycloudflare.com, which only shows up in error lines.
+    $url = $null
+    for ($i = 0; $i -lt 45 -and -not $url; $i++) {
+        Start-Sleep -Seconds 1
+        if ($proc.HasExited) {
+            break
+        }
+        foreach ($m in [regex]::Matches((Read-SharedText $tunnelLog), 'https://([a-z0-9-]+)\.trycloudflare\.com')) {
+            if ($m.Groups[1].Value -ne "api") {
+                $url = $m.Value
+                break
+            }
+        }
+    }
+    if (-not $url) {
+        Write-Host "    Could not get a tunnel link. See logs\cloudflared.log. The bot keeps running without the tunnel." -ForegroundColor Yellow
+        Show-Tail $tunnelLog 10
+        Stop-Tunnel
+        return $null
+    }
+    Write-Host "    Tunnel link: $url" -ForegroundColor Green
+
+    $gistId = $null
+    try {
+        $gistId = Publish-Gist $url $cfg["GIST_TOKEN"].Trim() ([string]$cfg["GIST_ID"]).Trim()
+    }
+    catch {
+        Write-Host "    Could not update the Gist: $($_.Exception.Message)" -ForegroundColor Yellow
+        Write-Host "    Check that GIST_TOKEN is a classic token with the 'gist' scope. The link above still works if you type it into the app." -ForegroundColor Yellow
+        return @{ Url = $url; GistId = $null }
+    }
+
+    # A fresh quick-tunnel hostname needs a few seconds before it resolves; wait a little, but never fail.
+    $reachable = $false
+    for ($i = 0; $i -lt 20 -and -not $reachable; $i++) {
+        try {
+            $r = Invoke-WebRequest -Uri "$url/healthz" -UseBasicParsing -TimeoutSec 4
+            $reachable = ($r.StatusCode -eq 200)
+        }
+        catch {
+            Start-Sleep -Seconds 1
+        }
+    }
+    if (-not $reachable) {
+        Write-Host "    The tunnel does not answer yet; it usually needs a few more seconds before the phone can use it." -ForegroundColor DarkGray
+    }
+    return @{ Url = $url; GistId = $gistId }
+}
+
 Write-Host ""
 Write-Host "FINAL60 - Polymarket BTC 5m bot" -ForegroundColor Green
 Write-Host "Starting backend and dashboard" -ForegroundColor DarkGray
@@ -244,6 +462,14 @@ if ($startedFrontend) {
     Write-Host "    Dashboard ready" -ForegroundColor DarkGray
 }
 
+$tunnelInfo = $null
+try {
+    $tunnelInfo = Start-QuickTunnel
+}
+catch {
+    Write-Host "    Tunnel setup failed: $($_.Exception.Message). The bot keeps running without the tunnel." -ForegroundColor Yellow
+}
+
 $mode = "paper"
 try {
     $health = Invoke-RestMethod -Uri "$ApiUrl/api/health" -TimeoutSec 5
@@ -259,6 +485,12 @@ Write-Host "    Dashboard: $UiUrl" -ForegroundColor Gray
 Write-Host "    API docs:  $ApiUrl/docs" -ForegroundColor Gray
 Write-Host "    Mode:      $($mode.ToUpper())" -ForegroundColor Gray
 Write-Host "    Logs:      logs\backend.log, logs\frontend.out.log" -ForegroundColor DarkGray
+if ($tunnelInfo) {
+    Write-Host "    Tunnel:    $($tunnelInfo.Url)" -ForegroundColor Gray
+    if ($tunnelInfo.GistId) {
+        Write-Host "    In the app enter: gist:$($tunnelInfo.GistId)" -ForegroundColor Green
+    }
+}
 if ($Detach) {
     Write-Host "    Stop:      stop.bat" -ForegroundColor DarkGray
 }
@@ -306,6 +538,7 @@ try {
         # stop.bat from another window (or a crash) ends the servers: nothing left to watch.
         if (-not (Test-PortOpen 8000) -and -not (Test-PortOpen 5173)) {
             Write-Host "Servers are no longer running." -ForegroundColor Yellow
+            Stop-Tunnel
             break
         }
         Start-Sleep -Milliseconds 400

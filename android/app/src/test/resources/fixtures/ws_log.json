@@ -1,0 +1,14 @@
+{
+ "type": "log",
+ "data": {
+  "id": 3,
+  "level": "WARNING",
+  "category": "system",
+  "message": "bot stopped (operator)",
+  "payload": {
+   "mode": "paper"
+  },
+  "mode": "paper",
+  "created_at": "2026-11-15T03:10:34.248019Z"
+ }
+}

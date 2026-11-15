@@ -1,0 +1,39 @@
+[
+ {
+  "id": 3,
+  "level": "WARNING",
+  "category": "system",
+  "message": "bot stopped (operator)",
+  "payload": {
+   "mode": "paper"
+  },
+  "mode": "paper",
+  "created_at": "2026-11-15T03:10:34.248019Z"
+ },
+ {
+  "id": 2,
+  "level": "INFO",
+  "category": "system",
+  "message": "bot started in PAPER mode",
+  "payload": {
+   "mode": "paper",
+   "live_balance": null
+  },
+  "mode": "paper",
+  "created_at": "2026-11-15T03:10:34.237128Z"
+ },
+ {
+  "id": 1,
+  "level": "INFO",
+  "category": "system",
+  "message": "backend started; mode=paper status=STOPPED",
+  "payload": {
+   "recovered_orders": 0,
+   "unresolved_live_orders": 0,
+   "paper_open_positions": 0,
+   "live_open_positions": 0
+  },
+  "mode": "paper",
+  "created_at": "2026-11-15T03:10:34.206519Z"
+ }
+]

@@ -6,9 +6,22 @@ data/*.db
 data/*.db-*
 data/*.db-wal
 data/*.db-shm
-logs/
+/logs/
 .pids/
 frontend/node_modules/
 frontend/dist/
 .vite/
 .pytest_cache/
+
+# Android app (android/)
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+android/*.iml
+android/captures/
+android/.kotlin/
+*.jks
+android/keystore/*
+!android/keystore/debug.keystore
