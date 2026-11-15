@@ -11,6 +11,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+/** How many recent trigger events the Strategy tab loads and shows (newest first). */
+const val MAX_TRIGGERS = 10
+
 /** Recent trigger events (threshold hits, including blocked and skipped decisions). */
 class StrategyViewModel(private val graph: AppGraph) : ViewModel() {
     data class State(
@@ -33,7 +36,7 @@ class StrategyViewModel(private val graph: AppGraph) : ViewModel() {
 
     private suspend fun load() {
         try {
-            val rows = graph.api.triggers(100)
+            val rows = graph.api.triggers(MAX_TRIGGERS).take(MAX_TRIGGERS)
             _state.update { State(loading = false, triggers = rows, error = null) }
         } catch (e: ApiException) {
             _state.update { it.copy(loading = false, error = e.message) }

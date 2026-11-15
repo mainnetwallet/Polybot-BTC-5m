@@ -130,7 +130,7 @@ fun StrategyScreen(modifier: Modifier = Modifier) {
                 item(key = "triggers-header") {
                     ProSectionHeader(
                         "Recent triggers",
-                        subtitle = "Every ask that reached a trigger, including blocked and skipped decisions",
+                        subtitle = "Latest $MAX_TRIGGERS asks that reached a trigger, including blocked and skipped",
                     )
                 }
                 item(key = "trigger-filters") {
