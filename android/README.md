@@ -12,6 +12,7 @@ trading logic or backend behaviour.
 - [x] Phase 4: unit tests
 - [x] Phase 5: tunnel + Gist publisher (`scripts/start.ps1`, `scripts/stop.ps1`) and docs
 - [x] Phase 6: GitHub Actions workflow `.github/workflows/android-apk.yml`
+- [x] Phase 7: compileSdk/targetSdk 37 (Android 17), AGP 9.4 + Gradle 9.6, local network permission for LAN addresses
 
 ## Set up end to end
 
@@ -41,7 +42,7 @@ changes and the app recovers by itself.
 
 ## Build locally
 
-Requires JDK 17 and the Android SDK (platform 36, build-tools 36.0.0).
+Requires JDK 17 and the Android SDK (platform 37 = Android 17, build-tools 36.0.0). Toolchain: AGP 9.4, Gradle 9.6 (wrapper), Kotlin 2.2 with AGP built-in Kotlin.
 
 ```
 cd android
@@ -80,6 +81,9 @@ layer, JSON fixtures from real backend output, tick merge and settings validatio
 ## Security notes
 
 * The API token is stored encrypted with an Android Keystore AES-GCM key; preferences use DataStore.
+* On Android 17+ (targetSdk 37) a LAN address such as `http://192.168.x.x:8000` needs the `ACCESS_LOCAL_NETWORK`
+  runtime permission ("Nearby devices"); the app asks for it when you save or test such an address. A Gist link or
+  https tunnel needs nothing.
 * The network security config allows cleartext only because LAN use needs it; plain `http` outside private
   ranges shows a warning banner.
 * LIVE mode is always marked in red; starting the bot or switching to Live needs the typed confirmation phrase

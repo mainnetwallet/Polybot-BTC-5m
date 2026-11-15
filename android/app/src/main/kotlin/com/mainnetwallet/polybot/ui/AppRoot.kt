@@ -12,6 +12,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -22,6 +23,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mainnetwallet.polybot.AppGraph
 import com.mainnetwallet.polybot.data.store.ThemeMode
 import com.mainnetwallet.polybot.ui.connect.ConnectScreen
+import com.mainnetwallet.polybot.ui.connect.LOCAL_NETWORK_DENIED_MESSAGE
+import com.mainnetwallet.polybot.ui.connect.rememberLocalNetworkGate
 import com.mainnetwallet.polybot.ui.main.MainScaffold
 import com.mainnetwallet.polybot.ui.theme.PolybotTheme
 
@@ -35,6 +38,13 @@ fun AppRoot(graph: AppGraph) {
     val ui = remember(snackbar, scope, haptic) { UiHost(snackbar, scope, haptic, true) }
     val p = prefs
     ui.hapticsEnabled = p?.haptics ?: true
+
+    // Android 17+: an address saved before the update may be a LAN device; ask for the permission it now needs.
+    val localNetworkGate = rememberLocalNetworkGate { ui.message(LOCAL_NETWORK_DENIED_MESSAGE, long = true) }
+    val savedAddress = p?.takeIf { it.isConfigured }?.pcUrl
+    LaunchedEffect(savedAddress) {
+        if (savedAddress != null) localNetworkGate(savedAddress) {}
+    }
 
     PolybotTheme(mode = p?.themeMode ?: ThemeMode.SYSTEM) {
         CompositionLocalProvider(LocalGraph provides graph, LocalUi provides ui) {
