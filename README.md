@@ -16,6 +16,29 @@ cd Polybot-BTC-5m
 .\stop.bat       # stop everything
 ```
 
+Update and set up:
+
+```powershell
+cd .\Polybot-BTC-5m
+git pull
+.\setup.bat
+```
+
+Update and start:
+
+```powershell
+cd .\Polybot-BTC-5m
+git pull
+.\start.bat
+```
+
+Create `.env` (only if setup did not create it) and edit it:
+
+```powershell
+Copy-Item .env.example .env
+notepad .env
+```
+
 - Dashboard `http://127.0.0.1:5173`, API `http://127.0.0.1:8000`, docs `/docs`.
 - `start.bat` runs setup itself if `.venv`, `frontend\node_modules` or `.env` is missing, and **restarts** a running copy (`-NoRestart` keeps it, `-NoBrowser` skips the browser, `-Detach` returns the prompt).
 - The bot always starts **STOPPED**; start it from the dashboard. Orders, positions and settings persist in `data\polymarket_bot.db`.
