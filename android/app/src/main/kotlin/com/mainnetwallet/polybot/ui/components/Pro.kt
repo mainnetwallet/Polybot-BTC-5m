@@ -45,12 +45,17 @@ import com.mainnetwallet.polybot.ui.theme.Space
 
 private val HairlineAlpha = 0.55f
 
-/** Bordered card. [accent] draws a 4dp strip down the left edge; [onClick] makes the whole card tappable. */
+/**
+ * Bordered card. [accent] draws a 4dp strip down the left edge; [onClick] makes the whole card tappable.
+ * [contentPadding] and [spacing] default to the roomy look; dense screens pass smaller values.
+ */
 @Composable
 fun ProCard(
     modifier: Modifier = Modifier,
     accent: Color? = null,
     onClick: (() -> Unit)? = null,
+    contentPadding: Dp = Space.lg,
+    spacing: Dp = Space.md,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -71,12 +76,12 @@ fun ProCard(
                 .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
                 .then(accentStrip)
                 .padding(
-                    start = if (accent != null) Space.lg + 4.dp else Space.lg,
-                    top = Space.lg,
-                    end = Space.lg,
-                    bottom = Space.lg,
+                    start = if (accent != null) contentPadding + 4.dp else contentPadding,
+                    top = contentPadding,
+                    end = contentPadding,
+                    bottom = contentPadding,
                 ),
-            verticalArrangement = Arrangement.spacedBy(Space.md),
+            verticalArrangement = Arrangement.spacedBy(spacing),
             content = content,
         )
     }
