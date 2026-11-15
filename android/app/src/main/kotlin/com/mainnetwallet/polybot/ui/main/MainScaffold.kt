@@ -52,9 +52,9 @@ import com.mainnetwallet.polybot.ui.connect.ConnectScreen
 import com.mainnetwallet.polybot.ui.analytics.AnalyticsScreen
 import com.mainnetwallet.polybot.ui.logs.LogsScreen
 import com.mainnetwallet.polybot.ui.overview.OverviewScreen
+import com.mainnetwallet.polybot.ui.settings.SettingsScreen
 import com.mainnetwallet.polybot.ui.strategy.StrategyScreen
 import com.mainnetwallet.polybot.ui.trading.TradingScreen
-import com.mainnetwallet.polybot.ui.components.EmptyState
 import com.mainnetwallet.polybot.ui.theme.Poly
 import com.mainnetwallet.polybot.ui.theme.Space
 
@@ -158,7 +158,9 @@ fun MainScaffold(prefs: AppPrefs, snackbar: SnackbarHostState) {
                 composable(Dest.Strategy.route) { StrategyScreen() }
                 composable(Dest.Analytics.route) { AnalyticsScreen() }
                 composable(Dest.Logs.route) { LogsScreen() }
-                composable(ROUTE_SETTINGS) { Placeholder("Settings") }
+                composable(ROUTE_SETTINGS) {
+                    SettingsScreen(onEditConnection = { nav.navigate(ROUTE_CONNECTION) { launchSingleTop = true } })
+                }
                 composable(ROUTE_CONNECTION) {
                     ConnectScreen(
                         initialUrl = prefs.pcUrl,
@@ -171,11 +173,6 @@ fun MainScaffold(prefs: AppPrefs, snackbar: SnackbarHostState) {
             }
         }
     }
-}
-
-@Composable
-private fun Placeholder(name: String) {
-    EmptyState(title = name, hint = "Coming up in the next commit.")
 }
 
 @Composable

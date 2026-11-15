@@ -7,6 +7,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.mainnetwallet.polybot.AppGraph
 import com.mainnetwallet.polybot.ui.analytics.AnalyticsViewModel
 import com.mainnetwallet.polybot.ui.logs.LogsViewModel
+import com.mainnetwallet.polybot.ui.settings.SettingsViewModel
 import com.mainnetwallet.polybot.ui.strategy.StrategyViewModel
 import com.mainnetwallet.polybot.ui.trading.TradingViewModel
 
@@ -18,6 +19,7 @@ class GraphVmFactory(private val graph: AppGraph) : ViewModelProvider.Factory {
             modelClass.isAssignableFrom(StrategyViewModel::class.java) -> StrategyViewModel(graph)
             modelClass.isAssignableFrom(AnalyticsViewModel::class.java) -> AnalyticsViewModel(graph)
             modelClass.isAssignableFrom(LogsViewModel::class.java) -> LogsViewModel(graph)
+            modelClass.isAssignableFrom(SettingsViewModel::class.java) -> SettingsViewModel(graph)
             else -> throw IllegalArgumentException("Unknown ViewModel: ${modelClass.name}")
         }
         return modelClass.cast(vm)!!
