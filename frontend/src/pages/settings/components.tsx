@@ -308,3 +308,54 @@ export function CheckRow({ ok, label, detail }: { ok: boolean; label: string; de
     </div>
   );
 }
+
+/** An on/off row for a preference that is not a bot setting (saved on the spot, in this browser). */
+export function ToggleRow({
+  id,
+  label,
+  hint,
+  checked,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  hint: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 px-4 py-2.5">
+      <div className="min-w-0">
+        <label htmlFor={id} className="text-[12px] font-medium text-slate-200">
+          {label}
+        </label>
+        <p className="mt-0.5 text-[10.5px] leading-snug text-slate-500">{hint}</p>
+      </div>
+      <button
+        id={id}
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        onClick={() => onChange(!checked)}
+        className="flex shrink-0 items-center gap-2.5"
+      >
+        <span className={cx("w-6 text-right text-[11px] font-semibold", checked ? "text-up" : "text-slate-500")}>
+          {checked ? "On" : "Off"}
+        </span>
+        <span
+          className={cx(
+            "relative h-5 w-9 rounded-full border transition-colors",
+            checked ? "border-up/40 bg-up/25" : "border-white/10 bg-white/[0.04]",
+          )}
+        >
+          <span
+            className={cx(
+              "absolute top-[2px] h-3.5 w-3.5 rounded-full transition-all",
+              checked ? "left-[18px] bg-up" : "left-[2px] bg-slate-500",
+            )}
+          />
+        </span>
+      </button>
+    </div>
+  );
+}

@@ -20,6 +20,7 @@ import { Stat } from "../components/Stat";
 import { OrdersTable, PositionsTable } from "../components/Tables";
 import { useBot } from "../hooks/BotContext";
 import { LoadingPanel } from "../components/LoadingPanel";
+import { Modal } from "../components/Modal";
 import { useRemainingSeconds } from "../hooks/useCountdown";
 import { useLiveRefresh } from "../hooks/useLiveRefresh";
 import {
@@ -33,6 +34,7 @@ import {
   pnlClass,
   shortId,
 } from "../lib/format";
+import { useConfirmSells } from "../lib/prefs";
 
 function PanelHead({
   label,
@@ -291,6 +293,8 @@ function stageEntryPrice(orders: OrderRow[], marketId: string, side: string, sta
 function PositionPanel({ orders }: { orders: OrderRow[] }) {
   const { snapshot, sellNow, sellAll } = useBot();
   const [selling, setSelling] = useState<Set<string>>(new Set());
+  const [confirmSells] = useConfirmSells();
+  const [pending, setPending] = useState<{ kind: "one"; row: StageHolding } | { kind: "all" } | null>(null);
   if (!snapshot) return <LoadingPanel className="xl:col-span-4" />;
 
   const marketId = snapshot.market?.market_id ?? null;
@@ -345,6 +349,13 @@ function PositionPanel({ orders }: { orders: OrderRow[] }) {
     );
   };
 
+  // "Confirm sells" (Settings, off by default) puts a dialog in front of the sell; off = the request goes out at once.
+  const requestSell = (row: StageHolding) => {
+    if (!row.holding || selling.has(row.key)) return;
+    if (confirmSells) setPending({ kind: "one", row });
+    else sell(row);
+  };
+
   const sellableRows = rows.filter((row) => row.holding);
   const sellingAll = selling.has("__all__");
   const sellEverything = () => {
@@ -359,7 +370,23 @@ function PositionPanel({ orders }: { orders: OrderRow[] }) {
     );
   };
 
+  const requestSellAll = () => {
+    if (!marketId || sellableRows.length === 0 || sellingAll) return;
+    if (confirmSells) setPending({ kind: "all" });
+    else sellEverything();
+  };
+
+  const runPending = () => {
+    const action = pending;
+    setPending(null);
+    if (action?.kind === "one") sell(action.row);
+    else if (action?.kind === "all") sellEverything();
+  };
+
+  const live = snapshot.bot.mode === "live";
+
   return (
+    <>
     <section className="panel p-5 xl:col-span-4">
       <PanelHead
         label="Position"
@@ -369,7 +396,7 @@ function PositionPanel({ orders }: { orders: OrderRow[] }) {
             {sellableRows.length > 0 ? (
               <button
                 type="button"
-                onClick={sellEverything}
+                onClick={requestSellAll}
                 disabled={sellingAll}
                 title={`Sell every stage that holds shares (${sellableRows.length}) now at the market`}
                 className="rounded-md border border-rose-400/40 bg-rose-400/15 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-rose-300 transition hover:bg-rose-400/25 disabled:cursor-wait disabled:opacity-50"
@@ -410,7 +437,7 @@ function PositionPanel({ orders }: { orders: OrderRow[] }) {
                 {row.holding ? (
                   <button
                     type="button"
-                    onClick={() => sell(row)}
+                    onClick={() => requestSell(row)}
                     disabled={selling.has(row.key)}
                     title={`Sell ${fmtNum(row.holding.size, 2)} shares now at the market`}
                     className="rounded-md border border-rose-400/40 bg-rose-400/15 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-rose-300 transition hover:bg-rose-400/25 disabled:cursor-wait disabled:opacity-50"
@@ -440,6 +467,38 @@ function PositionPanel({ orders }: { orders: OrderRow[] }) {
         </div>
       )}
     </section>
+
+    <Modal
+      open={pending !== null}
+      onClose={() => setPending(null)}
+      eyebrow={live ? "Live sell" : "Paper sell"}
+      title={pending?.kind === "all" ? "Sell every stage at the market?" : "Sell this position at the market?"}
+      subtitle={
+        pending?.kind === "one"
+          ? `${pending.row.side} · ${pending.row.stage === null ? "position" : `stage ${pending.row.stage}`} · ${fmtNum(pending.row.size, 2)} shares`
+          : `${sellableRows.length} ${sellableRows.length === 1 ? "stage holds" : "stages hold"} shares in this market`
+      }
+      danger={live}
+      maxWidth="max-w-md"
+      footer={
+        <>
+          <button type="button" className="btn" onClick={() => setPending(null)}>
+            Cancel
+          </button>
+          <button type="button" className="btn btn-danger" onClick={runPending}>
+            {pending?.kind === "all" ? "Sell all" : "Sell"}
+          </button>
+        </>
+      }
+    >
+      <p className="text-[12px] leading-relaxed text-slate-400">
+        {live
+          ? "This sends a real market sell order on Polymarket."
+          : "This closes the shares in the paper account at the current bid."}{" "}
+        You can turn this question off in Settings under Execution.
+      </p>
+    </Modal>
+    </>
   );
 }
 

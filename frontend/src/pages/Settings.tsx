@@ -6,13 +6,15 @@ import { IconAlert, IconRefresh, IconSearch, IconSettings, IconShield, IconWalle
 import { Modal } from "../components/Modal";
 import { useBot } from "../hooks/BotContext";
 import { cx, fmtUsd } from "../lib/format";
-import { ActionRow, CheckRow, GroupCard, SaveControls, SettingRow, TabBar } from "./settings/components";
+import { useConfirmSells } from "../lib/prefs";
+import { ActionRow, CheckRow, GroupCard, SaveControls, SettingRow, TabBar, ToggleRow } from "./settings/components";
 import { FIELDS } from "./settings/fields";
 import { fieldsOf, TABS, tabOfField, type TabId } from "./settings/layout";
 import { buildDiff, dirtyKeys, draftFrom, savedValue, validateDraft, type Draft } from "./settings/validate";
 
 export function Settings() {
   const { snapshot, notify, resetPaper, resetDaily, resetServer } = useBot();
+  const [confirmSells, setConfirmSells] = useConfirmSells();
   const [settings, setSettings] = useState<SettingsState | null>(null);
   const [draft, setDraft] = useState<Draft>({});
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -223,6 +225,20 @@ export function Settings() {
 
   const executionSection = (
     <div className="lg:columns-2 lg:gap-4">
+      <GroupCard
+        title="Manual sells"
+        description="Stored in this browser only. Applies to paper and live."
+        badge={<span className="chip border-white/8 bg-white/[0.03] text-slate-500">This browser</span>}
+      >
+        <ToggleRow
+          id="pref-confirm-sells"
+          label="Confirm sells"
+          hint="Ask before a manual Sell or Sell all. Off sells immediately, with no dialog."
+          checked={confirmSells}
+          onChange={setConfirmSells}
+        />
+      </GroupCard>
+
       {!isLive ? (
         <GroupCard
           title="Paper fill model"
