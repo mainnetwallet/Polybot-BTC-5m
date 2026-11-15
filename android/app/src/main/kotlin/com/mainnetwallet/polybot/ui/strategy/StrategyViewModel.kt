@@ -8,7 +8,6 @@ import com.mainnetwallet.polybot.data.net.ApiException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -25,7 +24,7 @@ class StrategyViewModel(private val graph: AppGraph) : ViewModel() {
 
     init {
         viewModelScope.launch {
-            graph.repository.dataVersion.conflate().collect {
+            graph.repository.dataVersion.collect {
                 load()
                 delay(1000)
             }

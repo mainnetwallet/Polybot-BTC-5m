@@ -6,7 +6,7 @@ data/*.db
 data/*.db-*
 data/*.db-wal
 data/*.db-shm
-logs/
+/logs/
 .pids/
 frontend/node_modules/
 frontend/dist/
