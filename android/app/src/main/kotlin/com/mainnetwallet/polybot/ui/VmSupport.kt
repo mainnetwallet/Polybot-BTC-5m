@@ -58,5 +58,7 @@ inline fun <reified T : ViewModel> graphViewModel(owner: ViewModelStoreOwner): T
 fun <T, R> StateFlow<T>.collectSelectedAsState(select: (T) -> R): State<R> {
     val source = this
     val selected = remember(source) { source.map(select).distinctUntilChanged() }
-    return selected.collectAsStateWithLifecycle(initialValue = select(source.value))
+    // Read once per source, outside composition: the collected flow supplies every later update.
+    val initial = remember(source) { select(source.value) }
+    return selected.collectAsStateWithLifecycle(initialValue = initial)
 }
