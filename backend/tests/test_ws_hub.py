@@ -93,3 +93,23 @@ async def test_send_to_targets_one_client():
     await asyncio.sleep(0.05)
     assert a.sent == [{"type": "state", "data": {"x": 1}}]
     assert b.sent == []
+
+
+async def test_tick_flood_does_not_drop_a_slow_client(monkeypatch):
+    # Stale state/tick frames are squeezed out of a full queue instead of dropping the phone behind it.
+    monkeypatch.setattr(ws_module, "QUEUE_LIMIT", 3)
+    hub = RealtimeHub()
+    sock = FakeSocket(delay=0.3)
+    await hub.connect(sock)
+    for i in range(50):
+        await hub.broadcast({"type": "tick", "data": {"n": i}})
+    await asyncio.sleep(1.0)
+    assert hub.client_count == 1
+    assert sock.sent[-1]["data"]["n"] == 49  # the newest tick still arrives
+
+
+async def test_logs_are_never_squeezed_out():
+    # Logs are history: a client that really cannot keep up with them is still dropped (see the test above).
+    assert ws_module.coalesce_frames([("log", "a"), ("log", "b"), ("tick", "t1"), ("tick", "t2")]) == [
+        ("log", "a"), ("log", "b"), ("tick", "t2"),
+    ]

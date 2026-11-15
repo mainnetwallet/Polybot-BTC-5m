@@ -64,6 +64,7 @@ class BotRepository(
 
     @Volatile
     private var lastStateMs = 0L
+    private var lastStaleRefreshMs = 0L
 
     init {
         scope.launch {
@@ -96,9 +97,11 @@ class BotRepository(
         scope.launch {
             while (true) {
                 delay(STALE_CHECK_MS)
+                val now = nowMs()
                 if (feed.state.value == FeedState.Live && _snapshot.value != null &&
-                    nowMs() - lastStateMs > STALE_STATE_MS
+                    now - lastStateMs > STALE_STATE_MS && now - lastStaleRefreshMs > STALE_REFRESH_GAP_MS
                 ) {
+                    lastStaleRefreshMs = now
                     refresh()
                 }
             }
@@ -270,10 +273,16 @@ class BotRepository(
         }
     }
 
-    /** Called when the socket (re)connects: the server already sent a full state, REST fills in the logs. */
+    /**
+     * Called when the socket (re)connects. The server sends a full state right after the socket opens, so no REST
+     * state read is needed (only when there is nothing on screen yet). The logs are only re-read when the feed was
+     * away long enough to have missed some: a brief drop then costs nothing instead of two big requests.
+     */
     fun onFeedConnected() {
+        val awayMs = nowMs() - lastStateMs
+        if (_snapshot.value != null && lastStateMs != 0L && awayMs < QUICK_RECONNECT_MS) return
         scope.launch {
-            refresh()
+            if (_snapshot.value == null) refresh()
             loadLogs()
         }
     }
@@ -365,5 +374,11 @@ class BotRepository(
         private const val OFFSET_WINDOW_MS = 20_000L
         private const val STALE_CHECK_MS = 1_000L
         private const val STALE_STATE_MS = 2_500L
+
+        /** Do not hammer a weak link with a REST read every second while the socket is quiet. */
+        private const val STALE_REFRESH_GAP_MS = 5_000L
+
+        /** A reconnect within this time of the last state loses nothing worth a REST reload. */
+        private const val QUICK_RECONNECT_MS = 8_000L
     }
 }

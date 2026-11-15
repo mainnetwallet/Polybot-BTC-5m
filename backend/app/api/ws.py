@@ -10,7 +10,9 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 logger = logging.getLogger(__name__)
 
 
-SEND_TIMEOUT_S = 5.0  # a client that cannot take one frame in this time is dropped; it reconnects by itself
+SEND_TIMEOUT_S = 20.0  # a client that cannot take one frame in this time is dropped; it reconnects by itself
+# (phones on mobile data behind a tunnel regularly stall for 5-10 s: dropping them then only made them
+# reconnect, re-download the whole state and stall again)
 QUEUE_LIMIT = 256  # frames a client may fall behind before it is dropped
 _LATEST_ONLY = ("state", "tick")  # a newer frame replaces an older one of the same kind
 
@@ -24,16 +26,21 @@ class _Client:
         self.task: asyncio.Task | None = None
 
 
+def coalesce_frames(batch: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    """Same as [coalesce] but keeps the (kind, text) pairs."""
+    last: dict[str, int] = {}
+    for index, (kind, _text) in enumerate(batch):
+        if kind in _LATEST_ONLY:
+            last[kind] = index
+    return [(kind, text) for index, (kind, text) in enumerate(batch) if kind not in _LATEST_ONLY or last[kind] == index]
+
+
 def coalesce(batch: list[tuple[str, str]]) -> list[str]:
     """Frames to actually send: every log in order, but only the newest state and the newest tick.
 
     A client that was slow for a moment would otherwise replay seconds of stale states one by one and
     show old prices and positions while it catches up."""
-    last: dict[str, int] = {}
-    for index, (kind, _text) in enumerate(batch):
-        if kind in _LATEST_ONLY:
-            last[kind] = index
-    return [text for index, (kind, text) in enumerate(batch) if kind not in _LATEST_ONLY or last[kind] == index]
+    return [text for _kind, text in coalesce_frames(batch)]
 
 
 class RealtimeHub:
@@ -79,9 +86,33 @@ class RealtimeHub:
     def _enqueue(self, client: _Client, kind: str, text: str) -> None:
         try:
             client.queue.put_nowait((kind, text))
+            return
         except asyncio.QueueFull:
-            logger.debug("ws client too far behind, dropping it")
-            self._drop(client)
+            pass
+        # A full queue is mostly stale state/tick frames (several per second while the phone's link stalls).
+        # Only the newest of each is ever sent, so squeeze the rest out instead of dropping the client.
+        if self._squeeze(client):
+            try:
+                client.queue.put_nowait((kind, text))
+                return
+            except asyncio.QueueFull:
+                pass
+        logger.debug("ws client too far behind, dropping it")
+        self._drop(client)
+
+    @staticmethod
+    def _squeeze(client: _Client) -> bool:
+        """Remove superseded state/tick frames from a client's queue. True when room was made."""
+        pending: list[tuple[str, str]] = []
+        while True:
+            try:
+                pending.append(client.queue.get_nowait())
+            except asyncio.QueueEmpty:
+                break
+        kept = coalesce_frames(pending)
+        for item in kept:
+            client.queue.put_nowait(item)
+        return len(kept) < len(pending)
 
     async def _writer(self, client: _Client) -> None:
         try:

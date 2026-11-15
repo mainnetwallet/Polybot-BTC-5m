@@ -9,6 +9,8 @@ import com.mainnetwallet.polybot.data.model.OrderRow
 import com.mainnetwallet.polybot.data.model.PositionRow
 import com.mainnetwallet.polybot.data.model.Snapshot
 import com.mainnetwallet.polybot.data.model.TriggerRow
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.JsonElement
@@ -28,7 +30,8 @@ class BotApi(private val client: ApiClient) {
     ): T {
         val text = client.send(method, path, body?.toString())
         return try {
-            AppJson.decodeFromString(serializer, text)
+            // a full state or 200 log rows are big: decode them away from the main thread
+            withContext(Dispatchers.Default) { AppJson.decodeFromString(serializer, text) }
         } catch (e: IllegalArgumentException) {
             throw ApiException(ApiException.Kind.BadResponse, "The PC sent a reply the app could not read.")
         }

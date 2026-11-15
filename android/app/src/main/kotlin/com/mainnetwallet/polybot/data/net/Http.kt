@@ -1,6 +1,9 @@
 package com.mainnetwallet.polybot.data.net
 
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.MediaType.Companion.toMediaType
@@ -46,7 +49,14 @@ class OkHttpTransport(private val client: OkHttpClient) : HttpTransport {
             else -> builder.method(request.method.uppercase(), request.body?.toRequestBody(jsonType))
         }
         val response = client.newCall(builder.build()).await()
-        return response.use { HttpResponseSpec(it.code, it.body?.string().orEmpty()) }
+        // The app scope runs on the main thread; reading the body here would block the UI until the whole reply
+        // has arrived (seconds on a weak link), which is what made the app stutter around reconnects.
+        return try {
+            withContext(Dispatchers.IO) { response.use { HttpResponseSpec(it.code, it.body?.string().orEmpty()) } }
+        } catch (e: CancellationException) {
+            response.close() // withContext throws before running the block when the caller is already cancelled
+            throw e
+        }
     }
 }
 

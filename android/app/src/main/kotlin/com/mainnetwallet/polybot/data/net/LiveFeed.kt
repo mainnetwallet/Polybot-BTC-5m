@@ -68,6 +68,12 @@ class LiveFeed(
     @Volatile
     private var manualKick = false
 
+    @Volatile
+    private var lastFrameMs = 0L
+
+    @Volatile
+    private var kickJob: Job? = null
+
     private class Outcome(val opened: Boolean, val authFailed: Boolean)
 
     fun start() {
@@ -92,13 +98,31 @@ class LiveFeed(
         start()
     }
 
-    /** The Android network changed: do not wait for the backoff. */
+    /**
+     * The Android network changed: do not wait for the backoff. A network callback does not always mean the socket
+     * died (Wi-Fi renegotiating, a second network coming up), and dropping a healthy socket only costs a new TLS
+     * handshake and a full state. So a live feed is given [KICK_VERIFY_MS]: if a frame still arrives after the
+     * callback the socket is kept, otherwise it is replaced. Several callbacks in a row count as one.
+     */
     fun kick() {
         if (!wanted) return
         if (job?.isActive != true) {
             start()
             return
         }
+        if (_state.value != FeedState.Live) {
+            kickNow()
+            return
+        }
+        val sentAt = nowMs()
+        kickJob?.cancel()
+        kickJob = scope.launch {
+            delay(KICK_VERIFY_MS)
+            if (wanted && !(_state.value == FeedState.Live && lastFrameMs > sentAt)) kickNow()
+        }
+    }
+
+    private fun kickNow() {
         manualKick = true
         kickSignal.trySend(Unit)
         activeSocket?.cancel()
@@ -129,7 +153,13 @@ class LiveFeed(
             val kicked = manualKick
             manualKick = false
             if (!kicked && endpoint.isGist) endpoint.reresolveAfterFailure()
-            _state.value = if (attempt < OFFLINE_AFTER_ATTEMPTS) FeedState.Reconnecting else FeedState.Offline
+            // A feed that was live a moment ago keeps showing Live while the first retry runs: most drops heal
+            // within a second, and the badge flashing "Reconnecting" each time looked like constant trouble.
+            // connectOnce flips it to Reconnecting if that retry takes longer than RECONNECT_GRACE_MS.
+            val justDropped = outcome != null && outcome.opened && !kicked && _state.value == FeedState.Live
+            if (!justDropped) {
+                _state.value = if (attempt < OFFLINE_AFTER_ATTEMPTS) FeedState.Reconnecting else FeedState.Offline
+            }
             val signalled = withTimeoutOrNull(backoffMs(attempt)) { kickSignal.receive() } != null
             if (signalled) attempt = 0 else attempt++
         }
@@ -145,6 +175,7 @@ class LiveFeed(
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 opened.set(true)
                 lastMessage.set(nowMs())
+                lastFrameMs = nowMs()
                 endpoint.noteSuccess()
                 _state.value = FeedState.Live
                 onConnected()
@@ -152,6 +183,7 @@ class LiveFeed(
 
             override fun onMessage(webSocket: WebSocket, text: String) {
                 lastMessage.set(nowMs())
+                lastFrameMs = nowMs()
                 handleFrame(text)
             }
 
@@ -181,9 +213,15 @@ class LiveFeed(
                 }
             }
         }
+        // Still "Live" from before a quick drop, but this retry is taking too long: say so.
+        val grace = scope.launch {
+            delay(RECONNECT_GRACE_MS)
+            if (!opened.get() && _state.value == FeedState.Live) _state.value = FeedState.Reconnecting
+        }
         try {
             return done.await()
         } finally {
+            grace.cancel()
             watchdog.cancel()
             socket.cancel()
             if (activeSocket === socket) activeSocket = null
@@ -212,7 +250,11 @@ class LiveFeed(
     companion object {
         private const val OFFLINE_AFTER_ATTEMPTS = 4
         private const val WATCHDOG_INTERVAL_MS = 3_000L
-        private const val STALE_AFTER_MS = 12_000L
+        // Silence this long means a dead link. The server pushes twice a second, but a phone on mobile data behind a
+        // tunnel can stall for ten seconds and recover; a reconnect then is slower than waiting.
+        private const val STALE_AFTER_MS = 20_000L
+        private const val KICK_VERIFY_MS = 1_500L
+        private const val RECONNECT_GRACE_MS = 2_500L
 
         /** 0.5 s, 1 s, 2 s, 4 s, 8 s, then 10 s. */
         fun backoffMs(attempt: Int): Long = minOf(500L shl minOf(attempt, 5), 10_000L)
