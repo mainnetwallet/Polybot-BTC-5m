@@ -7,15 +7,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -30,6 +26,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -62,28 +60,25 @@ fun ProCard(
         color = scheme.surfaceContainer,
         border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = HairlineAlpha)),
     ) {
-        Row(
+        val accentStrip = if (accent != null) {
+            Modifier.drawBehind { drawRect(color = accent, size = Size(4.dp.toPx(), size.height)) }
+        } else {
             Modifier
-                .fillMaxWidth()
-                .height(IntrinsicSize.Min)
-                .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
-        ) {
-            if (accent != null) {
-                Box(
-                    Modifier
-                        .width(4.dp)
-                        .fillMaxHeight()
-                        .background(accent),
-                )
-            }
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(Space.lg),
-                verticalArrangement = Arrangement.spacedBy(Space.md),
-                content = content,
-            )
         }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+                .then(accentStrip)
+                .padding(
+                    start = if (accent != null) Space.lg + 4.dp else Space.lg,
+                    top = Space.lg,
+                    end = Space.lg,
+                    bottom = Space.lg,
+                ),
+            verticalArrangement = Arrangement.spacedBy(Space.md),
+            content = content,
+        )
     }
 }
 

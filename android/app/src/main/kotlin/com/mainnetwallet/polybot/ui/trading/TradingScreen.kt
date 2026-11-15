@@ -58,7 +58,6 @@ import com.mainnetwallet.polybot.data.ActionResult
 import com.mainnetwallet.polybot.data.model.OrderRow
 import com.mainnetwallet.polybot.data.model.PositionRow
 import com.mainnetwallet.polybot.data.model.SellableHolding
-import com.mainnetwallet.polybot.data.model.Snapshot
 import com.mainnetwallet.polybot.domain.Tone
 import com.mainnetwallet.polybot.domain.orderKind
 import com.mainnetwallet.polybot.domain.resultLabel
@@ -101,7 +100,7 @@ fun TradingScreen(modifier: Modifier = Modifier) {
     val ui = LocalUi.current
     val repo = graph.repository
     val state by vm.state.collectAsStateWithLifecycle()
-    val snapshot by repo.snapshot.collectAsStateWithLifecycle()
+    val slice by vm.slice.collectAsStateWithLifecycle()
     val prefs by graph.prefs.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
 
@@ -114,7 +113,7 @@ fun TradingScreen(modifier: Modifier = Modifier) {
     var filter by rememberSaveable { mutableStateOf(0) }
     val historyFilter = HistoryFilter.entries.getOrElse(filter) { HistoryFilter.All }
 
-    val snap = snapshot
+    val snap = slice
     val live = snap?.bot?.isLive == true
 
     suspend fun send(t: SellTarget): ActionResult = when (t) {
@@ -156,7 +155,7 @@ fun TradingScreen(modifier: Modifier = Modifier) {
                 SkeletonCard(lines = 4)
             }
         } else {
-            val shownOrders = state.orders.filter { historyFilter.matches(it) }
+            val shownOrders = remember(state.orders, historyFilter) { state.orders.filter { historyFilter.matches(it) } }
             LazyColumn(
                 Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(Space.lg),
@@ -200,7 +199,7 @@ fun TradingScreen(modifier: Modifier = Modifier) {
                                 }
                             }
                         } else {
-                            items(snap.positions, key = { "pos-${it.id}" }) { PositionCard(it) }
+                            items(snap.positions, key = { "pos-${it.id}" }, contentType = { "position" }) { PositionCard(it) }
                         }
                     }
 
@@ -218,7 +217,7 @@ fun TradingScreen(modifier: Modifier = Modifier) {
                                 }
                             }
                         } else {
-                            items(snap.openOrders, key = { "open-${it.id}" }) { order ->
+                            items(snap.openOrders, key = { "open-${it.id}" }, contentType = { "order" }) { order ->
                                 OrderRowItem(order, onClick = { detail = order })
                             }
                         }
@@ -277,7 +276,7 @@ fun TradingScreen(modifier: Modifier = Modifier) {
                                     )
                                 }
                             }
-                            else -> items(shownOrders, key = { "hist-${it.id}" }) { order ->
+                            else -> items(shownOrders, key = { "hist-${it.id}" }, contentType = { "order" }) { order ->
                                 OrderRowItem(order, onClick = { detail = order })
                             }
                         }
@@ -361,7 +360,7 @@ private enum class HistoryFilter(val label: String) {
 // ---- account hero -----------------------------------------------------------------------------------------------
 
 @Composable
-private fun AccountHero(snap: Snapshot, live: Boolean) {
+private fun AccountHero(snap: TradingSlice, live: Boolean) {
     val account = snap.account
     val base = account.balance - account.dailyPnl
     val dailyPct: Double? = if (base > 0.0) account.dailyPnl / base * 100.0 else null
