@@ -2,7 +2,8 @@ name: Android APK
 
 # The installable APK comes from the fast "apk" job (debug build only, no lint, no tests, no R8), so it is ready
 # in about a minute once the Gradle cache is warm. Lint, unit tests and the minified release APK run in parallel
-# in the "verify" job. Pushing a tag like app-v1.2.0 also publishes both APKs as a GitHub Release.
+# in the "verify" job. Every build on main (and every manual run) publishes its APKs as a GitHub Release under its own
+# tag app-v0.1.<run number>; pushing a tag like app-v1.2.0 publishes that tag instead.
 
 on:
   push:
@@ -225,7 +226,8 @@ jobs:
   release:
     name: Publish GitHub Release
     needs: [apk, verify]
-    if: startsWith(github.ref, 'refs/tags/app-v')
+    # Every non-PR build gets its own release; still publish the debug APK if lint/tests in "verify" fail.
+    if: ${{ always() && needs.apk.result == 'success' && github.event_name != 'pull_request' }}
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -240,10 +242,16 @@ jobs:
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
           REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          VERSION: ${{ needs.apk.outputs.version }}
         run: |
+          TAG="app-v${VERSION}"
+          if gh release view "$TAG" --repo "$REPO" > /dev/null 2>&1; then
+            TAG="${TAG}-${GITHUB_RUN_NUMBER}"
+          fi
           gh release create "$TAG" dist/*.apk \
             --repo "$REPO" \
+            --target "$SHA" \
             --title "Polybot Android ${TAG#app-v}" \
             --generate-notes
