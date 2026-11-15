@@ -21,7 +21,7 @@ data class AppPrefs(
     val token: String = "",
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val haptics: Boolean = true,
-    val confirmSells: Boolean = true,
+    val confirmSells: Boolean = false,
     /** The `gist:<id>` address [lastTunnelUrl] was read for; it is ignored when the saved address differs. */
     val lastTunnelFor: String = "",
     /** The tunnel URL the Gist gave last time, tried first on the next launch. */
@@ -54,7 +54,7 @@ class PrefsStore(private val context: Context) {
                 themeMode = p[Keys.theme]?.let { name -> ThemeMode.entries.firstOrNull { it.name == name } }
                     ?: ThemeMode.SYSTEM,
                 haptics = p[Keys.haptics] ?: true,
-                confirmSells = p[Keys.confirmSells] ?: true,
+                confirmSells = p[Keys.confirmSells] ?: false,
                 lastTunnelFor = p[Keys.tunnelFor].orEmpty(),
                 lastTunnelUrl = p[Keys.tunnelUrl].orEmpty(),
             )
