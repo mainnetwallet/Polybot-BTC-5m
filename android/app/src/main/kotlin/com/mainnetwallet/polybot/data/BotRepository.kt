@@ -9,6 +9,7 @@ import com.mainnetwallet.polybot.data.net.BotApi
 import com.mainnetwallet.polybot.data.net.FeedEvent
 import com.mainnetwallet.polybot.data.net.FeedState
 import com.mainnetwallet.polybot.data.net.LiveFeed
+import com.mainnetwallet.polybot.domain.changesLists
 import com.mainnetwallet.polybot.domain.mergeTick
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -162,7 +163,8 @@ class BotRepository(
         next.add(row)
         next.addAll(_logs.value)
         _logs.value = if (next.size > LOG_LIMIT) next.subList(0, LOG_LIMIT).toList() else next
-        _dataVersion.value = _dataVersion.value + 1
+        // Only lines that mean orders, positions or triggers changed make the lists refetch (see changesLists).
+        if (row.changesLists()) _dataVersion.value = _dataVersion.value + 1
     }
 
     /** Only real book updates are charted; the chart restarts for every new market. */

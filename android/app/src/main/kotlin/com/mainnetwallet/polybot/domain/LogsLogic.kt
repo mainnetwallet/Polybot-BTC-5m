@@ -12,6 +12,15 @@ data class LevelCounts(val all: Int, val info: Int, val warn: Int, val error: In
     }
 }
 
+/**
+ * True when this log line means the order, position or trigger lists on the PC changed, so screens should
+ * read them again. Every other line (market events, health checks, info...) must not: each refetch is a round
+ * trip through the tunnel, and busy logs used to trigger three of them per second for nothing.
+ */
+fun LogRow.changesLists(): Boolean =
+    category == "trigger" || category == "fill" || category == "order_submit" || category == "order" ||
+        message.contains("sold", ignoreCase = true) || message.contains("STOP-LOSS", ignoreCase = true)
+
 /** Filtering, searching and counting of log entries. Free of Compose and Android, so it is unit tested. */
 object LogsLogic {
     /** True when [query] (trimmed, any case) is part of the message, the category or the payload. Blank matches all. */

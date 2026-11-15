@@ -95,4 +95,15 @@ class LogsLogicTest {
         )
         assertEquals("[INFO]\nhello", LogsLogic.entryText(LogRow(level = "", message = "hello"), null))
     }
+
+    @Test fun onlyListChangingLinesMakeScreensRefetch() {
+        assertTrue(row("INFO", "trigger", "UP ask 0.350 -> submitted").changesLists())
+        assertTrue(row("INFO", "fill", "Filled 5 UP").changesLists())
+        assertTrue(row("INFO", "order_submit", "BUY UP").changesLists())
+        assertTrue(row("INFO", "engine", "Position sold at 0.62").changesLists())
+        assertTrue(row("WARNING", "engine", "STOP-LOSS hit").changesLists())
+        assertTrue(!row("INFO", "engine", "Engine started").changesLists())
+        assertTrue(!row("INFO", "market", "New market tracked").changesLists())
+        assertTrue(!row("ERROR", "error", "exit worker failed: boom").changesLists())
+    }
 }
