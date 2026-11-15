@@ -78,11 +78,13 @@ class BotRepository(
                     batch.add(next)
                 }
                 val lastState = batch.indexOfLast { it is FeedEvent.StateEvent }
+                // A tick replaces the books and the evaluation completely, so only the newest one matters.
+                val lastTick = batch.indexOfLast { it is FeedEvent.TickEvent }
                 var needRefresh = false
                 batch.forEachIndexed { i, event ->
                     when (event) {
                         is FeedEvent.StateEvent -> if (i == lastState) applySnapshot(event.snapshot, recordBtc = true)
-                        is FeedEvent.TickEvent -> if (i > lastState) applyTick(event)
+                        is FeedEvent.TickEvent -> if (i == lastTick && i > lastState) applyTick(event)
                         is FeedEvent.LogEvent -> {
                             appendLog(event.row)
                             if (isTradeEvent(event.row)) needRefresh = true
@@ -90,6 +92,10 @@ class BotRepository(
                     }
                 }
                 if (needRefresh) refreshSoon()
+                // The server sends a tick on every order-book event, dozens a second. Every applied tick copies the
+                // snapshot and recomposes the screens on the main thread, which is what made scrolling stutter.
+                // Ten updates a second look live and leave the frames free; frames that pile up are merged above.
+                delay(FEED_MIN_GAP_MS)
             }
         }
         // Safety net: the socket normally sends a full state twice a second. If none arrived for a while although the
@@ -372,6 +378,9 @@ class BotRepository(
         const val BTC_LIMIT = 240
         const val LOG_LIMIT = 400
         private const val OFFSET_WINDOW_MS = 20_000L
+        /** At most one batch of feed frames is applied per this time (see the feed loop). */
+        private const val FEED_MIN_GAP_MS = 100L
+
         private const val STALE_CHECK_MS = 1_000L
         private const val STALE_STATE_MS = 2_500L
 

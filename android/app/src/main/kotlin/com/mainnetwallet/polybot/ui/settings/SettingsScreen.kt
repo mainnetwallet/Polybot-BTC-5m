@@ -61,6 +61,7 @@ import com.mainnetwallet.polybot.domain.SettingSection
 import com.mainnetwallet.polybot.domain.SettingsSpec
 import com.mainnetwallet.polybot.ui.LocalGraph
 import com.mainnetwallet.polybot.ui.LocalUi
+import com.mainnetwallet.polybot.ui.collectSelectedAsState
 import com.mainnetwallet.polybot.ui.components.EmptyState
 import com.mainnetwallet.polybot.ui.components.IconBadge
 import com.mainnetwallet.polybot.ui.components.Pill
@@ -97,7 +98,7 @@ fun SettingsHome(
     val scope = rememberCoroutineScope()
     val prefs by graph.prefs.collectAsStateWithLifecycle()
     val feed by graph.repository.feedState.collectAsStateWithLifecycle()
-    val snapshot by graph.repository.snapshot.collectAsStateWithLifecycle()
+    val live by graph.repository.snapshot.collectSelectedAsState { it?.bot?.isLive == true }
     var confirmLogout by remember { mutableStateOf(false) }
     val p = prefs ?: return
     val colors = Poly.colors
@@ -106,7 +107,7 @@ fun SettingsHome(
         ConnectionHero(
             pcUrl = p.pcUrl,
             feed = feed,
-            live = snapshot?.bot?.isLive == true,
+            live = live,
             onEdit = onEditConnection,
         )
 
@@ -225,10 +226,9 @@ fun SettingsDangerPage(owner: ViewModelStoreOwner, modifier: Modifier = Modifier
     val repo = graph.repository
     val ui = LocalUi.current
     val scope = rememberCoroutineScope()
-    val snapshot by repo.snapshot.collectAsStateWithLifecycle()
+    val starting by repo.snapshot.collectSelectedAsState { it?.account?.startingBalance }
     var dialog by remember { mutableStateOf<String?>(null) }
     var balanceText by remember { mutableStateOf("") }
-    val starting = snapshot?.account?.startingBalance
     val colors = Poly.colors
 
     PageFrame(vm, showSaveBar = false, modifier = modifier) { _ ->

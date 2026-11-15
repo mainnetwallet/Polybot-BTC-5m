@@ -45,12 +45,15 @@ import com.mainnetwallet.polybot.ui.components.ProCard
 import com.mainnetwallet.polybot.ui.components.ProSectionHeader
 import com.mainnetwallet.polybot.ui.components.SidePill
 import com.mainnetwallet.polybot.ui.components.SkeletonCard
+import com.mainnetwallet.polybot.ui.collectSelectedAsState
 import com.mainnetwallet.polybot.ui.components.ToneChip
 import com.mainnetwallet.polybot.ui.graphViewModel
 import com.mainnetwallet.polybot.ui.theme.Mono
 import com.mainnetwallet.polybot.ui.theme.Poly
 import com.mainnetwallet.polybot.ui.theme.Space
 import kotlinx.coroutines.launch
+import kotlin.math.ceil
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.doubleOrNull
 
@@ -79,11 +82,17 @@ fun StrategyScreen(modifier: Modifier = Modifier) {
     val vm: StrategyViewModel = graphViewModel()
     val repo = LocalGraph.current.repository
     val state by vm.state.collectAsStateWithLifecycle()
-    val snapshot by repo.snapshot.collectAsStateWithLifecycle()
+    // This tab shows settings, not prices: it reads a view without the per-tick fields (asks, armed flags, reason,
+    // fractional countdown), so it is not rebuilt several times a second while the user scrolls.
+    val view by repo.snapshot.collectSelectedAsState { it?.toStrategyView() }
+    val remainingNow by repo.snapshot.collectSelectedAsState { s ->
+        // Whole seconds, rounded up: for whole-second stage limits "remaining <= limit" gives the same answer.
+        (s?.strategy?.remainingSeconds ?: s?.market?.remainingSeconds)?.let { ceil(it) }
+    }
     val scope = rememberCoroutineScope()
     var refreshing by remember { mutableStateOf(false) }
     var filterIndex by rememberSaveable { mutableStateOf(0) }
-    val snap = snapshot
+    val snap = view
 
     PolyPullToRefresh(
         isRefreshing = refreshing,
@@ -110,7 +119,7 @@ fun StrategyScreen(modifier: Modifier = Modifier) {
                 SkeletonCard(lines = 3)
             }
         } else {
-            val remaining = snap.strategy.remainingSeconds ?: snap.market?.remainingSeconds
+            val remaining = remainingNow
             val stages = stageSpecs(snap, remaining)
             val filter = TriggerFilter.entries.getOrElse(filterIndex) { TriggerFilter.All }
             val shown = state.triggers.filter { filter.matches(it) }
@@ -169,7 +178,28 @@ fun StrategyScreen(modifier: Modifier = Modifier) {
     }
 }
 
-private fun cfg(snap: Snapshot, key: String): Double? = (snap.config[key] as? JsonPrimitive)?.doubleOrNull
+/** What the Strategy tab needs from a snapshot: the stage settings, without the values that change on every tick. */
+private data class StrategyView(
+    val strategy: StrategyState,
+    val durationSeconds: Double?,
+    val config: Map<String, JsonElement>,
+)
+
+private fun Snapshot.toStrategyView() = StrategyView(
+    strategy = strategy.copy(
+        inWindow = false,
+        remainingSeconds = null,
+        upAsk = null,
+        downAsk = null,
+        upArmed = false,
+        downArmed = false,
+        reason = "",
+    ),
+    durationSeconds = market?.durationSeconds,
+    config = config,
+)
+
+private fun cfg(snap: StrategyView, key: String): Double? = (snap.config[key] as? JsonPrimitive)?.doubleOrNull
 
 private fun secs(v: Double): String = Fmt.plain(v) + "s"
 
@@ -183,7 +213,7 @@ private fun centsRange(low: Double, high: Double): String =
 
 private fun triggerCounts(rows: List<TriggerRow>): List<Int> = TriggerFilter.entries.map { f -> rows.count { f.matches(it) } }
 
-private fun stageSpecs(snap: Snapshot, remaining: Double?): List<StageSpec> {
+private fun stageSpecs(snap: StrategyView, remaining: Double?): List<StageSpec> {
     val s = snap.strategy
     val open0 = remaining != null && remaining <= s.stage0StartSeconds && remaining > s.stage0EndSeconds
     val open1 = remaining != null && remaining <= s.finalWindowSeconds
@@ -286,9 +316,9 @@ private fun stageSpecs(snap: Snapshot, remaining: Double?): List<StageSpec> {
 }
 
 @Composable
-private fun TimelineCard(snap: Snapshot, remaining: Double?) {
+private fun TimelineCard(snap: StrategyView, remaining: Double?) {
     val s = snap.strategy
-    val duration = snap.market?.durationSeconds
+    val duration = snap.durationSeconds
     ProCard(contentPadding = Space.md, spacing = Space.sm) {
         ProSectionHeader("Stage timeline", subtitle = "When each stage is allowed to trade in this market")
         if (duration == null || duration <= 0.0) {

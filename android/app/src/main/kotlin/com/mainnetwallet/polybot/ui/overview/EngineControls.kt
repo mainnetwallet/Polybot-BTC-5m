@@ -8,10 +8,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mainnetwallet.polybot.data.ActionResult
 import com.mainnetwallet.polybot.data.model.Modes
 import com.mainnetwallet.polybot.ui.LocalGraph
+import com.mainnetwallet.polybot.ui.collectSelectedAsState
 import com.mainnetwallet.polybot.ui.LocalUi
 import com.mainnetwallet.polybot.ui.safety.ConfirmDialog
 import com.mainnetwallet.polybot.ui.safety.PhraseDialog
@@ -28,7 +28,7 @@ fun EngineControls(modifier: Modifier = Modifier) {
     val graph = LocalGraph.current
     val ui = LocalUi.current
     val repo = graph.repository
-    val snapshot by repo.snapshot.collectAsStateWithLifecycle()
+    val botState by repo.snapshot.collectSelectedAsState { it?.bot }
     val scope = rememberCoroutineScope()
 
     var busy by remember { mutableStateOf(false) }
@@ -46,7 +46,7 @@ fun EngineControls(modifier: Modifier = Modifier) {
         }
     }
 
-    val bot = snapshot?.bot ?: return
+    val bot = botState ?: return
     EngineControlsRow(
         bot = bot,
         busy = busy,

@@ -58,6 +58,7 @@ import com.mainnetwallet.polybot.data.net.UrlUtils
 import com.mainnetwallet.polybot.data.store.AppPrefs
 import com.mainnetwallet.polybot.domain.SettingsSpec
 import com.mainnetwallet.polybot.ui.LocalGraph
+import com.mainnetwallet.polybot.ui.collectSelectedAsState
 import com.mainnetwallet.polybot.ui.connect.ConnectScreen
 import com.mainnetwallet.polybot.ui.analytics.AnalyticsScreen
 import com.mainnetwallet.polybot.ui.logs.LogsScreen
@@ -105,10 +106,13 @@ fun MainScaffold(prefs: AppPrefs, snackbar: SnackbarHostState) {
     val nav = rememberNavController()
     val backEntry by nav.currentBackStackEntryAsState()
     val route = backEntry?.destination?.route
-    val snapshot by graph.repository.snapshot.collectAsStateWithLifecycle()
+    // Only the few values the bars need: reading the whole snapshot here recomposed the scaffold on every tick.
+    val hasSnapshot by graph.repository.snapshot.collectSelectedAsState { it != null }
     val feed by graph.repository.feedState.collectAsStateWithLifecycle()
-    val live = snapshot?.bot?.isLive == true
-    val strategyArmed = snapshot?.strategy?.let { it.upArmed || it.downArmed } == true
+    val live by graph.repository.snapshot.collectSelectedAsState { it?.bot?.isLive == true }
+    val strategyArmed by graph.repository.snapshot.collectSelectedAsState { s ->
+        s?.strategy?.let { it.upArmed || it.downArmed } == true
+    }
     val onTab = Dest.entries.any { it.route == route }
 
     Scaffold(
@@ -121,7 +125,7 @@ fun MainScaffold(prefs: AppPrefs, snackbar: SnackbarHostState) {
                 title = {
                     when {
                         // Start/Stop, PAPER | LIVE and kill switch replace the old feed/mode badges.
-                        onTab || route == null -> if (snapshot != null) EngineControls() else ConnectionPill(feed)
+                        onTab || route == null -> if (hasSnapshot) EngineControls() else ConnectionPill(feed)
                         else -> Text(routeTitle(route), style = MaterialTheme.typography.titleLarge)
                     }
                 },
