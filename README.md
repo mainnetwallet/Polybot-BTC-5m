@@ -2,22 +2,6 @@
 
 Local Windows app for Polymarket BTC up/down 5-minute markets: Python (FastAPI) backend, React dashboard and a native Android app (`android/`). **Paper trading is the default**; live trading is disabled until you pass explicit safety gates.
 
-## Strategy
-
-All values are defaults and can be changed in Settings or `.env`. Up to 3 buys per market; every stage buys and sells only its own shares.
-
-| Stage | Entry | Take-profit | Stop-loss |
-| --- | --- | --- | --- |
-| **0** early buy | `200`-`100`s left, ask `0.60`-`0.94`, BTC gap >= `$80` beyond the price to beat. One buy per market | Best bid `+15%` / `+10%` / `+5%` over avg cost (buy below `0.70` / `0.70`-`0.80` / above); `0` = hold | `50%` below avg cost (`15%` if bought at `0.90`+) |
-| **1** final window | Last `80`s, best ask >= `0.80`, gap >= `$20` (waits and buys as soon as it gets there) | Bought up to `0.86`: `+10%`; dearer: bid `0.99` | `15%` |
-| **2** add-on | `<= 50`s left, ask >= `0.90`, gap >= `$25` | Bid `0.99` | `9%` |
-| **3** add-on | `<= 30`s left, ask >= `0.90`, gap >= `$30` | held to settlement | `5%` |
-
-- Orders are marketable BUY (FOK) at the current ask. `0.80` / `0.90` are triggers, never limit prices; `MAX_EXECUTION_PRICE` caps the price paid.
-- Take-profit sells are marketable and never below their sell price. Stop-loss sells at market with no floor. `0` turns a stop-loss off.
-- A blocked or failed entry is retried on the next book event and every 0.5s while the book is quiet.
-- Execution is WebSocket/event-driven, no sleeps in the trigger path.
-
 ## Requirements
 
 Windows 10/11, Python 3.11+, Node.js 20.19+ or 22.12+, Git, a synced system clock (clock drift makes books look stale), internet access to Polymarket.
@@ -38,6 +22,22 @@ cd Polybot-BTC-5m
 - Update: `.\stop.bat`, `git pull`, `.\setup.bat`, `.\start.bat`.
 - Clean reinstall: `.\stop.bat; Remove-Item -Recurse -Force .venv, frontend\node_modules; .\setup.bat` (keeps `.env` and the database).
 - Private repo: sign in via Git Credential Manager; never put a token in the clone URL.
+
+## Strategy
+
+All values are defaults and can be changed in Settings or `.env`. Up to 3 buys per market; every stage buys and sells only its own shares.
+
+| Stage | Entry | Take-profit | Stop-loss |
+| --- | --- | --- | --- |
+| **0** early buy | `200`-`100`s left, ask `0.60`-`0.94`, BTC gap >= `$80` beyond the price to beat. One buy per market | Best bid `+15%` / `+10%` / `+5%` over avg cost (buy below `0.70` / `0.70`-`0.80` / above); `0` = hold | `50%` below avg cost (`15%` if bought at `0.90`+) |
+| **1** final window | Last `80`s, best ask >= `0.80`, gap >= `$20` (waits and buys as soon as it gets there) | Bought up to `0.86`: `+10%`; dearer: bid `0.99` | `15%` |
+| **2** add-on | `<= 50`s left, ask >= `0.90`, gap >= `$25` | Bid `0.99` | `9%` |
+| **3** add-on | `<= 30`s left, ask >= `0.90`, gap >= `$30` | held to settlement | `5%` |
+
+- Orders are marketable BUY (FOK) at the current ask. `0.80` / `0.90` are triggers, never limit prices; `MAX_EXECUTION_PRICE` caps the price paid.
+- Take-profit sells are marketable and never below their sell price. Stop-loss sells at market with no floor. `0` turns a stop-loss off.
+- A blocked or failed entry is retried on the next book event and every 0.5s while the book is quiet.
+- Execution is WebSocket/event-driven, no sleeps in the trigger path.
 
 ## Dashboard
 
