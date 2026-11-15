@@ -40,6 +40,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -55,13 +56,16 @@ import com.mainnetwallet.polybot.data.net.PcTarget
 import com.mainnetwallet.polybot.data.net.TargetParse
 import com.mainnetwallet.polybot.data.net.UrlUtils
 import com.mainnetwallet.polybot.data.store.AppPrefs
+import com.mainnetwallet.polybot.domain.SettingsSpec
 import com.mainnetwallet.polybot.ui.LocalGraph
 import com.mainnetwallet.polybot.ui.connect.ConnectScreen
 import com.mainnetwallet.polybot.ui.analytics.AnalyticsScreen
 import com.mainnetwallet.polybot.ui.logs.LogsScreen
 import com.mainnetwallet.polybot.ui.overview.EngineControls
 import com.mainnetwallet.polybot.ui.overview.OverviewScreen
-import com.mainnetwallet.polybot.ui.settings.SettingsScreen
+import com.mainnetwallet.polybot.ui.settings.SettingsDangerPage
+import com.mainnetwallet.polybot.ui.settings.SettingsHome
+import com.mainnetwallet.polybot.ui.settings.SettingsSectionPage
 import com.mainnetwallet.polybot.ui.strategy.StrategyScreen
 import com.mainnetwallet.polybot.ui.trading.TradingScreen
 import com.mainnetwallet.polybot.ui.theme.Poly
@@ -82,7 +86,18 @@ enum class Dest(
 }
 
 const val ROUTE_SETTINGS = "settings"
+const val ROUTE_SETTINGS_DANGER = "settings/danger"
 const val ROUTE_CONNECTION = "connection"
+
+/** Route of the detail page of one trading section (`entry`, `stage0` ... `paper`). */
+fun settingsSectionRoute(sectionId: String): String = "settings/section/$sectionId"
+
+/** Title of the top bar on the pages that are not one of the five tabs. */
+private fun routeTitle(route: String?): String = when {
+    route == ROUTE_CONNECTION -> "Connection"
+    route == ROUTE_SETTINGS_DANGER -> "Danger zone"
+    else -> SettingsSpec.sections.firstOrNull { settingsSectionRoute(it.id) == route }?.title ?: "Settings"
+}
 
 @Composable
 fun MainScaffold(prefs: AppPrefs, snackbar: SnackbarHostState) {
@@ -107,8 +122,7 @@ fun MainScaffold(prefs: AppPrefs, snackbar: SnackbarHostState) {
                     when {
                         // Start/Stop, PAPER | LIVE and kill switch replace the old feed/mode badges.
                         onTab || route == null -> if (snapshot != null) EngineControls() else ConnectionPill(feed)
-                        route == ROUTE_CONNECTION -> Text("Connection", style = MaterialTheme.typography.titleLarge)
-                        else -> Text("Settings", style = MaterialTheme.typography.titleLarge)
+                        else -> Text(routeTitle(route), style = MaterialTheme.typography.titleLarge)
                     }
                 },
             )
@@ -143,7 +157,22 @@ fun MainScaffold(prefs: AppPrefs, snackbar: SnackbarHostState) {
                 composable(Dest.Analytics.route) { AnalyticsScreen() }
                 composable(Dest.Logs.route) { LogsScreen() }
                 composable(ROUTE_SETTINGS) {
-                    SettingsScreen(onEditConnection = { nav.navigate(ROUTE_CONNECTION) { launchSingleTop = true } })
+                    SettingsHome(
+                        onEditConnection = { nav.navigate(ROUTE_CONNECTION) { launchSingleTop = true } },
+                        onOpenSection = { id -> nav.navigate(settingsSectionRoute(id)) { launchSingleTop = true } },
+                        onOpenDanger = { nav.navigate(ROUTE_SETTINGS_DANGER) { launchSingleTop = true } },
+                    )
+                }
+                // The detail pages share the hub's ViewModel, so edits survive moving between pages.
+                SettingsSpec.sections.forEach { section ->
+                    composable(settingsSectionRoute(section.id)) { entry ->
+                        val hub = remember(entry) { nav.getBackStackEntry(ROUTE_SETTINGS) }
+                        SettingsSectionPage(sectionId = section.id, owner = hub)
+                    }
+                }
+                composable(ROUTE_SETTINGS_DANGER) { entry ->
+                    val hub = remember(entry) { nav.getBackStackEntry(ROUTE_SETTINGS) }
+                    SettingsDangerPage(owner = hub)
                 }
                 composable(ROUTE_CONNECTION) {
                     ConnectScreen(

@@ -3,6 +3,7 @@ package com.mainnetwallet.polybot.ui
 import androidx.compose.runtime.Composable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.mainnetwallet.polybot.AppGraph
 import com.mainnetwallet.polybot.ui.analytics.AnalyticsViewModel
@@ -30,4 +31,14 @@ class GraphVmFactory(private val graph: AppGraph) : ViewModelProvider.Factory {
 inline fun <reified T : ViewModel> graphViewModel(): T {
     val graph = LocalGraph.current
     return viewModel<T>(factory = GraphVmFactory(graph))
+}
+
+/**
+ * Same as [graphViewModel] but scoped to [owner], so several navigation destinations (for example the Settings
+ * hub and its detail pages) share one ViewModel instead of each getting its own.
+ */
+@Composable
+inline fun <reified T : ViewModel> graphViewModel(owner: ViewModelStoreOwner): T {
+    val graph = LocalGraph.current
+    return viewModel<T>(viewModelStoreOwner = owner, factory = GraphVmFactory(graph))
 }

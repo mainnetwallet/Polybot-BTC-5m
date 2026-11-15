@@ -27,6 +27,28 @@ class SettingsLogicTest {
         assertEquals(SettingsSpec.fields.map { it.key }.toSet(), placed.toSet())
     }
 
+    @Test fun stageSectionsKnowTheirOnOffSwitch() {
+        val switches = SettingsSpec.sections.associate { it.id to SettingsSpec.enabledKey(it) }
+        assertEquals("stage0_enabled", switches["stage0"])
+        assertEquals("stage1_enabled", switches["stage1"])
+        assertEquals("stage2_enabled", switches["stage2"])
+        assertEquals("stage3_enabled", switches["stage3"])
+        assertNull(switches["entry"])
+        assertNull(switches["risk"])
+        assertNull(switches["paper"])
+    }
+
+    @Test fun editedFieldsAreCountedPerSection() {
+        val stage0 = SettingsSpec.sections.first { it.id == "stage0" }
+        val risk = SettingsSpec.sections.first { it.id == "risk" }
+        val edited = listOf("stage0_enabled", "stage0_min_ask", "trade_amount_usdc")
+        assertEquals(2, SettingsSpec.dirtyIn(stage0, edited))
+        assertEquals(1, SettingsSpec.dirtyIn(risk, edited))
+        assertEquals(0, SettingsSpec.dirtyIn(stage0, emptyList()))
+        assertEquals("risk", SettingsSpec.sectionOfKey("trade_amount_usdc")?.id)
+        assertNull(SettingsSpec.sectionOfKey("not_a_setting"))
+    }
+
     @Test fun untouchedDraftHasNoChanges() {
         val draft = fresh()
         assertTrue(SettingsLogic.dirtyKeys(draft, saved).isEmpty())

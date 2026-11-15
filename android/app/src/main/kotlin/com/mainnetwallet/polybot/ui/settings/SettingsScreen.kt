@@ -2,34 +2,41 @@ package com.mainnetwallet.polybot.ui.settings
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudOff
-import androidx.compose.material3.Button
+import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Restore
+import androidx.compose.material.icons.filled.Science
+import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.TouchApp
+import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.PrimaryScrollableTabRow
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
-import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.AlertDialog
-import com.mainnetwallet.polybot.ui.components.PolyPullToRefresh
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -38,217 +45,182 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.mainnetwallet.polybot.BuildConfig
+import com.mainnetwallet.polybot.data.net.FeedState
 import com.mainnetwallet.polybot.data.store.ThemeMode
-import com.mainnetwallet.polybot.domain.SettingField
-import com.mainnetwallet.polybot.domain.SettingKind
+import com.mainnetwallet.polybot.domain.SettingGroup
+import com.mainnetwallet.polybot.domain.SettingSection
 import com.mainnetwallet.polybot.domain.SettingsSpec
 import com.mainnetwallet.polybot.ui.LocalGraph
 import com.mainnetwallet.polybot.ui.LocalUi
 import com.mainnetwallet.polybot.ui.components.EmptyState
-import com.mainnetwallet.polybot.ui.components.PolyCard
-import com.mainnetwallet.polybot.ui.components.SectionTitle
+import com.mainnetwallet.polybot.ui.components.IconBadge
+import com.mainnetwallet.polybot.ui.components.Pill
+import com.mainnetwallet.polybot.ui.components.PolyPullToRefresh
+import com.mainnetwallet.polybot.ui.components.ProHero
+import com.mainnetwallet.polybot.ui.components.SegmentedTabs
 import com.mainnetwallet.polybot.ui.components.SkeletonCard
 import com.mainnetwallet.polybot.ui.graphViewModel
 import com.mainnetwallet.polybot.ui.safety.ConfirmDialog
 import com.mainnetwallet.polybot.ui.safety.PhraseDialog
+import com.mainnetwallet.polybot.ui.theme.Mono
+import com.mainnetwallet.polybot.ui.theme.Poly
 import com.mainnetwallet.polybot.ui.theme.Space
 import kotlinx.coroutines.launch
 
-private const val APP_TAB = "app"
-private const val DANGER_TAB = "danger"
+// Settings is a hub with detail pages, each one a navigation route (see MainScaffold):
+//   SettingsHome         connection, one row per trading section, preferences, danger zone and log out
+//   SettingsSectionPage  the editable fields of one trading section (Entry, Stage 0 ... Paper)
+//   SettingsDangerPage   resets that change or wipe data on the PC
+// The three share one SettingsViewModel (scoped to the hub's back stack entry), so an edit made on a detail page
+// is still there, and still counted, when the person comes back to the hub.
 
-@OptIn(ExperimentalMaterial3Api::class)
+/** The hub: where the PC connection, the trading sections, app preferences and account actions start. */
 @Composable
-fun SettingsScreen(onEditConnection: () -> Unit, modifier: Modifier = Modifier) {
+fun SettingsHome(
+    onEditConnection: () -> Unit,
+    onOpenSection: (String) -> Unit,
+    onOpenDanger: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val vm: SettingsViewModel = graphViewModel()
+    val graph = LocalGraph.current
     val ui = LocalUi.current
-    val state by vm.state.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
-    var tab by remember { mutableStateOf(SettingsSpec.sections.first().id) }
-    var refreshing by remember { mutableStateOf(false) }
-    var confirmReset by remember { mutableStateOf(false) }
+    val prefs by graph.prefs.collectAsStateWithLifecycle()
+    val feed by graph.repository.feedState.collectAsStateWithLifecycle()
+    val snapshot by graph.repository.snapshot.collectAsStateWithLifecycle()
+    var confirmLogout by remember { mutableStateOf(false) }
+    val p = prefs ?: return
+    val colors = Poly.colors
 
-    val tabs = SettingsSpec.sections.map { it.id to it.title } + listOf(DANGER_TAB to "Danger zone", APP_TAB to "App")
+    PageFrame(vm, showSaveBar = true, modifier = modifier) { state ->
+        ConnectionHero(
+            pcUrl = p.pcUrl,
+            feed = feed,
+            live = snapshot?.bot?.isLive == true,
+            onEdit = onEditConnection,
+        )
 
-    Column(modifier.fillMaxSize()) {
-        PrimaryScrollableTabRow(selectedTabIndex = tabs.indexOfFirst { it.first == tab }.coerceAtLeast(0), edgePadding = Space.sm) {
-            tabs.forEach { (id, title) ->
-                Tab(selected = tab == id, onClick = { tab = id }, text = { Text(title, maxLines = 1) })
-            }
-        }
-        PolyPullToRefresh(
-            isRefreshing = refreshing,
-            onRefresh = {
-                refreshing = true
-                scope.launch {
-                    vm.load()
-                    refreshing = false
-                }
-            },
-            modifier = Modifier.weight(1f),
-        ) {
-            Column(
-                Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(Space.lg),
-                verticalArrangement = Arrangement.spacedBy(Space.md),
-            ) {
-                when {
-                    tab == APP_TAB -> AppSection(onEditConnection)
-                    tab == DANGER_TAB -> DangerZone()
-                    state.loading -> {
-                        SkeletonCard(lines = 4)
-                        SkeletonCard(lines = 4)
-                    }
-                    state.loadError != null && state.saved.isEmpty() -> PolyCard {
-                        EmptyState("Could not load the settings", state.loadError, icon = Icons.Filled.CloudOff)
-                    }
-                    else -> {
-                        val section = SettingsSpec.sections.first { it.id == tab }
-                        section.groups.forEach { group ->
-                            PolyCard {
-                                SectionTitle(group.title)
-                                group.description?.let {
-                                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                                group.keys.mapNotNull { SettingsSpec.field(it) }.forEachIndexed { index, field ->
-                                    if (index > 0) HorizontalDivider(Modifier.padding(vertical = Space.xs))
-                                    FieldRow(
-                                        field = field,
-                                        value = state.draft[field.key].orEmpty(),
-                                        error = state.errors[field.key],
-                                        dirty = field.key in state.dirty,
-                                        enabled = !state.saving,
-                                        onChange = { vm.edit(field.key, it) },
-                                    )
-                                }
-                            }
-                        }
-                        OutlinedButton(onClick = { confirmReset = true }, modifier = Modifier.fillMaxWidth(), enabled = !state.saving) {
-                            Text("Reset all settings to defaults")
-                        }
-                    }
-                }
-            }
-        }
-        if (state.dirty.isNotEmpty() && tab != APP_TAB && tab != DANGER_TAB) {
-            SaveBar(
-                changed = state.dirty.mapNotNull { SettingsSpec.field(it)?.label },
-                problems = state.errors.size,
-                saving = state.saving,
-                canSave = state.canSave,
-                onDiscard = vm::discard,
-                onSave = {
-                    scope.launch {
-                        val result = vm.save()
-                        ui.report(result)
-                    }
-                },
+        Column(verticalArrangement = Arrangement.spacedBy(Space.sm)) {
+            GroupHeader(
+                "Trading configuration",
+                caption = "The rules the bot follows on your PC. Changes are sent when you save.",
             )
+            SettingsCard {
+                SettingsSpec.sections.forEachIndexed { index, section ->
+                    if (index > 0) RowDivider()
+                    SectionRow(section, state, onClick = { onOpenSection(section.id) })
+                }
+            }
         }
+
+        Column(verticalArrangement = Arrangement.spacedBy(Space.sm)) {
+            GroupHeader("Preferences", caption = "Stored on this phone only.")
+            SettingsCard {
+                AppearanceRow(mode = p.themeMode, onSelect = { scope.launch { graph.prefsStore.setTheme(it) } })
+                RowDivider()
+                SettingsToggleRow(
+                    icon = Icons.Filled.TouchApp,
+                    title = "Haptic feedback",
+                    hint = "Short vibration on actions.",
+                    checked = p.haptics,
+                    onChange = { scope.launch { graph.prefsStore.setHaptics(it) } },
+                )
+                RowDivider()
+                SettingsToggleRow(
+                    icon = Icons.Filled.CheckCircle,
+                    title = "Confirm paper sells",
+                    hint = "Ask before a manual sell in paper mode. Live sells always ask.",
+                    checked = p.confirmSells,
+                    onChange = { scope.launch { graph.prefsStore.setConfirmSells(it) } },
+                )
+            }
+        }
+
+        Column(verticalArrangement = Arrangement.spacedBy(Space.sm)) {
+            GroupHeader("Safety and account")
+            SettingsCard {
+                SettingsNavRow(
+                    icon = Icons.Filled.Warning,
+                    title = "Danger zone",
+                    subtitle = "Reset settings, the paper account, daily stats or the whole server.",
+                    onClick = onOpenDanger,
+                    tint = colors.down,
+                    container = colors.downContainer,
+                )
+                RowDivider()
+                SettingsNavRow(
+                    icon = Icons.AutoMirrored.Filled.Logout,
+                    title = "Log out",
+                    subtitle = "Forgets the API token on this phone. The PC address stays.",
+                    onClick = { confirmLogout = true },
+                    tint = colors.down,
+                    container = colors.downContainer,
+                    titleColor = MaterialTheme.colorScheme.error,
+                    chevron = false,
+                )
+            }
+        }
+
+        Text(
+            "Polybot for Android · v${BuildConfig.VERSION_NAME}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 
-    if (confirmReset) {
+    if (confirmLogout) {
         ConfirmDialog(
-            title = "Reset all settings?",
-            text = "Every trading setting returns to its default value. Unsaved edits are lost.",
-            confirmLabel = "Reset",
+            title = "Log out?",
+            text = "The saved API token is removed from this phone.",
+            confirmLabel = "Log out",
             destructive = true,
-            onConfirm = { scope.launch { ui.report(vm.resetToDefaults()) } },
-            onDismiss = { confirmReset = false },
+            onConfirm = {
+                ui.strong()
+                scope.launch { graph.prefsStore.logout() }
+            },
+            onDismiss = { confirmLogout = false },
         )
     }
 }
 
+/** The fields of one trading section, grouped as in [SettingsSpec]. */
 @Composable
-private fun SaveBar(
-    changed: List<String>,
-    problems: Int,
-    saving: Boolean,
-    canSave: Boolean,
-    onDiscard: () -> Unit,
-    onSave: () -> Unit,
-) {
-    Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, tonalElevation = 3.dp, modifier = Modifier.fillMaxWidth()) {
-        Column(
-            Modifier
-                .navigationBarsPadding()
-                .padding(horizontal = Space.lg, vertical = Space.sm),
-            verticalArrangement = Arrangement.spacedBy(Space.sm),
-        ) {
-            Text(
-                "${changed.size} unsaved: " + changed.take(4).joinToString(", ") + if (changed.size > 4) " and ${changed.size - 4} more" else "",
-                style = MaterialTheme.typography.bodySmall,
-                maxLines = 2,
+fun SettingsSectionPage(sectionId: String, owner: ViewModelStoreOwner, modifier: Modifier = Modifier) {
+    val vm: SettingsViewModel = graphViewModel(owner)
+    val scope = rememberCoroutineScope()
+    val section = SettingsSpec.sections.firstOrNull { it.id == sectionId } ?: return
+
+    PageFrame(vm, showSaveBar = true, modifier = modifier) { state ->
+        when {
+            state.loading -> {
+                SkeletonCard(lines = 4)
+                SkeletonCard(lines = 4)
+            }
+            state.loadError != null && state.saved.isEmpty() -> LoadError(
+                message = state.loadError,
+                onRetry = { scope.launch { vm.load() } },
             )
-            if (problems > 0) {
-                Text(
-                    "$problems field${if (problems == 1) "" else "s"} need attention.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(Space.md)) {
-                OutlinedButton(onClick = onDiscard, enabled = !saving, modifier = Modifier.weight(1f)) { Text("Discard") }
-                Button(onClick = onSave, enabled = canSave, modifier = Modifier.weight(1f)) {
-                    if (saving) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp) else Text("Save")
-                }
-            }
+            else -> section.groups.forEach { group -> GroupBlock(group, state, vm) }
         }
     }
 }
 
+/** Resets that change or wipe data on the PC. Every action asks for confirmation first. */
 @Composable
-private fun FieldRow(field: SettingField, value: String, error: String?, dirty: Boolean, enabled: Boolean, onChange: (String) -> Unit) {
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
-        when (val kind = field.kind) {
-            SettingKind.Toggle -> Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(field.label + if (dirty) " •" else "", style = MaterialTheme.typography.bodyLarge)
-                    Text(field.hint, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                Switch(checked = value == "true", onCheckedChange = { onChange(it.toString()) }, enabled = enabled)
-            }
-            is SettingKind.Number -> {
-                OutlinedTextField(
-                    value = value,
-                    onValueChange = onChange,
-                    label = { Text(field.label + if (dirty) " •" else "") },
-                    suffix = kind.suffix?.let { { Text(it) } },
-                    singleLine = true,
-                    enabled = enabled,
-                    isError = error != null,
-                    supportingText = { Text(error ?: field.hint) },
-                    keyboardOptions = KeyboardOptions(keyboardType = if (kind.integer) KeyboardType.Number else KeyboardType.Decimal),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-            is SettingKind.Choice -> {
-                Text(field.label + if (dirty) " •" else "", style = MaterialTheme.typography.bodyLarge)
-                Column(verticalArrangement = Arrangement.spacedBy(Space.xs)) {
-                    kind.options.chunked(2).forEach { pair ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
-                            pair.forEach { (id, label) ->
-                                FilterChip(selected = value == id, onClick = { onChange(id) }, label = { Text(label) }, enabled = enabled)
-                            }
-                        }
-                    }
-                }
-                Text(error ?: field.hint, style = MaterialTheme.typography.bodySmall, color = if (error != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-        if (error != null && field.kind !is SettingKind.Number && field.kind !is SettingKind.Choice) {
-            Text(error, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-        }
-    }
-}
-
-@Composable
-private fun DangerZone() {
+fun SettingsDangerPage(owner: ViewModelStoreOwner, modifier: Modifier = Modifier) {
+    val vm: SettingsViewModel = graphViewModel(owner)
     val graph = LocalGraph.current
     val repo = graph.repository
     val ui = LocalUi.current
@@ -257,24 +229,80 @@ private fun DangerZone() {
     var dialog by remember { mutableStateOf<String?>(null) }
     var balanceText by remember { mutableStateOf("") }
     val starting = snapshot?.account?.startingBalance
-    val container = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f)
+    val colors = Poly.colors
 
-    PolyCard(container = container, borderColor = MaterialTheme.colorScheme.error) {
-        SectionTitle("Danger zone")
-        Text(
-            "These actions change or wipe data on the PC. Each one asks for confirmation.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        DangerButton("Reset paper account", "Sets the paper balance and clears paper positions.") {
-            balanceText = starting?.let { com.mainnetwallet.polybot.ui.Fmt.plain(it) } ?: "1000"
-            dialog = "paper"
+    PageFrame(vm, showSaveBar = false, modifier = modifier) { _ ->
+        SettingsCard(container = colors.downContainer.copy(alpha = 0.35f)) {
+            Row(
+                Modifier.padding(Space.lg),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Space.md),
+            ) {
+                Icon(Icons.Filled.Warning, contentDescription = null, tint = colors.down)
+                Text(
+                    "These actions change or wipe data on the PC. Each one asks for confirmation first.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.weight(1f),
+                )
+            }
         }
-        DangerButton("Reset daily stats", "Zeroes today's PnL and trade counters.") { dialog = "daily" }
-        DangerButton("Reset server (wipe everything)", "Deletes orders, positions, logs and stats. Type RESET ALL to confirm.") { dialog = "server" }
+
+        Column(verticalArrangement = Arrangement.spacedBy(Space.sm)) {
+            GroupHeader("Settings")
+            SettingsCard {
+                DangerRow(
+                    icon = Icons.Filled.Restore,
+                    title = "Reset settings to defaults",
+                    hint = "Every trading setting returns to its default value. Unsaved edits are lost.",
+                    onClick = { dialog = "settings" },
+                )
+            }
+        }
+
+        Column(verticalArrangement = Arrangement.spacedBy(Space.sm)) {
+            GroupHeader("Paper trading")
+            SettingsCard {
+                DangerRow(
+                    icon = Icons.Filled.DeleteSweep,
+                    title = "Reset paper account",
+                    hint = "Sets the paper balance and clears paper positions.",
+                    onClick = {
+                        balanceText = starting?.let { com.mainnetwallet.polybot.ui.Fmt.plain(it) } ?: "1000"
+                        dialog = "paper"
+                    },
+                )
+                RowDivider()
+                DangerRow(
+                    icon = Icons.Filled.Restore,
+                    title = "Reset daily stats",
+                    hint = "Zeroes today's PnL and trade counters.",
+                    onClick = { dialog = "daily" },
+                )
+            }
+        }
+
+        Column(verticalArrangement = Arrangement.spacedBy(Space.sm)) {
+            GroupHeader("Server")
+            SettingsCard {
+                DangerRow(
+                    icon = Icons.Filled.Warning,
+                    title = "Reset server (wipe everything)",
+                    hint = "Deletes orders, positions, logs and stats. Type RESET ALL to confirm.",
+                    onClick = { dialog = "server" },
+                )
+            }
+        }
     }
 
     when (dialog) {
+        "settings" -> ConfirmDialog(
+            title = "Reset all settings?",
+            text = "Every trading setting returns to its default value. Unsaved edits are lost.",
+            confirmLabel = "Reset",
+            destructive = true,
+            onConfirm = { scope.launch { ui.report(vm.resetToDefaults()) } },
+            onDismiss = { dialog = null },
+        )
         "paper" -> {
             val amount = balanceText.trim().toDoubleOrNull()
             val valid = amount != null && amount > 0
@@ -329,90 +357,225 @@ private fun DangerZone() {
     }
 }
 
+/**
+ * Shared frame of every Settings page: pull to refresh, a scrolling column with the page content and, when
+ * there are unsaved edits, the floating save bar underneath.
+ */
 @Composable
-private fun DangerButton(title: String, hint: String, onClick: () -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(Space.xs)) {
-        OutlinedButton(
-            onClick = onClick,
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-        ) { Text(title) }
-        Text(hint, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+private fun PageFrame(
+    vm: SettingsViewModel,
+    showSaveBar: Boolean,
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.(SettingsViewModel.State) -> Unit,
+) {
+    val ui = LocalUi.current
+    val state by vm.state.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
+    var refreshing by remember { mutableStateOf(false) }
+
+    Column(modifier.fillMaxSize().imePadding()) {
+        PolyPullToRefresh(
+            isRefreshing = refreshing,
+            onRefresh = {
+                refreshing = true
+                scope.launch {
+                    vm.load()
+                    refreshing = false
+                }
+            },
+            modifier = Modifier.weight(1f),
+        ) {
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(Space.lg),
+                verticalArrangement = Arrangement.spacedBy(Space.xl),
+            ) {
+                content(state)
+            }
+        }
+        if (showSaveBar && state.dirty.isNotEmpty()) {
+            SettingsSaveBar(
+                changed = state.dirty.mapNotNull { SettingsSpec.field(it)?.label },
+                problems = state.errors.size,
+                saving = state.saving,
+                canSave = state.canSave,
+                onDiscard = vm::discard,
+                onSave = {
+                    scope.launch {
+                        val result = vm.save()
+                        ui.report(result)
+                    }
+                },
+            )
+        }
     }
 }
 
 @Composable
-private fun AppSection(onEditConnection: () -> Unit) {
-    val graph = LocalGraph.current
-    val ui = LocalUi.current
-    val scope = rememberCoroutineScope()
-    val prefs by graph.prefs.collectAsStateWithLifecycle()
-    var confirmLogout by remember { mutableStateOf(false) }
-    val p = prefs ?: return
-
-    PolyCard {
-        SectionTitle("Connection")
-        Text(p.pcUrl, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        OutlinedButton(onClick = onEditConnection, modifier = Modifier.fillMaxWidth()) { Text("Edit PC address and token") }
-    }
-    PolyCard {
-        SectionTitle("Appearance")
-        Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
-            ThemeMode.entries.forEach { mode ->
-                FilterChip(
-                    selected = p.themeMode == mode,
-                    onClick = { scope.launch { graph.prefsStore.setTheme(mode) } },
-                    label = { Text(mode.name.lowercase().replaceFirstChar { it.uppercase() }) },
+private fun GroupBlock(group: SettingGroup, state: SettingsViewModel.State, vm: SettingsViewModel) {
+    Column(verticalArrangement = Arrangement.spacedBy(Space.sm)) {
+        GroupHeader(group.title, caption = group.description)
+        SettingsCard {
+            group.keys.mapNotNull { SettingsSpec.field(it) }.forEachIndexed { index, field ->
+                if (index > 0) RowDivider()
+                SettingFieldRow(
+                    field = field,
+                    value = state.draft[field.key].orEmpty(),
+                    error = state.errors[field.key],
+                    dirty = field.key in state.dirty,
+                    enabled = !state.saving,
+                    onChange = { vm.edit(field.key, it) },
                 )
             }
         }
     }
-    PolyCard {
-        SectionTitle("Behaviour")
-        ToggleRow("Haptic feedback", "Short vibration on actions.", p.haptics) {
-            scope.launch { graph.prefsStore.setHaptics(it) }
-        }
-        HorizontalDivider()
-        ToggleRow("Confirm paper sells", "Ask before a manual sell in paper mode. Live sells always ask.", p.confirmSells) {
-            scope.launch { graph.prefsStore.setConfirmSells(it) }
-        }
+}
+
+@Composable
+private fun LoadError(message: String?, onRetry: () -> Unit) {
+    SettingsCard {
+        EmptyState("Could not load the settings", message, icon = Icons.Filled.CloudOff)
+        FilledTonalButton(
+            onClick = onRetry,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = Space.lg, end = Space.lg, bottom = Space.lg),
+        ) { Text("Try again") }
     }
-    PolyCard {
-        SectionTitle("Account")
-        Text(
-            "Log out forgets the API token on this phone. The PC address stays so you only enter the token again.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        OutlinedButton(
-            onClick = { confirmLogout = true },
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-        ) { Text("Log out") }
+}
+
+private enum class Tone { Primary, Warn, Info }
+
+private data class SectionMeta(val icon: ImageVector, val summary: String, val tone: Tone = Tone.Primary)
+
+private fun sectionMeta(id: String): SectionMeta = when (id) {
+    "entry" -> SectionMeta(Icons.Filled.Bolt, "Final window, trigger and order policy")
+    "stage0" -> SectionMeta(Icons.Filled.Timer, "Early buy with tiered take-profit")
+    "stage1" -> SectionMeta(Icons.Filled.TrendingUp, "Price gap, take-profit and stop-loss")
+    "stage2" -> SectionMeta(Icons.Filled.Layers, "One extra buy close to expiry")
+    "stage3" -> SectionMeta(Icons.Filled.Flag, "Last buy, with a stop-loss")
+    "risk" -> SectionMeta(Icons.Filled.Shield, "Sizing, daily limits and data quality", Tone.Warn)
+    "paper" -> SectionMeta(Icons.Filled.Science, "Simulated slippage and fees", Tone.Info)
+    else -> SectionMeta(Icons.Filled.Tune, "")
+}
+
+/** One row of the trading list: icon, title, summary, an "N edited" pill and, for stages, an ON / OFF pill. */
+@Composable
+private fun SectionRow(section: SettingSection, state: SettingsViewModel.State, onClick: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    val colors = Poly.colors
+    val meta = sectionMeta(section.id)
+    val edited = SettingsSpec.dirtyIn(section, state.dirty)
+    val stageOn: Boolean? = SettingsSpec.enabledKey(section)
+        ?.let { state.draft[it] }
+        ?.let { it == "true" }
+    val (tint, container) = when (meta.tone) {
+        Tone.Primary -> scheme.primary to scheme.primaryContainer
+        Tone.Warn -> colors.warn to colors.warnContainer
+        Tone.Info -> colors.info to colors.info.copy(alpha = 0.16f)
     }
 
-    if (confirmLogout) {
-        ConfirmDialog(
-            title = "Log out?",
-            text = "The saved API token is removed from this phone.",
-            confirmLabel = "Log out",
-            destructive = true,
-            onConfirm = {
-                ui.strong()
-                scope.launch { graph.prefsStore.logout() }
-            },
-            onDismiss = { confirmLogout = false },
+    SettingsNavRow(
+        icon = meta.icon,
+        title = section.title,
+        subtitle = meta.summary.ifBlank { null },
+        onClick = onClick,
+        tint = tint,
+        container = container,
+        trailing = {
+            if (edited > 0) Pill("$edited edited", colors.info, colors.info.copy(alpha = 0.16f))
+            when (stageOn) {
+                true -> Pill("ON", colors.up, colors.upContainer)
+                false -> Pill("OFF", scheme.onSurfaceVariant, scheme.surfaceVariant)
+                null -> Unit
+            }
+        },
+    )
+}
+
+/** Connection summary at the top of the hub: address, feed status, PAPER or LIVE, and the edit button. */
+@Composable
+private fun ConnectionHero(pcUrl: String, feed: FeedState, live: Boolean, onEdit: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    val colors = Poly.colors
+    val (statusLabel, statusColors) = when (feed) {
+        FeedState.Live -> "Connected" to (colors.up to colors.upContainer)
+        FeedState.Connecting -> "Connecting" to (colors.warn to colors.warnContainer)
+        FeedState.Reconnecting -> "Reconnecting" to (colors.warn to colors.warnContainer)
+        FeedState.Offline -> "Offline" to (colors.down to colors.downContainer)
+        FeedState.AuthFailed -> "Token rejected" to (colors.down to colors.downContainer)
+        FeedState.Idle -> "Idle" to (scheme.onSurfaceVariant to scheme.surfaceVariant)
+    }
+
+    ProHero {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.md)) {
+            IconBadge(Icons.Filled.Link, scheme.primary, scheme.primaryContainer, size = 44.dp)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("Your PC", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    pcUrl.ifBlank { "Not set" },
+                    style = Mono.small,
+                    color = scheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+            Pill(statusLabel, statusColors.first, statusColors.second)
+            if (live) Pill("LIVE", colors.live, colors.liveContainer) else Pill("PAPER", colors.info, colors.info.copy(alpha = 0.16f))
+        }
+        FilledTonalButton(onClick = onEdit, modifier = Modifier.fillMaxWidth()) { Text("Edit address and token") }
+    }
+}
+
+private fun themeLabel(mode: ThemeMode): String = when (mode) {
+    ThemeMode.SYSTEM -> "System"
+    ThemeMode.DARK -> "Dark"
+    ThemeMode.LIGHT -> "Light"
+}
+
+@Composable
+private fun AppearanceRow(mode: ThemeMode, onSelect: (ThemeMode) -> Unit) {
+    val modes = ThemeMode.entries
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = Space.lg, vertical = Space.md),
+        verticalArrangement = Arrangement.spacedBy(Space.md),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.md)) {
+            IconBadge(Icons.Filled.Palette, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.primaryContainer, size = 38.dp)
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("Appearance", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                Text(
+                    "Follow the phone, or always use one theme.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        SegmentedTabs(
+            labels = modes.map { themeLabel(it) },
+            selected = modes.indexOf(mode).coerceAtLeast(0),
+            onSelect = { onSelect(modes[it]) },
         )
     }
 }
 
 @Composable
-private fun ToggleRow(title: String, hint: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge)
-            Text(hint, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        Switch(checked = checked, onCheckedChange = onChange)
-    }
+private fun DangerRow(icon: ImageVector, title: String, hint: String, onClick: () -> Unit) {
+    val colors = Poly.colors
+    SettingsNavRow(
+        icon = icon,
+        title = title,
+        subtitle = hint,
+        onClick = onClick,
+        tint = colors.down,
+        container = colors.downContainer,
+        titleColor = MaterialTheme.colorScheme.error,
+        chevron = false,
+    )
 }

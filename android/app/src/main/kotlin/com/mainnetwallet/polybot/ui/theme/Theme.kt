@@ -18,10 +18,13 @@ object Space {
     val xl = 24.dp
 }
 
+/** Softer corners than the Material default: cards use `large`, inputs and option rows use `medium`. */
 private val PolyShapes = Shapes(
-    small = RoundedCornerShape(8.dp),
-    medium = RoundedCornerShape(12.dp),
-    large = RoundedCornerShape(16.dp),
+    extraSmall = RoundedCornerShape(6.dp),
+    small = RoundedCornerShape(10.dp),
+    medium = RoundedCornerShape(14.dp),
+    large = RoundedCornerShape(18.dp),
+    extraLarge = RoundedCornerShape(26.dp),
 )
 
 object Poly {

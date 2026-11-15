@@ -91,6 +91,21 @@ object SettingsSpec {
 
     fun field(key: String): SettingField? = byKey[key]
 
+    /** Keys of every field shown in [section], in display order. */
+    fun keysOf(section: SettingSection): List<String> = section.groups.flatMap { it.keys }
+
+    /** The section a field lives in, or null for an unknown key. */
+    fun sectionOfKey(key: String): SettingSection? = sections.firstOrNull { key in keysOf(it) }
+
+    /** How many of the [dirty] keys belong to [section]. */
+    fun dirtyIn(section: SettingSection, dirty: Collection<String>): Int {
+        val keys = keysOf(section).toSet()
+        return dirty.count { it in keys }
+    }
+
+    /** The on/off switch of a stage section (`stage0_enabled` ...), or null for sections that have none. */
+    fun enabledKey(section: SettingSection): String? = "${section.id}_enabled".takeIf { it in byKey }
+
     val sections: List<SettingSection> = listOf(
         SettingSection("entry", "Entry", listOf(
             SettingGroup("Final-window entry", "When the final-window stages fire a marketable BUY.",
