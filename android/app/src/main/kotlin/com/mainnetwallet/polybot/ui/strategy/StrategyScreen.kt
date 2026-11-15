@@ -13,11 +13,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.TrackChanges
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -41,11 +39,8 @@ import com.mainnetwallet.polybot.ui.Fmt
 import com.mainnetwallet.polybot.ui.LocalGraph
 import com.mainnetwallet.polybot.ui.components.EmptyState
 import com.mainnetwallet.polybot.ui.components.KeyValueRow
-import com.mainnetwallet.polybot.ui.components.Label
-import com.mainnetwallet.polybot.ui.components.Pill
 import com.mainnetwallet.polybot.ui.components.PolyCard
 import com.mainnetwallet.polybot.ui.components.ProCard
-import com.mainnetwallet.polybot.ui.components.ProHero
 import com.mainnetwallet.polybot.ui.components.ProSectionHeader
 import com.mainnetwallet.polybot.ui.components.ProStat
 import com.mainnetwallet.polybot.ui.components.SidePill
@@ -75,8 +70,8 @@ private enum class TriggerFilter(val label: String) {
 }
 
 /**
- * Strategy tab: live evaluation (countdown, UP/DOWN gauges), a timeline of when each stage trades, expandable
- * stage cards with every parameter, the conflict/duplicate rules and the recent trigger events.
+ * Strategy tab: a timeline of when each stage trades, expandable stage cards with every parameter, the
+ * conflict/duplicate rules and the recent trigger events.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -124,7 +119,6 @@ fun StrategyScreen(modifier: Modifier = Modifier) {
                 contentPadding = PaddingValues(Space.lg),
                 verticalArrangement = Arrangement.spacedBy(Space.md),
             ) {
-                item(key = "hero") { EvaluationHero(snap, remaining) }
                 item(key = "timeline") { TimelineCard(snap, remaining) }
                 item(key = "stages-header") {
                     ProSectionHeader("Stages", subtitle = "Tap a stage to see all of its parameters")
@@ -289,64 +283,6 @@ private fun stageSpecs(snap: Snapshot, remaining: Double?): List<StageSpec> {
             ),
         ),
     )
-}
-
-@Composable
-private fun EvaluationHero(snap: Snapshot, remaining: Double?) {
-    val s = snap.strategy
-    val c = Poly.colors
-    val scheme = MaterialTheme.colorScheme
-    val duration = snap.market?.durationSeconds
-    val armed = s.upArmed || s.downArmed
-    ProHero {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Label("Live evaluation")
-                if (s.name.isNotBlank()) {
-                    Text(
-                        s.name.replace('_', ' '),
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 1,
-                    )
-                }
-            }
-            when {
-                armed -> Pill("ARMED", c.warn, c.warnContainer)
-                s.inWindow -> Pill("IN WINDOW", c.warn, c.warnContainer)
-                else -> Pill("STANDBY", scheme.onSurfaceVariant, scheme.surfaceVariant)
-            }
-        }
-        Row(
-            Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Space.lg),
-        ) {
-            CountdownRing(remaining = remaining, duration = duration, active = s.inWindow || armed)
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.sm)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.Top) {
-                    Icon(
-                        Icons.Filled.Info,
-                        contentDescription = null,
-                        tint = scheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 2.dp),
-                    )
-                    Text(
-                        s.reason.replace('_', ' ').ifBlank { "waiting" },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = scheme.onSurfaceVariant,
-                    )
-                }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.md)) {
-                    ProStat("Trigger", Fmt.centsShort(s.triggerThreshold), Modifier.weight(1f))
-                    ProStat("Final window", secs(s.finalWindowSeconds), Modifier.weight(1f))
-                }
-            }
-        }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.md)) {
-            SideGauge("UP", s.upAsk, s.triggerThreshold, s.upArmed, Modifier.weight(1f))
-            SideGauge("DOWN", s.downAsk, s.triggerThreshold, s.downArmed, Modifier.weight(1f))
-        }
-    }
 }
 
 @Composable

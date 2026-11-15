@@ -7,7 +7,6 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -26,7 +25,6 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -41,20 +39,16 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.mainnetwallet.polybot.ui.Fmt
 import com.mainnetwallet.polybot.ui.components.Label
 import com.mainnetwallet.polybot.ui.components.Pill
 import com.mainnetwallet.polybot.ui.components.ProCard
 import com.mainnetwallet.polybot.ui.components.ProStat
-import com.mainnetwallet.polybot.ui.components.SidePill
 import com.mainnetwallet.polybot.ui.components.ToneChip
 import com.mainnetwallet.polybot.domain.Tone
 import com.mainnetwallet.polybot.ui.theme.Mono
@@ -79,145 +73,6 @@ internal fun PulseDot(color: Color, modifier: Modifier = Modifier, size: Dp = 8.
             .alpha(alpha)
             .background(color, CircleShape),
     )
-}
-
-/**
- * Countdown ring for the current market. The arc is the share of the market that is still ahead, so it
- * shrinks towards zero; the clock sits in the middle.
- */
-@Composable
-internal fun CountdownRing(
-    remaining: Double?,
-    duration: Double?,
-    active: Boolean,
-    modifier: Modifier = Modifier,
-    diameter: Dp = 104.dp,
-) {
-    val c = Poly.colors
-    val scheme = MaterialTheme.colorScheme
-    val arc = if (active) c.warn else scheme.primary
-    val track = scheme.surfaceVariant
-    val fraction = if (remaining != null && duration != null && duration > 0.0) {
-        (remaining / duration).toFloat().coerceIn(0f, 1f)
-    } else {
-        0f
-    }
-    Box(modifier.size(diameter), contentAlignment = Alignment.Center) {
-        Canvas(Modifier.size(diameter)) {
-            val stroke = 8.dp.toPx()
-            val inset = stroke / 2f
-            val arcSize = Size(size.width - stroke, size.height - stroke)
-            drawArc(
-                color = track,
-                startAngle = -90f,
-                sweepAngle = 360f,
-                useCenter = false,
-                topLeft = Offset(inset, inset),
-                size = arcSize,
-                style = Stroke(width = stroke),
-            )
-            if (fraction > 0f) {
-                drawArc(
-                    color = arc,
-                    startAngle = -90f,
-                    sweepAngle = 360f * fraction,
-                    useCenter = false,
-                    topLeft = Offset(inset, inset),
-                    size = arcSize,
-                    style = Stroke(width = stroke, cap = StrokeCap.Round),
-                )
-            }
-        }
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                if (remaining == null) "—" else Fmt.clock(remaining),
-                style = Mono.large.copy(fontSize = 24.sp),
-                color = if (active) c.warn else MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                "left",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-/** Horizontal bar of the ask price (0..1) with a tick where the trigger sits. */
-@Composable
-private fun ThresholdBar(ask: Double?, threshold: Double, tone: Color, modifier: Modifier = Modifier) {
-    val scheme = MaterialTheme.colorScheme
-    val track = scheme.surfaceVariant
-    val tick = scheme.onSurface
-    val fill = (ask ?: 0.0).toFloat().coerceIn(0f, 1f)
-    val tickAt = threshold.toFloat()
-    Canvas(
-        modifier
-            .fillMaxWidth()
-            .height(10.dp),
-    ) {
-        val h = size.height
-        val radius = CornerRadius(h / 2f, h / 2f)
-        drawRoundRect(color = track, size = Size(size.width, h), cornerRadius = radius)
-        if (fill > 0f) {
-            drawRoundRect(color = tone, size = Size(size.width * fill, h), cornerRadius = radius)
-        }
-        if (tickAt > 0f && tickAt <= 1f) {
-            val x = size.width * tickAt
-            drawLine(color = tick, start = Offset(x, 0f), end = Offset(x, h), strokeWidth = 2.dp.toPx())
-        }
-    }
-}
-
-/** One side (UP or DOWN) of the live evaluation: its ask, how close it is to the trigger and whether it is armed. */
-@Composable
-internal fun SideGauge(
-    side: String,
-    ask: Double?,
-    threshold: Double,
-    armed: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    val c = Poly.colors
-    val scheme = MaterialTheme.colorScheme
-    val tone = if (side == "UP") c.up else c.down
-    Surface(
-        modifier = modifier,
-        shape = MaterialTheme.shapes.medium,
-        color = scheme.surfaceContainerLow,
-        border = BorderStroke(1.dp, if (armed) c.warn else scheme.outlineVariant.copy(alpha = HairlineAlpha)),
-    ) {
-        Column(
-            Modifier.padding(Space.md),
-            verticalArrangement = Arrangement.spacedBy(Space.sm),
-        ) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                SidePill(side)
-                Spacer(Modifier.weight(1f))
-                if (armed) PulseDot(c.warn)
-            }
-            Text(Fmt.centsShort(ask), style = Mono.large, color = tone, maxLines = 1)
-            ThresholdBar(ask, threshold, tone)
-            val caption = when {
-                armed -> "Trigger reached"
-                ask == null -> "No quote"
-                threshold > 0.0 && ask < threshold -> Fmt.centsShort(threshold - ask) + " to trigger"
-                else -> "Idle"
-            }
-            Text(
-                caption,
-                style = MaterialTheme.typography.bodySmall,
-                color = if (armed) c.warn else scheme.onSurfaceVariant,
-                maxLines = 1,
-            )
-            Text(
-                "trigger " + Fmt.centsShort(threshold),
-                style = Mono.small,
-                color = scheme.onSurfaceVariant,
-                maxLines = 1,
-            )
-        }
-    }
 }
 
 /** One lane of [StageTimeline]: stage [label] with the part of the market (time left, from to) it trades in. */
