@@ -1,0 +1,13 @@
+{
+ "status": "ok",
+ "time": "2026-11-15T03:10:34.271846Z",
+ "bot_status": "STOPPED",
+ "mode": "paper",
+ "market_data": {
+  "connected": false,
+  "reconnects": 0,
+  "last_message_ms": null,
+  "last_error": null
+ },
+ "db_revision": "0001_initial"
+}

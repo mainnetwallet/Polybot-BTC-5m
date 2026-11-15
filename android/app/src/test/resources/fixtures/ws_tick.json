@@ -1,0 +1,42 @@
+{
+ "type": "tick",
+ "data": {
+  "server_time_ms": 1763175034252,
+  "remaining_seconds": 71.5,
+  "books": {
+   "up": {
+    "token_id": "up-token",
+    "market_id": "0xmarket",
+    "side": "UP",
+    "best_bid": 0.84,
+    "best_ask": 0.86,
+    "bid_size": 200.0,
+    "ask_size": 120.0,
+    "updated_at_ms": 1794712256915,
+    "age_ms": 45.0,
+    "source": "clob_ws"
+   },
+   "down": {
+    "token_id": "down-token",
+    "market_id": "0xmarket",
+    "side": "DOWN",
+    "best_bid": 0.13,
+    "best_ask": 0.16,
+    "bid_size": 150.0,
+    "ask_size": 90.0,
+    "updated_at_ms": 1794712256915,
+    "age_ms": 45.0,
+    "source": "clob_ws"
+   }
+  },
+  "strategy": {
+   "in_window": true,
+   "remaining_seconds": 71.97,
+   "up_ask": 0.86,
+   "down_ask": 0.16,
+   "up_armed": true,
+   "down_armed": false,
+   "reason": "trigger"
+  }
+ }
+}
