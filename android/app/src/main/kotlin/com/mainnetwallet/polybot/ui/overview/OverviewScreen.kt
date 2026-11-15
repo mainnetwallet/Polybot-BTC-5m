@@ -7,7 +7,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import com.mainnetwallet.polybot.ui.components.PolyPullToRefresh
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -54,7 +54,7 @@ fun OverviewScreen(modifier: Modifier = Modifier) {
     }
 
     val snap = snapshot
-    PullToRefreshBox(
+    PolyPullToRefresh(
         isRefreshing = refreshing,
         onRefresh = {
             refreshing = true

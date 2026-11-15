@@ -42,7 +42,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import com.mainnetwallet.polybot.ui.components.PolyPullToRefresh
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -154,7 +154,7 @@ fun LogsScreen(modifier: Modifier = Modifier) {
     val visible = remember(scoped, filters.level) { scoped.filter { filters.level.matches(it.level) } }
     val items = remember(visible) { LogGrouping.group(visible, System.currentTimeMillis()) }
 
-    PullToRefreshBox(
+    PolyPullToRefresh(
         isRefreshing = refreshing,
         onRefresh = {
             refreshing = true

@@ -29,7 +29,7 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import com.mainnetwallet.polybot.ui.components.PolyPullToRefresh
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -79,7 +79,7 @@ fun SettingsScreen(onEditConnection: () -> Unit, modifier: Modifier = Modifier) 
                 Tab(selected = tab == id, onClick = { tab = id }, text = { Text(title, maxLines = 1) })
             }
         }
-        PullToRefreshBox(
+        PolyPullToRefresh(
             isRefreshing = refreshing,
             onRefresh = {
                 refreshing = true

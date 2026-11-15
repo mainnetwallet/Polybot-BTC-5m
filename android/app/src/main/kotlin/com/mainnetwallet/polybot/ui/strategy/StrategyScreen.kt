@@ -19,7 +19,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import com.mainnetwallet.polybot.ui.components.PolyPullToRefresh
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -85,7 +85,7 @@ fun StrategyScreen(modifier: Modifier = Modifier) {
     var filterIndex by rememberSaveable { mutableStateOf(0) }
     val snap = snapshot
 
-    PullToRefreshBox(
+    PolyPullToRefresh(
         isRefreshing = refreshing,
         onRefresh = {
             refreshing = true

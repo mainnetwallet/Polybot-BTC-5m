@@ -14,7 +14,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import com.mainnetwallet.polybot.ui.components.PolyPullToRefresh
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -64,7 +64,7 @@ fun AnalyticsScreen(modifier: Modifier = Modifier) {
     val scope = rememberCoroutineScope()
     var refreshing by remember { mutableStateOf(false) }
 
-    PullToRefreshBox(
+    PolyPullToRefresh(
         isRefreshing = refreshing,
         onRefresh = {
             refreshing = true
