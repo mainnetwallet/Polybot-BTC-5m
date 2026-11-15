@@ -35,6 +35,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
@@ -48,7 +49,11 @@ import com.mainnetwallet.polybot.data.net.UrlUtils
 import com.mainnetwallet.polybot.data.store.AppPrefs
 import com.mainnetwallet.polybot.ui.LocalGraph
 import com.mainnetwallet.polybot.ui.connect.ConnectScreen
+import com.mainnetwallet.polybot.ui.analytics.AnalyticsScreen
+import com.mainnetwallet.polybot.ui.logs.LogsScreen
 import com.mainnetwallet.polybot.ui.overview.OverviewScreen
+import com.mainnetwallet.polybot.ui.strategy.StrategyScreen
+import com.mainnetwallet.polybot.ui.trading.TradingScreen
 import com.mainnetwallet.polybot.ui.components.EmptyState
 import com.mainnetwallet.polybot.ui.theme.Poly
 import com.mainnetwallet.polybot.ui.theme.Space
@@ -149,10 +154,10 @@ fun MainScaffold(prefs: AppPrefs, snackbar: SnackbarHostState) {
                 modifier = Modifier.weight(1f),
             ) {
                 composable(Dest.Overview.route) { OverviewScreen() }
-                composable(Dest.Trading.route) { Placeholder("Trading") }
-                composable(Dest.Strategy.route) { Placeholder("Strategy") }
-                composable(Dest.Analytics.route) { Placeholder("Analytics") }
-                composable(Dest.Logs.route) { Placeholder("Logs") }
+                composable(Dest.Trading.route) { TradingScreen() }
+                composable(Dest.Strategy.route) { StrategyScreen() }
+                composable(Dest.Analytics.route) { AnalyticsScreen() }
+                composable(Dest.Logs.route) { LogsScreen() }
                 composable(ROUTE_SETTINGS) { Placeholder("Settings") }
                 composable(ROUTE_CONNECTION) {
                     ConnectScreen(

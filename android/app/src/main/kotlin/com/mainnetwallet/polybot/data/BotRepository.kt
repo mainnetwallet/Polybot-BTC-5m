@@ -96,6 +96,8 @@ class BotRepository(
     }
 
     private fun appendLog(row: LogRow) {
+        // The REST reload and the socket can both deliver the same row; ids are unique, so skip repeats.
+        if (row.id != null && _logs.value.any { it.id == row.id }) return
         val next = ArrayList<LogRow>(minOf(_logs.value.size + 1, LOG_LIMIT))
         next.add(row)
         next.addAll(_logs.value)
