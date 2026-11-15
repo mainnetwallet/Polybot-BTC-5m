@@ -50,7 +50,11 @@ jobs:
         run: |
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKMANAGER" --licenses > /dev/null || true
-          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0" > /dev/null
+          # Android 17 (API 37). Package id of the stable platform: android-37.0 (older previews used android-37).
+          # If neither can be installed here, AGP downloads the platform itself because the licenses are accepted.
+          "$SDKMANAGER" "platforms;android-37.0" "build-tools;36.0.0" > /dev/null \
+            || "$SDKMANAGER" "platforms;android-37" "build-tools;36.0.0" > /dev/null \
+            || echo "::warning::sdkmanager could not install the API 37 platform; relying on the Gradle auto-download."
 
       - name: Compute version
         id: ver

@@ -69,6 +69,7 @@ fun ConnectScreen(
     val graph = LocalGraph.current
     val ui = LocalUi.current
     val scope = rememberCoroutineScope()
+    val localNetworkGate = rememberLocalNetworkGate { ui.message(LOCAL_NETWORK_DENIED_MESSAGE, long = true) }
 
     var url by rememberSaveable { mutableStateOf(initialUrl) }
     var token by remember { mutableStateOf(initialToken) }
@@ -160,10 +161,12 @@ fun ConnectScreen(
                 onClick = {
                     testing = true
                     steps = emptyList()
-                    scope.launch {
-                        val ok = graph.connectionTester.run(url, token.trim()) { steps = it }
-                        testing = false
-                        ui.message(if (ok) "Connection works." else "Connection test failed. See the steps above.", long = !ok)
+                    localNetworkGate(url) {
+                        scope.launch {
+                            val ok = graph.connectionTester.run(url, token.trim()) { steps = it }
+                            testing = false
+                            ui.message(if (ok) "Connection works." else "Connection test failed. See the steps above.", long = !ok)
+                        }
                     }
                 },
                 enabled = !testing && !saving && url.isNotBlank(),
@@ -174,11 +177,13 @@ fun ConnectScreen(
             Button(
                 onClick = {
                     saving = true
-                    scope.launch {
-                        graph.prefsStore.saveConnection(url, token)
-                        saving = false
-                        ui.message("Saved. Connecting…")
-                        onDone()
+                    localNetworkGate(url) {
+                        scope.launch {
+                            graph.prefsStore.saveConnection(url, token)
+                            saving = false
+                            ui.message("Saved. Connecting…")
+                            onDone()
+                        }
                     }
                 },
                 enabled = canSave,

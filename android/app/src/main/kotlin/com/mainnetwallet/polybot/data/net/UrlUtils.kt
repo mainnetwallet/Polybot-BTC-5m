@@ -107,6 +107,17 @@ object UrlUtils {
         return url.scheme == "http" && !isPrivateHost(url.host)
     }
 
+    /**
+     * True when the PC address points straight at a device on the local network (LAN IP, `.local`, ...).
+     * Android 17+ apps that target API 37 need the ACCESS_LOCAL_NETWORK permission to reach those. A Gist
+     * link never counts: it resolves to a public tunnel URL.
+     */
+    fun isLocalNetworkTarget(input: String): Boolean {
+        val target = (parseTarget(input) as? TargetParse.Ok)?.target as? PcTarget.Direct ?: return false
+        val host = target.baseUrl.toHttpUrlOrNull()?.host ?: return false
+        return isPrivateHost(host)
+    }
+
     /** https -> wss, http -> ws; the API token travels as `?token=` because browsers/OkHttp cannot set WS headers reliably. */
     fun wsUrl(baseUrl: String, token: String): String {
         val url = baseUrl.toHttpUrlOrNull() ?: error("Invalid base URL")

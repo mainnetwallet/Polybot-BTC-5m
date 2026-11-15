@@ -88,4 +88,14 @@ class UrlUtilsTest {
     @Test fun wsUrlWithoutTokenHasNoQuery() {
         assertEquals("wss://pc.example.com/api/ws", UrlUtils.wsUrl("https://pc.example.com", ""))
     }
+
+    @Test fun localNetworkTargetsAreDetected() {
+        assertTrue(UrlUtils.isLocalNetworkTarget("192.168.1.20:8000"))
+        assertTrue(UrlUtils.isLocalNetworkTarget("http://10.0.0.5:8000"))
+        assertTrue(UrlUtils.isLocalNetworkTarget("my-pc.local"))
+        assertFalse(UrlUtils.isLocalNetworkTarget("https://abc-def.trycloudflare.com"))
+        assertFalse(UrlUtils.isLocalNetworkTarget("gist:$id"))
+        assertFalse(UrlUtils.isLocalNetworkTarget("https://gist.github.com/user/$id"))
+        assertFalse(UrlUtils.isLocalNetworkTarget(""))
+    }
 }
