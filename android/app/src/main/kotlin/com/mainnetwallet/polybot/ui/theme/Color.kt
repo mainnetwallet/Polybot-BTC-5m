@@ -19,6 +19,12 @@ class PolyColors(
     val live: Color,
     val liveContainer: Color,
     val info: Color,
+    /** Hero ring while waiting for the stage 1 window (calm, cool). */
+    val ringWaiting: Color,
+    val ringWaitingContainer: Color,
+    /** Hero ring inside the stage 1 window (bright, active). Kept apart from up/down/warn on purpose. */
+    val ringStage: Color,
+    val ringStageContainer: Color,
 )
 
 val DarkPolyColors = PolyColors(
@@ -31,6 +37,10 @@ val DarkPolyColors = PolyColors(
     live = Color(0xFFFF4D4D),
     liveContainer = Color(0xFF3A1216),
     info = Color(0xFF5AB0FF),
+    ringWaiting = Color(0xFFA78BFA),
+    ringWaitingContainer = Color(0xFF221B3F),
+    ringStage = Color(0xFF22D3EE),
+    ringStageContainer = Color(0xFF0B2F38),
 )
 
 val LightPolyColors = PolyColors(
@@ -43,6 +53,10 @@ val LightPolyColors = PolyColors(
     live = Color(0xFFC62828),
     liveContainer = Color(0xFFFFE0E0),
     info = Color(0xFF0B63B5),
+    ringWaiting = Color(0xFF6D4AE0),
+    ringWaitingContainer = Color(0xFFE7E0FF),
+    ringStage = Color(0xFF0E7490),
+    ringStageContainer = Color(0xFFCFF3FA),
 )
 
 val LocalPolyColors = staticCompositionLocalOf { DarkPolyColors }
