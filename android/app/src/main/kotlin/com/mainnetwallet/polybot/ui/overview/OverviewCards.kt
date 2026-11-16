@@ -63,6 +63,8 @@ import com.mainnetwallet.polybot.data.model.MarketSnapshot
 import com.mainnetwallet.polybot.data.model.Modes
 import com.mainnetwallet.polybot.data.model.PositionRow
 import com.mainnetwallet.polybot.data.model.SellableHolding
+import com.mainnetwallet.polybot.data.model.StrategyState
+import com.mainnetwallet.polybot.domain.ringStage
 import com.mainnetwallet.polybot.ui.Fmt
 import com.mainnetwallet.polybot.ui.components.Dot
 import com.mainnetwallet.polybot.ui.components.FlashBackground
@@ -208,6 +210,7 @@ fun HeroCard(
     btcHistory: List<Float>,
     account: AccountState,
     inWindow: Boolean,
+    strategy: StrategyState,
     endLocalMs: Long?,
     modifier: Modifier = Modifier,
 ) {
@@ -215,8 +218,6 @@ fun HeroCard(
     val scheme = MaterialTheme.colorScheme
     // Accent drives the clock, progress bar and card tint (amber in the stage 1 window, primary while waiting).
     val accent = if (inWindow) c.warn else scheme.primary
-    // Only the hero ring has its own colors: cyan in the stage 1 window, violet while waiting.
-    val ringColor = if (inWindow) c.ringStage else c.ringWaiting
 
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(market?.marketId) {
@@ -231,6 +232,9 @@ fun HeroCard(
     val remaining: Double? = market?.let { m ->
         if (endLocalMs != null) (endLocalMs - now) / 1000.0 else m.remainingSeconds
     }
+    // Only the hero ring has its own colors, one per stage (violet while waiting, then stage 0 to 3).
+    val stage = ringStage(inWindow, remaining, strategy)
+    val ringColor = c.ring(stage)
     val fraction: Float = if (market != null && remaining != null && market.durationSeconds > 0) {
         (remaining / market.durationSeconds).coerceIn(0.0, 1.0).toFloat()
     } else {
@@ -252,7 +256,7 @@ fun HeroCard(
                             HeroRing(
                                 fraction = fraction,
                                 remainingSeconds = remaining,
-                                label = if (inWindow) "Stage 1" else "Waiting",
+                                label = if (stage != null) "Stage $stage" else "Waiting",
                                 color = ringColor,
                                 modifier = Modifier.fillMaxHeight().aspectRatio(1f),
                             )

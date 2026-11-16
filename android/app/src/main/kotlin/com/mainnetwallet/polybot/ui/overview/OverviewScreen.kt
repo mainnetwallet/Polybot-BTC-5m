@@ -79,7 +79,7 @@ fun OverviewScreen(modifier: Modifier = Modifier) {
                 SkeletonCard(lines = 2)
             } else {
                 EngineNotices(snap.bot, snap.live)
-                HeroCard(snap.market, snap.btc, history.btc, snap.account, snap.strategy.inWindow, marketEndMs)
+                HeroCard(snap.market, snap.btc, history.btc, snap.account, snap.strategy.inWindow, snap.strategy, marketEndMs)
                 OddsCard(
                     up = snap.books.up,
                     down = snap.books.down,

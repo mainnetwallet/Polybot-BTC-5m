@@ -23,7 +23,22 @@ class PolyColors(
     val ringWaiting: Color,
     /** Hero ring inside the stage 1 window (bright, active). Kept apart from up/down/warn on purpose. */
     val ringStage: Color,
-)
+    /** Hero ring in the stage 0 window, the early buy. */
+    val ringStage0: Color,
+    /** Hero ring in the stage 2 window. */
+    val ringStage2: Color,
+    /** Hero ring in the stage 3 window. */
+    val ringStage3: Color,
+) {
+    /** Hero ring colour of a stage (0 to 3); null is the waiting colour. */
+    fun ring(stage: Int?): Color = when (stage) {
+        0 -> ringStage0
+        1 -> ringStage
+        2 -> ringStage2
+        3 -> ringStage3
+        else -> ringWaiting
+    }
+}
 
 val DarkPolyColors = PolyColors(
     up = Color(0xFF34D17A),
@@ -37,6 +52,9 @@ val DarkPolyColors = PolyColors(
     info = Color(0xFF5AB0FF),
     ringWaiting = Color(0xFFA78BFA),
     ringStage = Color(0xFF22D3EE),
+    ringStage0 = Color(0xFF60A5FA),
+    ringStage2 = Color(0xFFF472B6),
+    ringStage3 = Color(0xFFFF7043),
 )
 
 val LightPolyColors = PolyColors(
@@ -51,6 +69,9 @@ val LightPolyColors = PolyColors(
     info = Color(0xFF0B63B5),
     ringWaiting = Color(0xFF6D4AE0),
     ringStage = Color(0xFF0E7490),
+    ringStage0 = Color(0xFF1D4ED8),
+    ringStage2 = Color(0xFFBE185D),
+    ringStage3 = Color(0xFFD84315),
 )
 
 val LocalPolyColors = staticCompositionLocalOf { DarkPolyColors }
