@@ -52,6 +52,7 @@ export interface StrategyState {
   stage0_min_ask: number;
   stage0_max_ask: number;
   stage0_early_max_ask: number;
+  stage0_block_ask: number;
   stage0_min_price_gap_usd: number;
   stage0_mid_from_ask: number;
   stage0_high_from_ask: number;
@@ -277,6 +278,7 @@ export interface SettingsState {
   stage0_min_ask: number;
   stage0_max_ask: number;
   stage0_early_max_ask: number;
+  stage0_block_ask: number;
   stage0_min_price_gap_usd: number;
   stage0_mid_from_ask: number;
   stage0_high_from_ask: number;

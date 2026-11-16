@@ -120,6 +120,8 @@ class Settings(BaseSettings):
     # Asks in between (0.85 to 0.89) do not buy.
     stage0_max_ask: float = 0.96
     stage0_early_max_ask: float = 0.85
+    # An ask at or above this inside the stage 0 window blocks further stage 0 buys in that market.
+    stage0_block_ask: float = 0.99
     stage0_min_price_gap_usd: float = 70.0
     # Take-profit for stage 0: sell once the best bid is this many percent ABOVE the average price paid per
     # share (cost * (1 + pct / 100), capped at 0.99). The percentage depends on what stage 0 paid per share:

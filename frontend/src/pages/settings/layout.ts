@@ -41,6 +41,7 @@ export const TABS: TabSpec[] = [
           "stage0_early_max_ask",
           "stage0_high_buy_price",
           "stage0_max_ask",
+          "stage0_block_ask",
           "stage0_high_buy_after_pct",
           "stage0_min_price_gap_usd",
         ],

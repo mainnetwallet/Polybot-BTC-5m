@@ -500,3 +500,12 @@ def test_gap_inputs_are_read_on_the_event_loop_not_in_the_db_thread():
         # a precomputed value is used as is
         context = bot._risk_context(market, bot.runtime.get(), int(time.time() * 1000), (101.0, 100.0, ""))
         assert (context.btc_price, context.price_to_beat) == (101.0, 100.0)
+
+
+def test_stage0_block_ask_setting_roundtrip():
+    with TestClient(create_app()) as client:
+        assert client.get("/api/settings").json()["stage0_block_ask"] == 0.99
+        ok = client.patch("/api/settings", json={"stage0_block_ask": 0.95})
+        assert ok.status_code == 200 and ok.json()["stage0_block_ask"] == 0.95
+        assert client.get("/api/settings").json()["stage0_block_ask"] == 0.95
+        assert client.patch("/api/settings", json={"stage0_block_ask": 1.5}).status_code in {400, 422}

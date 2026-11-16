@@ -46,6 +46,7 @@ OVERRIDABLE_KEYS = (
     "stage0_min_ask",
     "stage0_max_ask",
     "stage0_early_max_ask",
+    "stage0_block_ask",
     "stage0_min_price_gap_usd",
     "stage0_mid_from_ask",
     "stage0_high_from_ask",
@@ -116,6 +117,10 @@ class RuntimeSettings(BaseModel):
     # effect: the lower of the two applies. (The app's real values come from Settings/.env; these are fallbacks.)
     stage0_max_ask: float = Field(default=0.94, ge=0.01, le=0.999)
     stage0_early_max_ask: float = Field(default=0.85, ge=0.01, le=0.999)
+    # Once either side's best ask reaches this inside the stage 0 window, stage 0 stops buying in that
+    # market for good (the ask dropping again does not lift it). Asks never exceed 0.99, so a value above
+    # 0.99 effectively turns the block off.
+    stage0_block_ask: float = Field(default=0.99, ge=0.01, le=0.999)
     stage0_min_price_gap_usd: float = Field(default=70.0, ge=0.0, le=1_000_000.0)
     # Stage 0 take-profit in percent above the average buy price, by what stage 0 paid per share:
     #   cost <  stage0_mid_from_ask   -> stage0_take_profit_pct_low  (default 0.60-0.70 buy -> +15 %)

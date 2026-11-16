@@ -113,6 +113,15 @@ export const FIELDS: FieldSpec[] = [
     max: "0.999",
   },
   {
+    key: "stage0_block_ask",
+    label: "Stage 0: stop buying in a market once an ask reaches",
+    hint: "If either side's best ask touches this decimal during the stage 0 window, stage 0 buys nothing more in that market, even if the ask falls back later. It only counts inside the stage 0 window and only for that one market (the next market starts normally). Stages 1 to 3 and the sell rules of shares you already hold are not affected. Default 0.99; asks never go above 0.99, so a value above that turns the block off.",
+    kind: "number",
+    step: "0.01",
+    min: "0.01",
+    max: "0.999",
+  },
+  {
     key: "stage0_high_buy_after_pct",
     label: "Stage 0: expensive buys start after (% of window)",
     hint: "This is a PERCENT of the stage 0 window, not seconds. Buys at the expensive-buy price (default 0.89) or more only start once this % of the window (start to end) has passed. Example: 50 % with 160s to 100s = from 130s left; 50 % with 180s to 110s = from 145s left. 0 % = the whole window, 100 % = never.",

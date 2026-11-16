@@ -897,3 +897,30 @@ def test_stage0_block_is_per_market_and_needs_the_stage0_window():
     strategy.evaluate(market, books_for(market, 0.99, 0.01), end_ms - 140_000, config)
     assert strategy.stage0_blocked(market.market_id)
     assert not strategy.stage0_blocked("another-market")
+
+
+def test_stage0_block_ask_is_a_setting_with_default_099():
+    assert Settings.model_fields["stage0_block_ask"].default == 0.99
+    assert make_config(**STAGE0).stage0_block_ask == 0.99
+    assert "stage0_block_ask" in make_config(**STAGE0).model_dump()
+
+
+def test_stage0_block_ask_setting_changes_when_the_market_is_blocked():
+    market = make_market(remaining=1150)
+    end_ms = datetime_to_epoch_ms(market.window_end)
+    strategy = Stage1Strategy()
+    config = make_config(**STAGE0, stage0_block_ask=0.95, stage0_max_ask=0.99, stage0_early_max_ask=0.99)
+
+    def run(remaining: float, up: float, down: float):
+        return strategy.evaluate(market, books_for(market, up, down), end_ms - int(remaining * 1000), config)
+
+    assert [s.side for s in run(150, 0.80, 0.20).signals if s.stage == 0] == ["UP"]
+    run(140, 0.96, 0.04)  # 0.96 >= 0.95: blocked although it is below the old fixed 0.99
+    assert strategy.stage0_blocked(market.market_id)
+    assert [s for s in run(130, 0.80, 0.20).signals if s.stage == 0] == []
+
+    # a threshold above the ask keeps the market open
+    fresh = Stage1Strategy()
+    relaxed = make_config(**STAGE0, stage0_block_ask=0.99)
+    fresh.evaluate(market, books_for(market, 0.96, 0.04), end_ms - 140_000, relaxed)
+    assert not fresh.stage0_blocked(market.market_id)
