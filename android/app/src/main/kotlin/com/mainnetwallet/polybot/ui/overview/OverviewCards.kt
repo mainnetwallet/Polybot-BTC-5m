@@ -250,7 +250,7 @@ fun HeroCard(
                                 fraction = fraction,
                                 remainingSeconds = remaining,
                                 label = if (inWindow) "Stage 1" else "Waiting",
-                                color = accent,
+                                color = if (inWindow) accent else Color(0xFF5CC8FF),
                                 modifier = Modifier.fillMaxHeight().aspectRatio(1f),
                             )
                         }
