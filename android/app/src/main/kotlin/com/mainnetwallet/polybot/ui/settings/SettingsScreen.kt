@@ -435,8 +435,17 @@ private fun GroupBlock(group: SettingGroup, state: SettingsViewModel.State, vm: 
     Column(verticalArrangement = Arrangement.spacedBy(Space.sm)) {
         GroupHeader(group.title, caption = group.description)
         SettingsCard {
+            // The low take-profit tier has no field of its own: it starts at the stage 0 min ask.
+            val showsTiers = group.keys.firstOrNull() == "stage0_mid_from_ask"
+            if (showsTiers) {
+                DerivedValueRow(
+                    title = "Low tier from (buy price)",
+                    hint = "Not editable: the low tier starts at the stage 0 min ask. Shares bought from here up to the mid tier price use the low take-profit %.",
+                    value = state.draft["stage0_min_ask"].orEmpty(),
+                )
+            }
             group.keys.mapNotNull { SettingsSpec.field(it) }.forEachIndexed { index, field ->
-                if (index > 0) RowDivider()
+                if (index > 0 || showsTiers) RowDivider()
                 SettingFieldRow(
                     field = field,
                     value = state.draft[field.key].orEmpty(),

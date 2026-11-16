@@ -248,6 +248,32 @@ fun SettingFieldRow(
     }
 }
 
+/** Read-only row for a value derived from another setting (shown, not editable). */
+@Composable
+fun DerivedValueRow(title: String, hint: String, value: String) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = Space.lg, vertical = Space.md),
+        verticalArrangement = Arrangement.spacedBy(Space.sm),
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+            Text(hint, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Text(
+            value,
+            style = Mono.body,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(MaterialTheme.shapes.medium)
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, MaterialTheme.shapes.medium)
+                .padding(horizontal = Space.lg, vertical = Space.md),
+        )
+    }
+}
+
 @Composable
 private fun FieldHeader(field: SettingField, dirty: Boolean) {
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {

@@ -7,9 +7,9 @@ import { Modal } from "../components/Modal";
 import { useBot } from "../hooks/BotContext";
 import { cx, fmtUsd } from "../lib/format";
 import { useConfirmSells } from "../lib/prefs";
-import { ActionRow, CheckRow, GroupCard, SaveControls, SettingRow, StageHeader, TabBar, ToggleRow } from "./settings/components";
+import { ActionRow, CheckRow, DerivedRow, GroupCard, SaveControls, SettingRow, StageHeader, TabBar, ToggleRow } from "./settings/components";
 import { FIELDS } from "./settings/fields";
-import { fieldsOf, TABS, tabOfField, type TabId } from "./settings/layout";
+import { fieldsOf, LOW_TIER_FROM, TABS, tabOfField, type TabId } from "./settings/layout";
 import { buildDiff, dirtyKeys, draftFrom, savedValue, validateDraft, type Draft } from "./settings/validate";
 
 export function Settings() {
@@ -197,17 +197,31 @@ export function Settings() {
   }
 
   const renderRows = (keys: string[]) =>
-    fieldsOf(keys).map((field) => (
-      <SettingRow
-        key={field.key}
-        spec={field}
-        value={draft[field.key] ?? ""}
-        savedValue={savedValue(settings, field.key)}
-        dirty={dirty.has(field.key)}
-        error={errors[field.key]}
-        onChange={(value) => setDraft((prev) => ({ ...prev, [field.key]: value }))}
-      />
-    ));
+    keys.map((key) => {
+      if (key === LOW_TIER_FROM) {
+        return (
+          <DerivedRow
+            key={key}
+            label="Stage 0: low tier from (buy price)"
+            hint="Not editable: the low tier starts at the stage 0 min ask. Shares bought from here up to the mid tier price use the low take-profit %."
+            value={draft["stage0_min_ask"] ?? ""}
+          />
+        );
+      }
+      const field = fieldsOf([key])[0];
+      if (!field) return null;
+      return (
+        <SettingRow
+          key={field.key}
+          spec={field}
+          value={draft[field.key] ?? ""}
+          savedValue={savedValue(settings, field.key)}
+          dirty={dirty.has(field.key)}
+          error={errors[field.key]}
+          onChange={(value) => setDraft((prev) => ({ ...prev, [field.key]: value }))}
+        />
+      );
+    });
 
   const groupBadge = (keys: string[]) => {
     const edited = keys.filter((key) => dirty.has(key)).length;

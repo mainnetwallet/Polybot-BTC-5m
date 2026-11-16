@@ -1,6 +1,9 @@
 import type { FieldSpec } from "./fields";
 import { FIELDS } from "./fields";
 
+/** Pseudo key: a read-only row showing where the low take-profit tier starts (it is stage 0's min ask). */
+export const LOW_TIER_FROM = "@stage0_low_from";
+
 export type TabId = "stage0" | "stage1" | "stage2" | "stage3" | "risk" | "execution" | "maintenance";
 
 export interface FieldGroup {
@@ -45,6 +48,7 @@ export const TABS: TabSpec[] = [
         title: "Exits: take-profit",
         description: "Buy price decides the tier. 0 % means hold to settlement.",
         keys: [
+          LOW_TIER_FROM,
           "stage0_mid_from_ask",
           "stage0_high_from_ask",
           "stage0_take_profit_pct_low",

@@ -4,6 +4,25 @@ import { cx } from "../../lib/format";
 import type { FieldSpec } from "./fields";
 import type { TabId, TabSpec } from "./layout";
 
+/** Read-only row for a value that is derived from another setting (not editable here). */
+export function DerivedRow({ label, hint, value }: { label: string; hint: string; value: string }) {
+  return (
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 px-4 py-2.5">
+      <div className="min-w-0">
+        <div className="truncate text-[12.5px] font-medium text-slate-200">{label}</div>
+        <p className="mt-0.5 text-[10.5px] leading-snug text-slate-500 sm:truncate" title={hint}>
+          {hint}
+        </p>
+      </div>
+      <div className="w-[150px] sm:w-[170px]">
+        <div className="rounded-md border border-white/10 bg-white/[0.02] px-2.5 py-1.5 text-right text-[12px] tabular-nums text-slate-300">
+          {value}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function SettingRow({
   spec,
   value,
