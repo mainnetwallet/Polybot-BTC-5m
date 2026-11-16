@@ -11,7 +11,8 @@ Entries are staged. Each stage may place ONE buy per market:
   only buy once stage0_high_buy_after_pct of the window has passed. The risk manager also
   demands the BTC price gap (stage0_min_price_gap_usd) and the order manager sells the shares again once the
   best bid is the tier's take-profit percentage above the buy price (by buy price, capped at 0.99).
-  Values: see Settings / .env.
+  Values: see Settings / .env. Once either side's best ask reaches 0.99 inside the stage 0 window, stage 0 does not
+  buy again in that market (even if the ask drops back).
 
 * stage 1: inside the stage 1, best_ask >= stage1_threshold (default 0.80).
   If the ask is not there yet the strategy keeps watching and fires the moment it
@@ -62,7 +63,24 @@ def stage0_active(config: RuntimeSettings, remaining: float) -> bool:
     )
 
 
+# Once either side's best ask reaches this during the stage 0 window, stage 0 stops buying in that market.
+STAGE0_BLOCK_ASK = 0.99
+_STAGE0_BLOCKED_KEEP = 64  # remembered markets; older ones are long expired
+
+
 class Stage1Strategy:
+    def __init__(self) -> None:
+        # markets where an ask hit STAGE0_BLOCK_ASK inside the stage 0 window (stage 0 buys stay off for them)
+        self._stage0_blocked: dict[str, None] = {}
+
+    def stage0_blocked(self, market_id: str) -> bool:
+        return market_id in self._stage0_blocked
+
+    def _block_stage0(self, market_id: str) -> None:
+        self._stage0_blocked[market_id] = None
+        while len(self._stage0_blocked) > _STAGE0_BLOCKED_KEEP:
+            self._stage0_blocked.pop(next(iter(self._stage0_blocked)))
+
     def evaluate(
         self,
         market: MarketInfo,
@@ -96,7 +114,10 @@ class Stage1Strategy:
             )
 
         signals: list[Signal] = []
-        if in_stage0:
+        if in_stage0 and not self.stage0_blocked(market.market_id):
+            if any(a is not None and a + 1e-9 >= STAGE0_BLOCK_ASK for a in (up_ask, down_ask)):
+                self._block_stage0(market.market_id)  # an ask touched .99: no stage 0 buy in this market any more
+        if in_stage0 and not self.stage0_blocked(market.market_id):
             for side, market_side_token, book, ask in (
                 ("UP", market.up_token_id, up, up_ask),
                 ("DOWN", market.down_token_id, down, down_ask),
@@ -155,4 +176,4 @@ class Stage1Strategy:
         )
 
 
-__all__ = ["Stage1Strategy", "datetime_to_epoch_ms", "stage0_active", "stage_plan"]
+__all__ = ["STAGE0_BLOCK_ASK", "Stage1Strategy", "datetime_to_epoch_ms", "stage0_active", "stage_plan"]

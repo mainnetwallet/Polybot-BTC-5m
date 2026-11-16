@@ -865,3 +865,35 @@ def test_defaults_are_early_max_ask_85_and_expensive_max_ask_94():
     assert Settings.model_fields["stage0_early_max_ask"].default == 0.85
     config = make_config(**STAGE0)
     assert (config.stage0_max_ask_for(0.80), config.stage0_max_ask_for(0.88), config.stage0_max_ask_for(0.93)) == (0.85, 0.85, 0.94)
+
+
+# ------------------------- an ask of .99 inside the stage 0 window stops stage 0 buys in that market
+def test_ask_touching_99_blocks_stage0_for_the_rest_of_the_market():
+    market = make_market(remaining=1150)
+    config = make_config(**STAGE0)
+    strategy = Stage1Strategy()
+    end_ms = datetime_to_epoch_ms(market.window_end)
+
+    def run(remaining: float, up: float, down: float):
+        return strategy.evaluate(market, books_for(market, up, down), end_ms - int(remaining * 1000), config)
+
+    assert [s.side for s in run(150, 0.80, 0.20).signals if s.stage == 0] == ["UP"]  # buys normally
+    assert [s for s in run(140, 0.99, 0.01).signals if s.stage == 0] == []  # .99 touched
+    assert [s for s in run(130, 0.80, 0.20).signals if s.stage == 0] == []  # back to .80: still blocked
+    assert [s for s in run(120, 0.20, 0.80).signals if s.stage == 0] == []  # either side stays blocked
+
+
+def test_stage0_block_is_per_market_and_needs_the_stage0_window():
+    strategy = Stage1Strategy()
+    config = make_config(**STAGE0)
+    market = make_market(remaining=1150)
+    end_ms = datetime_to_epoch_ms(market.window_end)
+    # .99 seen before the stage 0 window (remaining 300 > 200) does not block
+    strategy.evaluate(market, books_for(market, 0.99, 0.01), end_ms - 300_000, config)
+    assert not strategy.stage0_blocked(market.market_id)
+    stage0 = strategy.evaluate(market, books_for(market, 0.80, 0.20), end_ms - 150_000, config)
+    assert [s.side for s in stage0.signals if s.stage == 0] == ["UP"]
+    # a different market is not affected by a block elsewhere
+    strategy.evaluate(market, books_for(market, 0.99, 0.01), end_ms - 140_000, config)
+    assert strategy.stage0_blocked(market.market_id)
+    assert not strategy.stage0_blocked("another-market")
