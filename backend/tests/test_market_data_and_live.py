@@ -696,3 +696,37 @@ def test_ws_tick_size_change_invokes_hook():
     message = {"event_type": "tick_size_change", "market": "0xcond", "new_tick_size": "0.001"}
     asyncio.run(client._handle_message(message))
     assert seen == [message]
+
+
+@pytest.mark.asyncio
+async def test_live_sells_run_in_parallel_without_a_shared_lock():
+    """A stop-loss must not wait for another stage's sell that is still in flight."""
+    import threading
+    import time as _time
+
+    from app.execution.base import ExecutionReport, SellRequest
+
+    engine = LiveExecutionEngine(Settings())
+    engine._orders_allowed = True
+    engine._client = object()  # no client build: the sync sell is replaced below
+
+    started = []
+    barrier = threading.Barrier(3, timeout=2)
+
+    def fake_sync(client, request):
+        started.append(request.order_key)
+        barrier.wait()  # only passes if all three sells are in flight at the same time
+        return ExecutionReport(status="FILLED", filled_size=request.size, avg_price=0.4)
+
+    engine._place_sell_sync = fake_sync
+
+    def req(stage):
+        return SellRequest(
+            order_key=f"k{stage}", client_order_id=f"c{stage}", market_id="0xm", side="UP",
+            token_id="UP", size=1.0, min_price=0.01, observed_at_ms=int(_time.time() * 1000),
+            order_min_size=1.0, asset_version=1,
+        )
+
+    reports = await asyncio.gather(*(engine.place_sell(req(s)) for s in range(3)))
+    assert [r.status for r in reports] == ["FILLED"] * 3
+    assert len(started) == 3

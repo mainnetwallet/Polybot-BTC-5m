@@ -21,6 +21,7 @@ import logging
 import math
 import time
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 
 from app.config.settings import Settings
 from app.execution.base import ExecutionEngine, ExecutionReport, FillPart, OrderRequest, SellRequest
@@ -151,9 +152,13 @@ class LiveExecutionEngine(ExecutionEngine):
         self._client = None
         self._lock = asyncio.Lock()
         self._order_lock = asyncio.Lock()
-        # Sells (take-profit / stop-loss) have their own lock so a buy that is waiting for the
-        # exchange never holds a stop-loss back.
-        self._sell_lock = asyncio.Lock()
+        # Sells (take-profit / stop-loss) never take a lock: a buy waiting for the exchange, or
+        # another stage's sell still in flight, must not hold a stop-loss back. Double sells of the
+        # same shares are already prevented per stage (exit lock + sell_in_flight), and stages hold
+        # disjoint shares, so parallel FOK sells are safe (the exchange checks the balance).
+        # They run on their own thread pool so database writes / price persists on the default
+        # pool can never queue a stop-loss behind them.
+        self._sell_pool = ThreadPoolExecutor(max_workers=8, thread_name_prefix="live-sell")
         self._orders_allowed = False
         self._balance_hint = balance_hint
         # token_id -> (fee rate, exponent) as published by the CLOB market info (``fd``).
@@ -246,6 +251,14 @@ class LiveExecutionEngine(ExecutionEngine):
             return
 
         def _warm(client) -> None:
+            # The SDK looks up the exchange order version once, on the first order it builds.
+            # Doing it here keeps that REST round trip out of the first buy / sell.
+            try:
+                resolve = getattr(client, "_ClobClient__resolve_version", None)
+                if callable(resolve):
+                    resolve()
+            except Exception as exc:  # best effort only
+                logger.debug("live version prewarm failed (%s)", type(exc).__name__)
             if condition_id:
                 try:
                     self._load_fee_params(client, condition_id, token_ids)
@@ -280,25 +293,24 @@ class LiveExecutionEngine(ExecutionEngine):
     async def place_sell(self, request: SellRequest) -> ExecutionReport:
         if not self._orders_allowed:
             return ExecutionReport(status="REJECTED", error="new live orders are blocked")
-        async with self._sell_lock:
-            if not self._orders_allowed:
-                return ExecutionReport(status="REJECTED", error="new live orders are blocked")
-            try:
-                client = await self._get_client()
-            except Exception as exc:
-                return ExecutionReport(
-                    status="REJECTED", error=f"live client unavailable: {type(exc).__name__}"
-                )
-            try:
-                report = await asyncio.to_thread(self._place_sell_sync, client, request)
-            except Exception as exc:
-                logger.error("live sell failed (%s)", type(exc).__name__)
-                report = ExecutionReport(
-                    status="SUBMITTED",
-                    error="sell submission outcome is unknown; reconcile before retrying",
-                )
-            report.latency_ms = float(max(0, int(time.time() * 1000) - request.observed_at_ms))
-            return report
+        try:
+            client = self._client if self._client is not None else await self._get_client()
+        except Exception as exc:
+            return ExecutionReport(
+                status="REJECTED", error=f"live client unavailable: {type(exc).__name__}"
+            )
+        try:
+            report = await asyncio.get_running_loop().run_in_executor(
+                self._sell_pool, self._place_sell_sync, client, request
+            )
+        except Exception as exc:
+            logger.error("live sell failed (%s)", type(exc).__name__)
+            report = ExecutionReport(
+                status="SUBMITTED",
+                error="sell submission outcome is unknown; reconcile before retrying",
+            )
+        report.latency_ms = float(max(0, int(time.time() * 1000) - request.observed_at_ms))
+        return report
 
     def _ensure_conditional_allowance(self, client, token_id: str) -> None:
         """Best effort, once per token: let the CLOB re-sync the outcome-token balance/allowance.
