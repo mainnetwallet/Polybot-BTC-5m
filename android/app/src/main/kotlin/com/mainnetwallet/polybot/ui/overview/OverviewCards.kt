@@ -199,7 +199,7 @@ private fun HeroRing(
 /**
  * Hero card: the 5-minute window countdown, the BTC price and its gap to the price to beat, and the account
  * numbers (balance, PnL, trades) in one place. The clock follows the server, not the phone.
- * The card tints cyan inside the stage 1 and violet while waiting.
+ * The card tints amber inside the stage 1.
  */
 @Composable
 fun HeroCard(
@@ -213,8 +213,10 @@ fun HeroCard(
 ) {
     val c = Poly.colors
     val scheme = MaterialTheme.colorScheme
-    // Ring, clock, progress bar and card tint share one accent: cyan in the stage 1 window, violet while waiting.
-    val accent = if (inWindow) c.ringStage else c.ringWaiting
+    // Accent drives the clock, progress bar and card tint (amber in the stage 1 window, primary while waiting).
+    val accent = if (inWindow) c.warn else scheme.primary
+    // Only the hero ring has its own colors: cyan in the stage 1 window, violet while waiting.
+    val ringColor = if (inWindow) c.ringStage else c.ringWaiting
 
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(market?.marketId) {
@@ -251,7 +253,7 @@ fun HeroCard(
                                 fraction = fraction,
                                 remainingSeconds = remaining,
                                 label = if (inWindow) "Stage 1" else "Waiting",
-                                color = accent,
+                                color = ringColor,
                                 modifier = Modifier.fillMaxHeight().aspectRatio(1f),
                             )
                         }
@@ -271,9 +273,9 @@ fun HeroCard(
                         }
                         if (market != null) {
                             if (inWindow) {
-                                Pill("STAGE 1", c.ringStage, c.ringStageContainer)
+                                Pill("STAGE 1", c.warn, c.warnContainer)
                             } else {
-                                Pill("OBSERVING", c.ringWaiting, c.ringWaitingContainer)
+                                Pill("OBSERVING", scheme.onSecondaryContainer, scheme.secondaryContainer)
                             }
                         }
                     }
