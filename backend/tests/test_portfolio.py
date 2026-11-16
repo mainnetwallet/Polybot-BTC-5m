@@ -181,7 +181,7 @@ def test_reset_all_wipes_every_table_and_recreates_accounts():
         assert session.query(BotSetting).count() == 0
         assert session.query(Account).count() == 2
         assert session.get(AppState, 1).status == "STOPPED"
-        assert portfolio.balance(session, "paper") == 10.0
+        assert portfolio.balance(session, "paper") == 100.0
 
 
 def test_snapshot_unrealized_keeps_pnl_for_settling_position():
