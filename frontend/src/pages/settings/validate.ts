@@ -49,6 +49,16 @@ const CROSS_RULES: CrossRule[] = [
     message: "Min ask must not be higher than the stage 0 max ask.",
   },
   {
+    keys: ["stage0_min_ask", "stage0_early_max_ask"],
+    broken: (d) => n(d, "stage0_min_ask") > n(d, "stage0_early_max_ask"),
+    message: "Min ask must not be higher than the stage 0 earlier-buy max ask.",
+  },
+  {
+    keys: ["stage0_early_max_ask", "stage0_max_ask"],
+    broken: (d) => n(d, "stage0_early_max_ask") > n(d, "stage0_max_ask"),
+    message: "The earlier-buy max ask must not be higher than the expensive-buy max ask.",
+  },
+  {
     keys: ["stage0_mid_from_ask", "stage0_high_from_ask"],
     broken: (d) => n(d, "stage0_mid_from_ask") > n(d, "stage0_high_from_ask"),
     message: "Mid tier border must not be higher than the high tier border.",

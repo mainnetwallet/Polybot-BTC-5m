@@ -44,6 +44,7 @@ OVERRIDABLE_KEYS = (
     "stage0_end_seconds",
     "stage0_min_ask",
     "stage0_max_ask",
+    "stage0_early_max_ask",
     "stage0_min_price_gap_usd",
     "stage0_mid_from_ask",
     "stage0_high_from_ask",
@@ -105,7 +106,13 @@ class RuntimeSettings(BaseModel):
     stage0_start_seconds: int = Field(default=200, ge=1, le=300)
     stage0_end_seconds: int = Field(default=100, ge=0, le=299)
     stage0_min_ask: float = Field(default=0.69, ge=0.01, le=0.999)
+    # Max ask by buy price: a buy below stage0_high_buy_price (the earlier, cheaper buys) goes up to
+    # stage0_early_max_ask (0.85); an expensive buy (ask >= stage0_high_buy_price, only after
+    # stage0_high_buy_after_pct of the window) goes up to stage0_max_ask (0.94). Asks between
+    # stage0_early_max_ask and stage0_high_buy_price do not buy. An early value above stage0_max_ask has no
+    # effect: the lower of the two applies.
     stage0_max_ask: float = Field(default=0.94, ge=0.01, le=0.999)
+    stage0_early_max_ask: float = Field(default=0.85, ge=0.01, le=0.999)
     stage0_min_price_gap_usd: float = Field(default=70.0, ge=0.0, le=1_000_000.0)
     # Stage 0 take-profit in percent above the average buy price, by what stage 0 paid per share:
     #   cost <  stage0_mid_from_ask   -> stage0_take_profit_pct_low  (default 0.60-0.70 buy -> +15 %)
@@ -237,6 +244,13 @@ class RuntimeSettings(BaseModel):
         """Seconds left at or below which stage 0 may buy at stage0_high_buy_price or more."""
         span = max(self.stage0_start_seconds - self.stage0_end_seconds, 0)
         return self.stage0_start_seconds - span * self.stage0_high_buy_after_pct / 100.0
+
+    def stage0_max_ask_for(self, ask: float) -> float:
+        """Highest ask stage 0 may buy at: stage0_max_ask for an expensive buy (ask >= stage0_high_buy_price),
+        otherwise the earlier-buy limit stage0_early_max_ask."""
+        if ask + 1e-9 >= self.stage0_high_buy_price:
+            return self.stage0_max_ask
+        return min(self.stage0_early_max_ask, self.stage0_max_ask)
 
     def stage0_high_buy_too_early(self, ask: float, remaining_seconds: float) -> bool:
         """True when `ask` is a high buy (>= stage0_high_buy_price) and its part of the window has not begun."""

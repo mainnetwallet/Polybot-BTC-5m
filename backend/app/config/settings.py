@@ -110,7 +110,11 @@ class Settings(BaseSettings):
     stage0_start_seconds: int = 200
     stage0_end_seconds: int = 100
     stage0_min_ask: float = 0.69
+    # Max ask by buy price: a buy below stage0_high_buy_price goes up to stage0_early_max_ask (0.85); an expensive
+    # buy (ask >= stage0_high_buy_price, after stage0_high_buy_after_pct of the window) up to stage0_max_ask (0.94).
+    # Asks in between (0.85 to 0.90) do not buy.
     stage0_max_ask: float = 0.94
+    stage0_early_max_ask: float = 0.85
     stage0_min_price_gap_usd: float = 70.0
     # Take-profit for stage 0: sell once the best bid is this many percent ABOVE the average price paid per
     # share (cost * (1 + pct / 100), capped at 0.99). The percentage depends on what stage 0 paid per share:

@@ -738,7 +738,7 @@ async def test_stage0_tier_set_to_zero_holds_to_settlement():
 
 
 # ------------------------------------------------ 0.90+ buys only in the later part of the window
-HIGH = dict(stage0_start_seconds=200, stage0_end_seconds=100, stage0_max_ask=0.99)
+HIGH = dict(stage0_start_seconds=200, stage0_end_seconds=100, stage0_max_ask=0.99, stage0_early_max_ask=0.99)
 
 
 def test_high_buy_opens_halfway_through_the_stage0_window():
@@ -805,3 +805,63 @@ async def test_partial_retry_waits_for_the_second_half_before_buying_a_90_plus_a
     with session_scope() as session:
         order = session.execute(select(Order)).scalars().one()
         assert order.status == "FILLED" and order.filled_size > before
+
+
+# ------------------------- max ask by buy price: early limit below the expensive-buy price, stage0_max_ask above it
+CAPS = dict(stage0_start_seconds=200, stage0_end_seconds=100, stage0_early_max_ask=0.80, stage0_max_ask=0.95)
+
+
+def _sides(result):
+    return {s.side for s in result.signals}
+
+
+def test_cheaper_buy_stops_at_the_early_max_ask_whenever_it_is():
+    for remaining in (180, 120):
+        assert _sides(evaluate(remaining, up=0.79, down=0.21, **CAPS)) == {"UP"}
+        assert _sides(evaluate(remaining, up=0.80, down=0.20, **CAPS)) == {"UP"}
+        assert evaluate(remaining, up=0.82, down=0.18, **CAPS).signals == []
+
+
+def test_expensive_buy_uses_stage0_max_ask_after_the_halfway_point():
+    assert _sides(evaluate(120, up=0.93, down=0.07, **CAPS)) == {"UP"}  # above the early max ask, still buys
+    assert evaluate(120, up=0.96, down=0.04, **CAPS).signals == []  # above stage0_max_ask
+    assert evaluate(180, up=0.93, down=0.07, **CAPS).signals == []  # still waits for the second half
+
+
+def test_there_is_a_gap_between_the_early_max_ask_and_the_expensive_buy_price():
+    for remaining in (180, 120):
+        for ask in (0.86, 0.88, 0.89):
+            assert evaluate(remaining, up=ask, down=1 - ask).signals == [], (remaining, ask)  # defaults: 0.85 / 0.90
+    assert _sides(evaluate(180, up=0.85, down=0.15)) == {"UP"}
+    assert _sides(evaluate(120, up=0.90, down=0.10)) == {"UP"}
+
+
+def test_signal_threshold_is_the_limit_that_applies():
+    cheap = evaluate(180, up=0.75, down=0.25, **CAPS).signals[0]
+    expensive = evaluate(120, up=0.93, down=0.07, **CAPS).signals[0]
+    assert (cheap.threshold, expensive.threshold) == (0.80, 0.95)
+
+
+def test_early_max_ask_above_stage0_max_ask_has_no_effect():
+    caps = {**CAPS, "stage0_early_max_ask": 0.99, "stage0_max_ask": 0.85}
+    assert evaluate(180, up=0.86, down=0.14, **caps).signals == []
+    assert _sides(evaluate(180, up=0.85, down=0.15, **caps)) == {"UP"}
+
+
+def test_risk_checks_the_limit_that_applies_to_the_buy():
+    from dataclasses import replace
+
+    config = make_config(**STAGE0, **CAPS)
+    late = make_ctx(remaining=120, btc_price=100_150.0, price_to_beat=100_000.0)
+    base = replace(_signal(remaining=180, up=0.75), remaining_seconds=120)
+    assert RiskManager().check(replace(base, best_ask=0.80), late, config).approved
+    too_high = RiskManager().check(replace(base, best_ask=0.82), late, config)
+    assert too_high.approved is False and too_high.reason == "stage0_ask_too_high"
+    assert RiskManager().check(replace(base, best_ask=0.93), late, config).approved
+    assert RiskManager().check(replace(base, best_ask=0.96), late, config).reason == "stage0_ask_too_high"
+
+
+def test_defaults_are_early_max_ask_85_and_expensive_max_ask_94():
+    assert Settings.model_fields["stage0_early_max_ask"].default == 0.85
+    config = make_config(**STAGE0)
+    assert (config.stage0_max_ask_for(0.80), config.stage0_max_ask_for(0.88), config.stage0_max_ask_for(0.93)) == (0.85, 0.85, 0.94)

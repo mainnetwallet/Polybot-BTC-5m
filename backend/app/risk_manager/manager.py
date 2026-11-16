@@ -120,11 +120,12 @@ class RiskManager:
                     "stage0_ask_too_low",
                     f"ask {signal.best_ask:.3f} below the stage 0 minimum {config.stage0_min_ask:.3f}",
                 )
-            if signal.best_ask > config.stage0_max_ask + 1e-9:
+            stage0_limit = config.stage0_max_ask_for(signal.best_ask)
+            if signal.best_ask > stage0_limit + 1e-9:
                 return RiskDecision(
                     False,
                     "stage0_ask_too_high",
-                    f"ask {signal.best_ask:.3f} above the stage 0 limit {config.stage0_max_ask:.3f}",
+                    f"ask {signal.best_ask:.3f} above the stage 0 limit {stage0_limit:.3f}",
                 )
             if config.stage0_high_buy_too_early(signal.best_ask, ctx.remaining_seconds):
                 return RiskDecision(

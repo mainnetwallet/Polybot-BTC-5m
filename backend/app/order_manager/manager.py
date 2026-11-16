@@ -376,7 +376,7 @@ class OrderManager:
             token_id=signal.token_id,
             notional=config.trade_amount_usdc,
             # stage 0 never pays more than its own ask limit
-            max_price=config.stage0_max_ask if signal.stage == 0 else config.max_execution_price,
+            max_price=config.stage0_max_ask_for(signal.best_ask) if signal.stage == 0 else config.max_execution_price,
             observed_at_ms=signal.observed_at_ms,
             order_min_size=market.min_order_size,
             asset_version=market.asset_version,
@@ -617,6 +617,8 @@ class OrderManager:
             if book is None or book.best_ask is None or book.ask_size is None or book.ask_size <= 0:
                 continue
             if book.best_ask > max_price + 1e-9:
+                continue
+            if stage == 0 and book.best_ask > config.stage0_max_ask_for(book.best_ask) + 1e-9:
                 continue
             if stage == 0 and book.best_ask + 1e-9 < config.stage0_min_ask:
                 continue

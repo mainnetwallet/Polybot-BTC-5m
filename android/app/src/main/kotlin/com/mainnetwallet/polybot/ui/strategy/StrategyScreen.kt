@@ -229,13 +229,14 @@ private fun stageSpecs(snap: StrategyView, remaining: Double?): List<StageSpec> 
             enabled = s.stage0Enabled,
             active = s.stage0Enabled && open0,
             highlights = listOf(
-                "Entry ask" to centsRange(s.stage0MinAsk, s.stage0MaxAsk),
+                "Entry ask" to centsRange(s.stage0MinAsk, s.stage0EarlyMaxAsk),
                 "Take-profit" to tiers0,
                 "Stop-loss" to pct(s.stage0StopLossPct),
             ),
             entry = listOf(
                 "Window" to "${secs(s.stage0StartSeconds)} to ${secs(s.stage0EndSeconds)} left",
-                "Ask band" to "${Fmt.cents(s.stage0MinAsk)} to ${Fmt.cents(s.stage0MaxAsk)}",
+                "Ask band" to "${Fmt.cents(s.stage0MinAsk)} to ${Fmt.cents(s.stage0EarlyMaxAsk)}",
+                "Expensive max ask" to Fmt.cents(s.stage0MaxAsk),
                 "Min price gap" to usdGap(s.stage0MinPriceGapUsd),
                 "Expensive buy from" to "${Fmt.cents(s.stage0HighBuyPrice)} after ${pct(s.stage0HighBuyAfterPct)} of window",
                 "Tier borders" to "${Fmt.cents(s.stage0MidFromAsk)} / ${Fmt.cents(s.stage0HighFromAsk)}",

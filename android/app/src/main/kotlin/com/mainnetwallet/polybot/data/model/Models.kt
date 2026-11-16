@@ -70,6 +70,7 @@ data class StrategyState(
     @SerialName("stage0_end_seconds") val stage0EndSeconds: Double = 0.0,
     @SerialName("stage0_min_ask") val stage0MinAsk: Double = 0.0,
     @SerialName("stage0_max_ask") val stage0MaxAsk: Double = 0.0,
+    @SerialName("stage0_early_max_ask") val stage0EarlyMaxAsk: Double = 0.0,
     @SerialName("stage0_min_price_gap_usd") val stage0MinPriceGapUsd: Double = 0.0,
     @SerialName("stage0_mid_from_ask") val stage0MidFromAsk: Double = 0.0,
     @SerialName("stage0_high_from_ask") val stage0HighFromAsk: Double = 0.0,
