@@ -1717,6 +1717,7 @@ class TradingBot:
                 ),
                 "stage1_threshold": config.stage1_threshold,
                 "stage1_seconds": config.stage1_seconds,
+                "stage1_max_ask": config.stage1_max_ask,
                 "stage1_enabled": config.stage1_enabled,
                 "stage2_enabled": config.stage2_enabled,
                 "stage3_enabled": config.stage3_enabled,

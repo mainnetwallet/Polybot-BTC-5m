@@ -107,6 +107,7 @@ Most used keys:
 | `MIN_PRICE_GAP_USD` / `STAGE2_...` / `STAGE3_...` | `35` / `30` / `25` | BTC (Chainlink TWAP60) must be this far beyond the price to beat; `0` = off; missing BTC data blocks the buy |
 | `TRADE_AMOUNT_USDC` | `50` | Notional per trade |
 | `MAX_EXECUTION_PRICE` | `0.98` | Hard price cap |
+| `STAGE1_MAX_ASK` | `0.97` | Stage 1 does not buy when the best ask is above this |
 | `STALE_DATA_MAX_AGE_MS` | `2000` | Max book age for a buy (exits skip the check) |
 | `MAX_DAILY_LOSS` / `DAILY_PROFIT_TARGET` / `MAX_TRADES_PER_DAY` | `5.0` / `10.0` / `600` | Risk limits |
 | `MAX_OPEN_POSITIONS` | `1` | Per-market position cap |

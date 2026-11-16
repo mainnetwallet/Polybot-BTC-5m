@@ -23,6 +23,15 @@ export const FIELDS: FieldSpec[] = [
     max: "0.999",
   },
   {
+    key: "stage1_max_ask",
+    label: "Stage 1: max ask (no buy above)",
+    hint: "Stage 1 never buys when the best ask is above this decimal (default 0.97 = 97 cents), and never pays more than it.",
+    kind: "number",
+    step: "0.01",
+    min: "0.01",
+    max: "1",
+  },
+  {
     key: "stage1_seconds",
     label: "Stage 1",
     hint: "Seconds before expiry in which trading is enabled.",

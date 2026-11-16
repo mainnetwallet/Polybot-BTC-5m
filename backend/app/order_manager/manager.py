@@ -376,7 +376,7 @@ class OrderManager:
             token_id=signal.token_id,
             notional=config.trade_amount_usdc,
             # stage 0 never pays more than its own ask limit
-            max_price=config.stage0_max_ask_for(signal.best_ask) if signal.stage == 0 else config.max_execution_price,
+            max_price=config.stage0_max_ask_for(signal.best_ask) if signal.stage == 0 else config.max_buy_price_for_stage(signal.stage),
             observed_at_ms=signal.observed_at_ms,
             order_min_size=market.min_order_size,
             asset_version=market.asset_version,
@@ -607,7 +607,7 @@ class OrderManager:
             stage = self._key_stage(order_key)
             if not config.stage_enabled(stage):
                 continue  # a stage that was switched off stops topping up its buys
-            max_price = config.max_execution_price
+            max_price = config.max_buy_price_for_stage(stage)
             if stage == 0:
                 remaining_s = market.remaining_seconds()
                 if not (config.stage0_enabled and config.stage0_end_seconds < remaining_s <= config.stage0_start_seconds):

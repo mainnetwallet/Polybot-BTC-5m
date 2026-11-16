@@ -181,13 +181,24 @@ async def test_expired_market_blocks_execution():
 
 
 async def test_max_execution_price_blocks():
-    stack = build_stack()
+    stack = build_stack(make_config(stage1_max_ask=1.0))
     market = make_market(remaining=55)
     books = books_for(market, up_ask=0.995, down_ask=0.005)
 
     _, results = await _submit(stack, market, books)
 
     assert results[0].reason == "max_execution_price_exceeded"
+    assert _orders() == []
+
+
+async def test_stage1_max_ask_blocks_above_97():
+    stack = build_stack()
+    market = make_market(remaining=55)
+    books = books_for(market, up_ask=0.98, down_ask=0.02)
+
+    _, results = await _submit(stack, market, books)
+
+    assert results[0].reason == "stage1_max_ask_exceeded"
     assert _orders() == []
 
 

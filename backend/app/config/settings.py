@@ -84,6 +84,8 @@ class Settings(BaseSettings):
     stage3_seconds: int = 30
     stage3_threshold: float = 0.90
     max_execution_price: float = 0.98
+    # Stage 1 never buys when the best ask is above this (0.97 = 97 cents). Stages 2/3 only use max_execution_price.
+    stage1_max_ask: float = 0.97
     trade_amount_usdc: float = 50.0
     # Book age only resets on a websocket book event, so a stable price on a quiet book looks
     # "old" without being wrong, so too low a limit blocks stage 2/3 (armed by the clock) on a quiet

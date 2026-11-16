@@ -39,9 +39,22 @@ def test_expired_market_blocks():
 
 
 def test_max_execution_price_blocks():
-    decision = RiskManager().check(signal(ask=0.995), make_ctx(), make_config(max_execution_price=0.99))
+    decision = RiskManager().check(
+        signal(ask=0.995), make_ctx(), make_config(max_execution_price=0.99, stage1_max_ask=1.0)
+    )
     assert decision.approved is False
     assert decision.reason == "max_execution_price_exceeded"
+
+
+def test_stage1_max_ask_blocks_above_97():
+    decision = RiskManager().check(signal(ask=0.98), make_ctx(), make_config())
+    assert decision.approved is False
+    assert decision.reason == "stage1_max_ask_exceeded"
+
+
+def test_stage1_max_ask_allows_97_exactly():
+    decision = RiskManager().check(signal(ask=0.97), make_ctx(), make_config())
+    assert decision.approved is True
 
 
 def test_no_liquidity_blocks():

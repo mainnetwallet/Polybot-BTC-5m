@@ -426,9 +426,9 @@ async def test_stage0_sell_pnl_uses_stage0_cost_not_blended_average():
         s0 = session.execute(select(Order)).scalar_one()
         s0_cost = s0.filled_size * s0.avg_fill_price
 
-    # stage 1 adds shares at a very different price (0.99) to the same UP position
+    # stage 1 adds shares at a very different price (0.97, its max ask) to the same UP position
     late = make_market(remaining=45)
-    books1 = books_for(late, up_ask=0.99, down_ask=0.01)
+    books1 = books_for(late, up_ask=0.97, down_ask=0.03)
     stage_books(stack, late, books1)
     evaluation = stack["strategy"].evaluate(late, books1, int(time.time() * 1000), stack["config"])
     evaluation.signals = [s for s in evaluation.signals if s.stage == 1 and s.side == "UP"]

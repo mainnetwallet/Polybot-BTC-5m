@@ -146,6 +146,12 @@ class RiskManager:
                     "below_threshold",
                     f"ask {signal.best_ask:.3f} below stage {signal.stage} threshold {stage_threshold:.3f}",
                 )
+            if signal.stage == 1 and signal.best_ask > config.stage1_max_ask + 1e-9:
+                return RiskDecision(
+                    False,
+                    "stage1_max_ask_exceeded",
+                    f"ask {signal.best_ask:.3f} above the stage 1 limit {config.stage1_max_ask:.3f}",
+                )
             if signal.best_ask > config.max_execution_price + 1e-9:
                 return RiskDecision(
                     False,

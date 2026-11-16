@@ -74,6 +74,11 @@ const CROSS_RULES: CrossRule[] = [
     message: "Sell price must be higher than the stage 2 ask trigger.",
   },
   {
+    keys: ["stage1_max_ask", "stage1_threshold"],
+    broken: (d) => n(d, "stage1_max_ask") < n(d, "stage1_threshold"),
+    message: "Stage 1 max ask must be at least the stage 1 ask trigger.",
+  },
+  {
     keys: ["max_execution_price", "stage1_threshold", "stage2_threshold", "stage3_threshold"],
     broken: (d) =>
       n(d, "max_execution_price") <

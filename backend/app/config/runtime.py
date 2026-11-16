@@ -17,6 +17,7 @@ from app.config.settings import Settings
 
 OVERRIDABLE_KEYS = (
     "stage1_threshold",
+    "stage1_max_ask",
     "stage1_seconds",
     "stage1_enabled",
     "stage2_enabled",
@@ -78,6 +79,8 @@ STAGE0_MAX_TAKE_PROFIT_PRICE = 0.99
 class RuntimeSettings(BaseModel):
     stage1_threshold: float = Field(ge=0.01, le=0.999)
     stage1_seconds: int = Field(ge=1, le=300)
+    # Stage 1 does not buy when the best ask is above this (default 0.97). Never pays more than this either.
+    stage1_max_ask: float = Field(default=0.97, ge=0.01, le=1.0)
     # Master switch per entry stage (stage 0: stage0_enabled). Off = no buys, no take-profit, no stop-loss.
     stage1_enabled: bool = True
     stage2_enabled: bool = True
@@ -166,6 +169,8 @@ class RuntimeSettings(BaseModel):
             raise ValueError("duplicate_policy must be one_per_market, one_per_side or allow")
         if self.conflict_policy not in {"up_first", "down_first", "highest_ask", "block_both"}:
             raise ValueError("conflict_policy must be up_first, down_first, highest_ask or block_both")
+        if self.stage1_max_ask < self.stage1_threshold:
+            raise ValueError("stage1_max_ask must be >= stage1_threshold")
         if self.max_execution_price < self.stage1_threshold:
             raise ValueError("max_execution_price must be >= stage1_threshold")
         if self.max_execution_price < max(self.stage2_threshold, self.stage3_threshold):
@@ -244,6 +249,12 @@ class RuntimeSettings(BaseModel):
         """Seconds left at or below which stage 0 may buy at stage0_high_buy_price or more."""
         span = max(self.stage0_start_seconds - self.stage0_end_seconds, 0)
         return self.stage0_start_seconds - span * self.stage0_high_buy_after_pct / 100.0
+
+    def max_buy_price_for_stage(self, stage: int) -> float:
+        """Highest ask a buy of `stage` may pay (stage 0 has its own tiered limit, see stage0_max_ask_for)."""
+        if stage == 1:
+            return min(self.stage1_max_ask, self.max_execution_price)
+        return self.max_execution_price
 
     def stage0_max_ask_for(self, ask: float) -> float:
         """Highest ask stage 0 may buy at: stage0_max_ask for an expensive buy (ask >= stage0_high_buy_price),
