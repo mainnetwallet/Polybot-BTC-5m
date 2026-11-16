@@ -7,7 +7,7 @@ import { Modal } from "../components/Modal";
 import { useBot } from "../hooks/BotContext";
 import { cx, fmtUsd } from "../lib/format";
 import { useConfirmSells } from "../lib/prefs";
-import { ActionRow, CheckRow, GroupCard, SaveControls, SettingRow, TabBar, ToggleRow } from "./settings/components";
+import { ActionRow, CheckRow, GroupCard, SaveControls, SettingRow, StageHeader, TabBar, ToggleRow } from "./settings/components";
 import { FIELDS } from "./settings/fields";
 import { fieldsOf, TABS, tabOfField, type TabId } from "./settings/layout";
 import { buildDiff, dirtyKeys, draftFrom, savedValue, validateDraft, type Draft } from "./settings/validate";
@@ -21,7 +21,7 @@ export function Settings() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [validating, setValidating] = useState(false);
-  const [tab, setTab] = useState<TabId>("entry");
+  const [tab, setTab] = useState<TabId>("stage0");
   const [query, setQuery] = useState("");
 
   const [resetOpen, setResetOpen] = useState(false);
@@ -464,6 +464,10 @@ export function Settings() {
               onChange={setTab}
               editedCount={(id) => countIn(id, dirty)}
               errorCount={(id) => countIn(id, Object.keys(errors))}
+              stageOn={(id) => {
+                const key = TABS.find((item) => item.id === id)?.enabledKey;
+                return key ? draft[key] === "true" : null;
+              }}
             />
           </div>
         ) : null}
@@ -512,24 +516,36 @@ export function Settings() {
           maintenanceSection
         ) : (
           <>
-            <div className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 px-1">
-              <h2 className="text-[13px] font-semibold tracking-tight text-slate-100">{activeTab.title}</h2>
-              <p className="text-[11px] text-slate-500">{activeTab.description}</p>
-            </div>
+            {activeTab.enabledKey ? (
+              <StageHeader
+                title={activeTab.title}
+                description={activeTab.description}
+                on={draft[activeTab.enabledKey] === "true"}
+                dirty={dirty.has(activeTab.enabledKey)}
+                onToggle={() =>
+                  setDraft((prev) => ({
+                    ...prev,
+                    [activeTab.enabledKey as string]: prev[activeTab.enabledKey as string] === "true" ? "false" : "true",
+                  }))
+                }
+                note={
+                  activeTab.id === "stage1" && snapshot
+                    ? `Trigger now $${snapshot.strategy.stage1_threshold.toFixed(2)}. The order price is always the live ask, capped by the max execution price. It is never placed as a limit.`
+                    : undefined
+                }
+              />
+            ) : (
+              <div className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 px-1">
+                <h2 className="text-[13px] font-semibold tracking-tight text-slate-100">{activeTab.title}</h2>
+                <p className="text-[11px] text-slate-500">{activeTab.description}</p>
+              </div>
+            )}
             <div className="lg:columns-2 lg:gap-4">
               {activeTab.groups.map((group) => (
                 <GroupCard key={group.title} title={group.title} description={group.description} badge={groupBadge(group.keys)}>
                   {renderRows(group.keys)}
                 </GroupCard>
               ))}
-              {activeTab.id === "entry" ? (
-                <div className="mb-4 break-inside-avoid rounded-xl border border-sky/15 bg-sky/[0.04] px-4 py-2.5 text-[10.5px] leading-relaxed text-sky/80">
-                  The trigger is an activation threshold. The submitted price is always the live ask, capped by the max
-                  execution price
-                  {snapshot ? ` (stage 1 threshold currently $${snapshot.strategy.stage1_threshold.toFixed(2)})` : ""}. It is never
-                  placed as a limit.
-                </div>
-              ) : null}
             </div>
           </>
         )}

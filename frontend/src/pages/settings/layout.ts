@@ -1,7 +1,7 @@
 import type { FieldSpec } from "./fields";
 import { FIELDS } from "./fields";
 
-export type TabId = "entry" | "stage0" | "exits" | "risk" | "execution" | "maintenance";
+export type TabId = "stage0" | "stage1" | "stage2" | "stage3" | "risk" | "execution" | "maintenance";
 
 export interface FieldGroup {
   title: string;
@@ -15,56 +15,34 @@ export interface TabSpec {
   title: string;
   description: string;
   groups: FieldGroup[];
+  /** Stage tabs only: the on/off setting that switches the whole stage. */
+  enabledKey?: string;
 }
 
 // Every field is placed by key, so adding a field to FIELDS never lands in the wrong card.
+// Each stage tab holds everything for that stage: when it is on, its entry, take-profit and stop-loss.
 export const TABS: TabSpec[] = [
-  {
-    id: "entry",
-    label: "Entry",
-    title: "Entry logic",
-    description: "When stages 1 to 3 fire a marketable BUY.",
-    groups: [
-      {
-        title: "Stages on / off",
-        description: "A stage that is off does nothing: no buys, no take-profit and no stop-loss for it.",
-        keys: ["stage1_enabled", "stage2_enabled", "stage3_enabled"],
-      },
-      {
-        title: "Timing",
-        description: "How many seconds before expiry each stage becomes active.",
-        keys: ["stage1_seconds", "stage2_seconds", "stage3_seconds"],
-      },
-      {
-        title: "Ask triggers",
-        description: "Best ask at or above this decimal activates the stage.",
-        keys: ["stage1_threshold", "stage2_threshold", "stage3_threshold"],
-      },
-      {
-        title: "BTC price-gap filters",
-        description: "Require BTC to be this far beyond the price to beat. 0 turns the filter off.",
-        keys: ["min_price_gap_usd", "stage2_min_price_gap_usd", "stage3_min_price_gap_usd"],
-      },
-      {
-        title: "Order handling",
-        keys: ["duplicate_policy", "conflict_policy"],
-      },
-    ],
-  },
   {
     id: "stage0",
     label: "Stage 0",
-    title: "Early buy + take-profit",
-    description: "Buys between its own start and end time and sells on a tiered take-profit.",
+    title: "Stage 0",
+    description: "Early buy with its own time window, a tiered take-profit and stop-loss.",
+    enabledKey: "stage0_enabled",
     groups: [
-      { title: "Activation", keys: ["stage0_enabled", "stage0_start_seconds", "stage0_end_seconds"] },
+      { title: "Activation", description: "Seconds left before expiry in which stage 0 may buy.", keys: ["stage0_enabled", "stage0_start_seconds", "stage0_end_seconds"] },
       {
-        title: "Entry band",
+        title: "Entry",
         description: "Ask range and BTC gap in which stage 0 may buy.",
-        keys: ["stage0_min_ask", "stage0_early_max_ask", "stage0_max_ask", "stage0_high_buy_after_pct", "stage0_min_price_gap_usd"],
+        keys: [
+          "stage0_min_ask",
+          "stage0_early_max_ask",
+          "stage0_max_ask",
+          "stage0_high_buy_after_pct",
+          "stage0_min_price_gap_usd",
+        ],
       },
       {
-        title: "Take-profit tiers",
+        title: "Exits: take-profit",
         description: "Buy price decides the tier. 0 % means hold to settlement.",
         keys: [
           "stage0_mid_from_ask",
@@ -74,30 +52,87 @@ export const TABS: TabSpec[] = [
           "stage0_take_profit_pct_high",
         ],
       },
+      {
+        title: "Exits: stop-loss",
+        description: "Market sell once the best bid is this many percent below the average buy. 0 = off.",
+        keys: ["stage0_stop_loss_pct", "stage0_high_buy_price", "stage0_high_buy_stop_loss_pct"],
+      },
     ],
   },
   {
-    id: "exits",
-    label: "Exits",
-    title: "Take-profit & stop-loss",
-    description: "How open shares are closed before settlement.",
+    id: "stage1",
+    label: "Stage 1",
+    title: "Stage 1",
+    description: "First final-window buy when the ask reaches its trigger.",
+    enabledKey: "stage1_enabled",
     groups: [
       {
-        title: "Stage 1 take-profit",
+        title: "Activation",
+        description: "A stage that is off does nothing: no buys, no take-profit and no stop-loss for it.",
+        keys: ["stage1_enabled", "stage1_seconds"],
+      },
+      {
+        title: "Entry",
+        description: "Best ask at or above the trigger fires a marketable BUY. BTC gap 0 turns the filter off.",
+        keys: ["stage1_threshold", "min_price_gap_usd"],
+      },
+      {
+        title: "Exits: take-profit",
         keys: ["stage1_sell_enabled", "stage1_sell_max_buy", "stage1_take_profit_pct", "stage1_sell_price_high"],
       },
-      { title: "Stage 2 take-profit", keys: ["stage2_sell_enabled", "stage2_sell_price"] },
       {
-        title: "Stop-loss",
+        title: "Exits: stop-loss",
         description: "Market sell once the best bid is this many percent below the average buy. 0 = off.",
-        keys: [
-          "stage0_stop_loss_pct",
-          "stage0_high_buy_price",
-          "stage0_high_buy_stop_loss_pct",
-          "stage1_stop_loss_pct",
-          "stage2_stop_loss_pct",
-          "stage3_stop_loss_pct",
-        ],
+        keys: ["stage1_stop_loss_pct"],
+      },
+    ],
+  },
+  {
+    id: "stage2",
+    label: "Stage 2",
+    title: "Stage 2",
+    description: "Adds one more buy, only if stage 1 already bought before this stage starts.",
+    enabledKey: "stage2_enabled",
+    groups: [
+      {
+        title: "Activation",
+        description: "A stage that is off does nothing: no buys, no take-profit and no stop-loss for it.",
+        keys: ["stage2_enabled", "stage2_seconds"],
+      },
+      {
+        title: "Entry",
+        description: "Best ask at or above the trigger fires a marketable BUY. BTC gap 0 turns the filter off.",
+        keys: ["stage2_threshold", "stage2_min_price_gap_usd"],
+      },
+      { title: "Exits: take-profit", keys: ["stage2_sell_enabled", "stage2_sell_price"] },
+      {
+        title: "Exits: stop-loss",
+        description: "Market sell once the best bid is this many percent below the average buy. 0 = off.",
+        keys: ["stage2_stop_loss_pct"],
+      },
+    ],
+  },
+  {
+    id: "stage3",
+    label: "Stage 3",
+    title: "Stage 3",
+    description: "Last buy on its own rules. It has a stop-loss but no take-profit.",
+    enabledKey: "stage3_enabled",
+    groups: [
+      {
+        title: "Activation",
+        description: "A stage that is off does nothing: no buys and no stop-loss for it.",
+        keys: ["stage3_enabled", "stage3_seconds"],
+      },
+      {
+        title: "Entry",
+        description: "Best ask at or above the trigger fires a marketable BUY. BTC gap 0 turns the filter off.",
+        keys: ["stage3_threshold", "stage3_min_price_gap_usd"],
+      },
+      {
+        title: "Exits: stop-loss",
+        description: "Market sell once the best bid is this many percent below the average buy. 0 = off.",
+        keys: ["stage3_stop_loss_pct"],
       },
     ],
   },
@@ -105,9 +140,10 @@ export const TABS: TabSpec[] = [
     id: "risk",
     label: "Risk",
     title: "Risk & guardrails",
-    description: "Position sizing, daily limits and data-quality protection.",
+    description: "Position sizing, order handling, daily limits and data-quality protection.",
     groups: [
       { title: "Sizing", keys: ["trade_amount_usdc", "max_execution_price"] },
+      { title: "Order handling", keys: ["duplicate_policy", "conflict_policy"] },
       {
         title: "Daily limits",
         keys: ["max_daily_loss", "daily_profit_target", "max_trades_per_day", "max_open_positions"],

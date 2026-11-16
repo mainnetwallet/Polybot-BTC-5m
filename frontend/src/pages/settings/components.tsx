@@ -156,12 +156,15 @@ export function TabBar({
   onChange,
   editedCount,
   errorCount,
+  stageOn,
 }: {
   tabs: TabSpec[];
   active: TabId;
   onChange: (id: TabId) => void;
   editedCount: (id: TabId) => number;
   errorCount: (id: TabId) => number;
+  /** true / false for a stage tab (shows an on/off dot), null for the other tabs. */
+  stageOn?: (id: TabId) => boolean | null;
 }) {
   return (
     <div role="tablist" className="scrollbar flex gap-0.5 overflow-x-auto px-2 py-1.5">
@@ -169,6 +172,7 @@ export function TabBar({
         const isActive = tab.id === active;
         const edited = editedCount(tab.id);
         const errors = errorCount(tab.id);
+        const on = stageOn ? stageOn(tab.id) : null;
         return (
           <button
             key={tab.id}
@@ -182,6 +186,12 @@ export function TabBar({
               tab.id === "maintenance" && !isActive && "hover:text-down/80",
             )}
           >
+            {on !== null ? (
+              <span
+                title={on ? "Stage is on" : "Stage is off"}
+                className={cx("h-1.5 w-1.5 rounded-full", on ? "bg-up" : "bg-slate-600")}
+              />
+            ) : null}
             {tab.label}
             {errors > 0 ? (
               <span className="mono rounded-full bg-down/15 px-1.5 text-[9.5px] font-bold text-down">{errors}</span>
@@ -352,6 +362,72 @@ export function ToggleRow({
             className={cx(
               "absolute top-[2px] h-3.5 w-3.5 rounded-full transition-all",
               checked ? "left-[18px] bg-up" : "left-[2px] bg-slate-500",
+            )}
+          />
+        </span>
+      </button>
+    </div>
+  );
+}
+
+/** Top strip of a stage tab: stage name, what it does and the master on/off switch. */
+export function StageHeader({
+  title,
+  description,
+  on,
+  dirty,
+  onToggle,
+  note,
+}: {
+  title: string;
+  description: string;
+  on: boolean;
+  dirty: boolean;
+  onToggle: () => void;
+  note?: string;
+}) {
+  return (
+    <div
+      className={cx(
+        "mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3",
+        on ? "border-up/20 bg-up/[0.04]" : "border-white/8 bg-white/[0.02]",
+      )}
+    >
+      <div className="min-w-0">
+        <div className="flex items-center gap-2">
+          <h2 className="text-[15px] font-semibold tracking-tight text-slate-100">{title}</h2>
+          <span
+            className={cx(
+              "chip",
+              on ? "border-up/30 bg-up/10 text-up" : "border-white/10 bg-white/[0.03] text-slate-500",
+            )}
+          >
+            {on ? "On" : "Off"}
+          </span>
+          {dirty ? <span className="chip border-amber/30 bg-amber/10 text-amber">edited</span> : null}
+        </div>
+        <p className="mt-0.5 text-[11px] text-slate-500">{description}</p>
+        {note ? <p className="mt-1 text-[10.5px] leading-relaxed text-sky/80">{note}</p> : null}
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={on}
+        aria-label={`${title} on / off`}
+        onClick={onToggle}
+        className="flex shrink-0 items-center gap-2.5"
+      >
+        <span className={cx("text-[11px] font-semibold", on ? "text-up" : "text-slate-500")}>{on ? "Enabled" : "Disabled"}</span>
+        <span
+          className={cx(
+            "relative h-5 w-9 rounded-full border transition-colors",
+            on ? "border-up/40 bg-up/25" : "border-white/10 bg-white/[0.04]",
+          )}
+        >
+          <span
+            className={cx(
+              "absolute top-[2px] h-3.5 w-3.5 rounded-full transition-all",
+              on ? "left-[18px] bg-up" : "left-[2px] bg-slate-500",
             )}
           />
         </span>
