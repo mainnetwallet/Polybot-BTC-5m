@@ -105,7 +105,7 @@ function MarketPanel() {
               </span>
               <span className="chip border-white/8 bg-white/[0.03] text-slate-400">
                 <IconTarget size={10} />
-                Trigger {fmtCents(strategy.trigger_threshold)}
+                Stage 1 {fmtCents(strategy.stage1_threshold)}
               </span>
               <span className="chip border-white/8 bg-white/[0.03] text-slate-400">
                 <IconZap size={10} />
@@ -584,7 +584,7 @@ export function Overview() {
         side="UP"
         book={snapshot?.books.up ?? null}
         armed={snapshot?.strategy.up_armed ?? false}
-        threshold={snapshot?.strategy.trigger_threshold ?? null}
+        threshold={snapshot?.strategy.stage1_threshold ?? null}
         history={history.up}
         inWindow={snapshot?.strategy.in_window ?? false}
         staleAfterMs={stale}
@@ -594,7 +594,7 @@ export function Overview() {
         side="DOWN"
         book={snapshot?.books.down ?? null}
         armed={snapshot?.strategy.down_armed ?? false}
-        threshold={snapshot?.strategy.trigger_threshold ?? null}
+        threshold={snapshot?.strategy.stage1_threshold ?? null}
         history={history.down}
         inWindow={snapshot?.strategy.in_window ?? false}
         staleAfterMs={stale}

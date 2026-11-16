@@ -219,9 +219,9 @@ def test_mode_switch_blocked_while_running():
 
 def test_settings_patch_and_validation():
     with TestClient(create_app()) as client:
-        ok = client.patch("/api/settings", json={"trigger_threshold": 0.82})
+        ok = client.patch("/api/settings", json={"stage1_threshold": 0.82})
         assert ok.status_code == 200
-        assert ok.json()["trigger_threshold"] == 0.82
+        assert ok.json()["stage1_threshold"] == 0.82
 
         bad = client.patch("/api/settings", json={"max_execution_price": 0.5})
         assert bad.status_code == 400
@@ -236,16 +236,16 @@ def test_settings_reset_restores_env_defaults():
 
         env = get_settings()
         saved = client.patch(
-            "/api/settings", json={"trigger_threshold": 0.77, "trade_amount_usdc": 3.5}
+            "/api/settings", json={"stage1_threshold": 0.77, "trade_amount_usdc": 3.5}
         )
         assert saved.status_code == 200
-        assert client.get("/api/settings").json()["trigger_threshold"] == 0.77
+        assert client.get("/api/settings").json()["stage1_threshold"] == 0.77
 
         reset = client.post("/api/settings/reset")
         assert reset.status_code == 200
         after = client.get("/api/settings").json()
-        assert after["trigger_threshold"] == reset.json()["trigger_threshold"]
-        assert after["trigger_threshold"] == env.trigger_threshold
+        assert after["stage1_threshold"] == reset.json()["stage1_threshold"]
+        assert after["stage1_threshold"] == env.stage1_threshold
         assert after["trade_amount_usdc"] == env.trade_amount_usdc
 
 
@@ -314,7 +314,7 @@ def test_paper_reset_requires_confirmation():
 
 def test_database_survives_restart():
     with TestClient(create_app()) as client:
-        saved = client.patch("/api/settings", json={"trigger_threshold": 0.83})
+        saved = client.patch("/api/settings", json={"stage1_threshold": 0.83})
         assert saved.status_code == 200
         with session_scope() as session:
             session.add(
@@ -337,7 +337,7 @@ def test_database_survives_restart():
     with TestClient(restarted) as client:
         settings = client.get("/api/settings")
         assert settings.status_code == 200
-        assert settings.json()["trigger_threshold"] == 0.83
+        assert settings.json()["stage1_threshold"] == 0.83
 
         orders = client.get("/api/orders", params={"mode": "paper"}).json()
         assert any(o["market_id"] == "persisted-market" for o in orders)
@@ -395,7 +395,7 @@ def test_server_reset_requires_phrase_and_wipes_data():
             ).status_code
             == 400
         )
-        client.patch("/api/settings", json={"trigger_threshold": 0.83})
+        client.patch("/api/settings", json={"stage1_threshold": 0.83})
         ok = client.post(
             "/api/server/reset",
             json={"confirm": True, "confirmation_phrase": "RESET ALL"},
@@ -404,7 +404,7 @@ def test_server_reset_requires_phrase_and_wipes_data():
         assert ok.json()["bot"]["status"] == "STOPPED"
         assert ok.json()["bot"]["mode"] == "paper"
         # setting overrides are gone -> back to .env default
-        assert client.get("/api/settings").json()["trigger_threshold"] == 0.85
+        assert client.get("/api/settings").json()["stage1_threshold"] == 0.85
 
 
 def test_api_token_is_optional_and_protects_everything_but_health():

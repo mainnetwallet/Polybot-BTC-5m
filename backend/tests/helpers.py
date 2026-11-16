@@ -57,7 +57,7 @@ def make_book(
 
 def make_config(**overrides) -> RuntimeSettings:
     values = dict(
-        trigger_threshold=0.80,
+        stage1_threshold=0.80,
         stage1_seconds=60,
         max_execution_price=0.99,
         trade_amount_usdc=5.0,

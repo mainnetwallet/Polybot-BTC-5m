@@ -101,7 +101,7 @@ Most used keys:
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `TRIGGER_THRESHOLD` / `STAGE1_SECONDS` | `0.80` / `80` | Stage 1 ask trigger and window |
+| `STAGE1_THRESHOLD` / `STAGE1_SECONDS` | `0.80` / `80` | Stage 1 ask trigger and window |
 | `STAGE0..3_ENABLED` | `true` | Switch a stage fully on/off |
 | `STAGE0_*`, `STAGE1_*`, `STAGE2_*`, `STAGE3_*` | see table above | Timing, ask range, take-profit, stop-loss per stage |
 | `MIN_PRICE_GAP_USD` / `STAGE2_...` / `STAGE3_...` | `20` / `25` / `30` | BTC (Chainlink TWAP60) must be this far beyond the price to beat; `0` = off; missing BTC data blocks the buy |

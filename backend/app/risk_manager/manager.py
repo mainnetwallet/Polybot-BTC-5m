@@ -135,11 +135,11 @@ class RiskManager:
                     f"stage 0 buys that only from {config.stage0_high_buy_opens_at():g}s left",
                 )
         else:
-            # each entry stage has its own ask threshold (stage 1 = trigger_threshold)
+            # each entry stage has its own ask threshold (stage 1 = stage1_threshold)
             stage_threshold = {
                 2: config.stage2_threshold,
                 3: config.stage3_threshold,
-            }.get(signal.stage, config.trigger_threshold)
+            }.get(signal.stage, config.stage1_threshold)
             if signal.best_ask + 1e-9 < stage_threshold:
                 return RiskDecision(
                     False,

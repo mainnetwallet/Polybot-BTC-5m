@@ -167,7 +167,7 @@ def test_reset_all_wipes_every_table_and_recreates_accounts():
     with session_scope() as session:
         _fill(portfolio, session, "paper", "market-wipe")
         session.add(LogEntry(level="INFO", category="system", message="x"))
-        session.add(BotSetting(key="trigger_threshold", value=0.9))
+        session.add(BotSetting(key="stage1_threshold", value=0.9))
         portfolio.reset_daily(session, "paper")
 
     with session_scope() as session:

@@ -526,7 +526,7 @@ export function Settings() {
                 <div className="mb-4 break-inside-avoid rounded-xl border border-sky/15 bg-sky/[0.04] px-4 py-2.5 text-[10.5px] leading-relaxed text-sky/80">
                   The trigger is an activation threshold. The submitted price is always the live ask, capped by the max
                   execution price
-                  {snapshot ? ` (trigger currently $${snapshot.strategy.trigger_threshold.toFixed(2)})` : ""}. It is never
+                  {snapshot ? ` (stage 1 threshold currently $${snapshot.strategy.stage1_threshold.toFixed(2)})` : ""}. It is never
                   placed as a limit.
                 </div>
               ) : null}

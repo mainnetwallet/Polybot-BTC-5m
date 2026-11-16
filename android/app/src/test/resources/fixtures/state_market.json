@@ -54,7 +54,7 @@
   "up_armed": true,
   "down_armed": false,
   "reason": "trigger",
-  "trigger_threshold": 0.85,
+  "stage1_threshold": 0.85,
   "stage1_seconds": 90,
   "stage1_enabled": true,
   "stage2_enabled": true,
@@ -147,7 +147,7 @@
   "balance": null
  },
  "config": {
-  "trigger_threshold": 0.85,
+  "stage1_threshold": 0.85,
   "stage1_seconds": 90,
   "stage1_enabled": true,
   "stage2_enabled": true,

@@ -64,7 +64,10 @@ class Settings(BaseSettings):
     )
 
     # --- strategy -------------------------------------------------------
-    trigger_threshold: float = 0.85
+    # TRIGGER_THRESHOLD is the old env name and is still read.
+    stage1_threshold: float = Field(
+        default=0.85, validation_alias=AliasChoices("STAGE1_THRESHOLD", "TRIGGER_THRESHOLD")
+    )
     # FINAL_WINDOW_SECONDS is the old env name and is still read.
     stage1_seconds: int = Field(
         default=90, validation_alias=AliasChoices("STAGE1_SECONDS", "FINAL_WINDOW_SECONDS")

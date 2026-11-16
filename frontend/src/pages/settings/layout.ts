@@ -38,7 +38,7 @@ export const TABS: TabSpec[] = [
       {
         title: "Ask triggers",
         description: "Best ask at or above this decimal activates the stage.",
-        keys: ["trigger_threshold", "stage2_threshold", "stage3_threshold"],
+        keys: ["stage1_threshold", "stage2_threshold", "stage3_threshold"],
       },
       {
         title: "BTC price-gap filters",

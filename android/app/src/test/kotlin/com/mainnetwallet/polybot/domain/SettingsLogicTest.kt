@@ -59,31 +59,31 @@ class SettingsLogicTest {
     @Test fun wholeNumbersShowWithoutADecimalPoint() {
         val draft = fresh()
         assertEquals("90", draft["stage1_seconds"])
-        assertEquals("0.85", draft["trigger_threshold"])
+        assertEquals("0.85", draft["stage1_threshold"])
         assertEquals("true", draft["stage1_enabled"])
         assertEquals("one_per_market", draft["duplicate_policy"])
     }
 
     @Test fun onlyChangedKeysAreSentAndTyped() {
-        val draft = fresh() + mapOf("trigger_threshold" to "0.9", "stage1_seconds" to "75", "stage1_enabled" to "false", "conflict_policy" to "down_first")
+        val draft = fresh() + mapOf("stage1_threshold" to "0.9", "stage1_seconds" to "75", "stage1_enabled" to "false", "conflict_policy" to "down_first")
         val diff = SettingsLogic.diff(draft, saved)
-        assertEquals(setOf("trigger_threshold", "stage1_seconds", "stage1_enabled", "conflict_policy"), diff.keys)
-        assertEquals(JsonPrimitive(0.9), diff["trigger_threshold"])
+        assertEquals(setOf("stage1_threshold", "stage1_seconds", "stage1_enabled", "conflict_policy"), diff.keys)
+        assertEquals(JsonPrimitive(0.9), diff["stage1_threshold"])
         assertEquals(JsonPrimitive(75L), diff["stage1_seconds"]) // an integer field is sent as an integer
         assertEquals(JsonPrimitive(false), diff["stage1_enabled"])
         assertEquals(JsonPrimitive("down_first"), diff["conflict_policy"])
     }
 
     @Test fun sameNumberWithDifferentFormattingIsNotAChange() {
-        val draft = fresh() + mapOf("trigger_threshold" to "0.850", "stage1_seconds" to "90.0")
+        val draft = fresh() + mapOf("stage1_threshold" to "0.850", "stage1_seconds" to "90.0")
         assertTrue(SettingsLogic.dirtyKeys(draft, saved).isEmpty())
     }
 
     @Test fun rangesMirrorTheServerSchema() {
         fun error(key: String, value: String) = SettingsLogic.validate(fresh() + (key to value), saved)[key]
-        assertEquals("Must be at least 0.01.", error("trigger_threshold", "0"))
-        assertEquals("Must be at most 0.999.", error("trigger_threshold", "1"))
-        assertNull(error("trigger_threshold", "0.95"))
+        assertEquals("Must be at least 0.01.", error("stage1_threshold", "0"))
+        assertEquals("Must be at most 0.999.", error("stage1_threshold", "1"))
+        assertNull(error("stage1_threshold", "0.95"))
         assertEquals("Must be at most 300.", error("stage1_seconds", "301"))
         assertEquals("Must be at least 1.", error("stage1_seconds", "0"))
         assertEquals("Whole numbers only.", error("stage1_seconds", "45.5"))
@@ -111,12 +111,12 @@ class SettingsLogicTest {
         assertEquals("Mid tier border must not be higher than the high tier border.", errors("stage0_mid_from_ask" to "0.9")["stage0_mid_from_ask"])
         assertEquals("High sell price must be higher than the stage 1 cheap-buy limit.", errors("stage1_sell_price_high" to "0.5")["stage1_sell_price_high"])
         assertEquals("Sell price must be higher than the stage 2 ask trigger.", errors("stage2_sell_price" to "0.5")["stage2_sell_price"])
-        assertEquals("Must be at least the trigger and the stage 2/3 ask triggers.", errors("max_execution_price" to "0.5")["max_execution_price"])
+        assertEquals("Must be at least the stage 1, 2 and 3 ask triggers.", errors("max_execution_price" to "0.5")["max_execution_price"])
     }
 
     @Test fun aStoredValueOutsideItsRangeNeverBlocksAnUnrelatedSave() {
         val odd = saved + ("stale_data_max_age_ms" to JsonPrimitive(50))
-        val draft = SettingsLogic.draftFrom(odd) + ("trigger_threshold" to "0.9")
+        val draft = SettingsLogic.draftFrom(odd) + ("stage1_threshold" to "0.9")
         assertTrue(SettingsLogic.validate(draft, odd).isEmpty())
     }
 

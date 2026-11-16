@@ -56,7 +56,7 @@ data class StrategyState(
     @SerialName("up_armed") val upArmed: Boolean = false,
     @SerialName("down_armed") val downArmed: Boolean = false,
     val reason: String = "",
-    @SerialName("trigger_threshold") val triggerThreshold: Double = 0.0,
+    @SerialName("stage1_threshold") val stage1Threshold: Double = 0.0,
     @SerialName("stage1_seconds") val stage1Seconds: Double = 0.0,
     @SerialName("stage1_enabled") val stage1Enabled: Boolean = false,
     @SerialName("stage2_enabled") val stage2Enabled: Boolean = false,

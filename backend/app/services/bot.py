@@ -1715,7 +1715,7 @@ class TradingBot:
                         "reason": "no_market",
                     }
                 ),
-                "trigger_threshold": config.trigger_threshold,
+                "stage1_threshold": config.stage1_threshold,
                 "stage1_seconds": config.stage1_seconds,
                 "stage1_enabled": config.stage1_enabled,
                 "stage2_enabled": config.stage2_enabled,

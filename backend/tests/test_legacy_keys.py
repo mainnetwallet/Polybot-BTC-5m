@@ -1,4 +1,4 @@
-"""The old `final_window_seconds` / FINAL_WINDOW_SECONDS names keep working after the rename to stage1."""
+"""The old names (final_window_seconds, trigger_threshold) keep working after the rename to stage1."""
 
 from __future__ import annotations
 
@@ -53,4 +53,33 @@ def test_new_key_wins_over_old_key():
         service.load(session)
         assert service.get().stage1_seconds == 100
         assert session.get(BotSetting, "final_window_seconds") is None
+        session.query(BotSetting).delete()
+
+
+# ----------------------------------------------- trigger_threshold -> stage1_threshold
+def test_threshold_new_and_old_env_names(monkeypatch):
+    monkeypatch.delenv("TRIGGER_THRESHOLD", raising=False)
+    monkeypatch.setenv("STAGE1_THRESHOLD", "0.81")
+    assert Settings().stage1_threshold == 0.81
+    monkeypatch.delenv("STAGE1_THRESHOLD")
+    monkeypatch.setenv("TRIGGER_THRESHOLD", "0.82")
+    assert Settings().stage1_threshold == 0.82
+    monkeypatch.delenv("TRIGGER_THRESHOLD")
+    assert Settings(_env_file=None).stage1_threshold == 0.85
+    assert Settings(stage1_threshold=0.83).stage1_threshold == 0.83
+
+
+def test_saved_override_under_old_threshold_key_is_moved():
+    service = SettingsService(Settings())
+    with session_scope() as session:
+        session.query(BotSetting).delete()
+        session.add(BotSetting(key="trigger_threshold", value=0.91))
+        session.add(BotSetting(key="final_window_seconds", value=95))
+    with session_scope() as session:
+        service.load(session)
+        runtime = service.get()
+        assert (runtime.stage1_threshold, runtime.stage1_seconds) == (0.91, 95)
+        assert session.get(BotSetting, "trigger_threshold") is None
+        assert session.get(BotSetting, "stage1_threshold").value == 0.91
+        service.reset(session)
         session.query(BotSetting).delete()

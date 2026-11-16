@@ -49,7 +49,7 @@ class ResetServerRequest(BaseModel):
 
 
 class SettingsPatch(BaseModel):
-    trigger_threshold: float | None = Field(default=None, ge=0.01, le=0.999)
+    stage1_threshold: float | None = Field(default=None, ge=0.01, le=0.999)
     stage1_seconds: int | None = Field(default=None, ge=1, le=300)
     stage1_enabled: bool | None = None
     stage2_enabled: bool | None = None

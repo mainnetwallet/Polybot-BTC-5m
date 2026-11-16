@@ -47,7 +47,7 @@ class MergeTest {
         assertEquals("down_armed", merged.strategy.reason)
         // not part of the tick: untouched
         assertEquals(snapshot.strategy.name, merged.strategy.name)
-        assertEquals(snapshot.strategy.triggerThreshold, merged.strategy.triggerThreshold, 0.0)
+        assertEquals(snapshot.strategy.stage1Threshold, merged.strategy.stage1Threshold, 0.0)
         assertEquals(snapshot.strategy.stage0MinAsk, merged.strategy.stage0MinAsk, 0.0)
     }
 

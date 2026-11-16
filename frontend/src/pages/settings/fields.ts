@@ -14,8 +14,8 @@ export interface FieldSpec {
 
 export const FIELDS: FieldSpec[] = [
   {
-    key: "trigger_threshold",
-    label: "Trigger threshold",
+    key: "stage1_threshold",
+    label: "Stage 1: ask trigger",
     hint: "Ask at or above this decimal fires a marketable BUY. It is never used as a limit price.",
     kind: "number",
     step: "0.01",
@@ -351,7 +351,7 @@ export const FIELDS: FieldSpec[] = [
   {
     key: "max_execution_price",
     label: "Max execution price",
-    hint: "Hard ceiling for the live ask. Must be at least the trigger.",
+    hint: "Hard ceiling for the live ask. Must be at least the stage 1 ask trigger.",
     kind: "number",
     step: "0.001",
     min: "0.01",

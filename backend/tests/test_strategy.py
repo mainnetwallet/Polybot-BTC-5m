@@ -84,7 +84,7 @@ def test_expired_market_never_triggers():
 
 
 def test_threshold_is_configurable():
-    result = evaluate(30, up=0.70, down=0.10, trigger_threshold=0.70)
+    result = evaluate(30, up=0.70, down=0.10, stage1_threshold=0.70)
     assert result.signals[0].side == "UP"
 
 

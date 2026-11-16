@@ -291,9 +291,9 @@ class ApiClientTest {
     @Test fun extractDetailHandlesStringAndValidationShapes() {
         assertEquals("nope", ApiClient.extractDetail("""{"detail":"nope"}"""))
         assertEquals(
-            "trigger_threshold: Input should be greater than or equal to 0.01",
+            "stage1_threshold: Input should be greater than or equal to 0.01",
             ApiClient.extractDetail(
-                """{"detail":[{"loc":["body","trigger_threshold"],"msg":"Input should be greater than or equal to 0.01","type":"x"}]}""",
+                """{"detail":[{"loc":["body","stage1_threshold"],"msg":"Input should be greater than or equal to 0.01","type":"x"}]}""",
             ),
         )
         assertNull(ApiClient.extractDetail("not json"))

@@ -50,7 +50,7 @@ class ModelsParsingTest {
         assertTrue(s.strategy.inWindow)
         assertTrue(s.strategy.upArmed)
         assertFalse(s.strategy.downArmed)
-        assertEquals(0.85, s.strategy.triggerThreshold, 1e-9)
+        assertEquals(0.85, s.strategy.stage1Threshold, 1e-9)
         assertEquals(90.0, s.strategy.stage1Seconds, 1e-9)
         assertEquals(0.69, s.strategy.stage0MinAsk, 1e-9)
         assertEquals("one_per_market", s.strategy.duplicatePolicy)

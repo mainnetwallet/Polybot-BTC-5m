@@ -254,13 +254,13 @@ private fun stageSpecs(snap: StrategyView, remaining: Double?): List<StageSpec> 
             enabled = s.stage1Enabled,
             active = s.stage1Enabled && open1,
             highlights = listOf(
-                "Entry ask" to "≥ " + Fmt.centsShort(s.triggerThreshold),
+                "Entry ask" to "≥ " + Fmt.centsShort(s.stage1Threshold),
                 "Take-profit" to if (s.stage1SellEnabled) pct(s.stage1TakeProfitPct) else "off",
                 "Stop-loss" to pct(s.stage1StopLossPct),
             ),
             entry = listOf(
                 "Window" to "last ${secs(s.stage1Seconds)}",
-                "Ask trigger" to Fmt.cents(s.triggerThreshold),
+                "Ask trigger" to Fmt.cents(s.stage1Threshold),
                 "Min price gap" to usdGap(cfg(snap, "min_price_gap_usd")),
             ),
             exit = listOf(

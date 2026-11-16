@@ -12,7 +12,7 @@ Entries are staged. Each stage may place ONE buy per market:
   demands the BTC price gap (default $80) and the order manager sells the shares again once the
   best bid is the tier's take-profit percentage above the buy price (15 / 10 / 5 % by buy price, capped at 0.99).
 
-* stage 1: inside the stage 1, best_ask >= trigger_threshold (default 0.80).
+* stage 1: inside the stage 1, best_ask >= stage1_threshold (default 0.80).
   If the ask is not there yet the strategy keeps watching and fires the moment it
   gets there, any time before the market ends.
 * stage 2: stage3_seconds (default 30) < remaining <= stage2_seconds (default 50) and
@@ -46,7 +46,7 @@ def datetime_to_epoch_ms(value: datetime) -> int:
 def stage_plan(config: RuntimeSettings) -> list[tuple[int, float, float]]:
     """(stage, max remaining seconds, ask threshold) for every entry stage that is switched on."""
     plan = [
-        (1, float(config.stage1_seconds), config.trigger_threshold),
+        (1, float(config.stage1_seconds), config.stage1_threshold),
         (2, float(config.stage2_seconds), config.stage2_threshold),
         (3, float(config.stage3_seconds), config.stage3_threshold),
     ]
@@ -77,8 +77,8 @@ class Stage1Strategy:
         down = books.get(market.down_token_id)
         up_ask = up.best_ask if up else None
         down_ask = down.best_ask if down else None
-        up_armed = up_ask is not None and up_ask + 1e-9 >= config.trigger_threshold
-        down_armed = down_ask is not None and down_ask + 1e-9 >= config.trigger_threshold
+        up_armed = up_ask is not None and up_ask + 1e-9 >= config.stage1_threshold
+        down_armed = down_ask is not None and down_ask + 1e-9 >= config.stage1_threshold
 
         if now_ms < start_ms:
             return StrategyEvaluation(

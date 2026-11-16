@@ -251,7 +251,7 @@ def build_router(
             "series_slug": settings.series_slug,
             "clob_ws_url": settings.clob_ws_url,
             "strategy": "FINAL_60_SECONDS_MARKET_BUY",
-            "trigger_threshold": runtime.get().trigger_threshold,
+            "stage1_threshold": runtime.get().stage1_threshold,
             "stage1_seconds": runtime.get().stage1_seconds,
         }
 

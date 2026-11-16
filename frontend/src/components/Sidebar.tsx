@@ -80,9 +80,9 @@ export function Sidebar({ page, onNavigate }: SidebarProps) {
             <span className="mono text-slate-400">{snapshot ? `${snapshot.strategy.stage1_seconds}s` : "—"}</span>
           </div>
           <div className="flex items-center justify-between">
-            <span>Trigger ask</span>
+            <span>Stage 1 ask</span>
             <span className="mono text-slate-400">
-              {snapshot ? snapshot.strategy.trigger_threshold.toFixed(2) : "—"}
+              {snapshot ? snapshot.strategy.stage1_threshold.toFixed(2) : "—"}
             </span>
           </div>
         </div>

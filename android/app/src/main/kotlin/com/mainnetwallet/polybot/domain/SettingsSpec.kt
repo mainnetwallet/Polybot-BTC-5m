@@ -30,7 +30,7 @@ object SettingsSpec {
     private val price = num(0.01, 0.999)
 
     val fields: List<SettingField> = listOf(
-        SettingField("trigger_threshold", "Trigger threshold", "Ask at or above this decimal fires a marketable BUY. Never used as a limit price.", price),
+        SettingField("stage1_threshold", "Stage 1 ask trigger", "Ask at or above this decimal fires a marketable BUY. Never used as a limit price.", price),
         SettingField("stage1_seconds", "Stage 1", "Seconds before expiry in which trading is enabled.", num(1.0, 300.0, true, "s")),
         SettingField("duplicate_policy", "Duplicate policy", "Controls repeat entries for the same market or side.", SettingKind.Choice(listOf(
             "one_per_market" to "One order per market", "one_per_side" to "One per side", "allow" to "Allow duplicates"))),
@@ -110,7 +110,7 @@ object SettingsSpec {
     val sections: List<SettingSection> = listOf(
         SettingSection("entry", "Entry", listOf(
             SettingGroup("Stage 1 entry", "When stages 1 to 3 fire a marketable BUY.",
-                listOf("stage1_seconds", "trigger_threshold")),
+                listOf("stage1_seconds", "stage1_threshold")),
             SettingGroup("Order handling", null, listOf("duplicate_policy", "conflict_policy")),
         )),
         SettingSection("stage0", "Stage 0", listOf(
@@ -201,9 +201,9 @@ object SettingsLogic {
         Triple(listOf("stage2_sell_price", "stage2_threshold"),
             { d -> d.getValue("stage2_sell_price") <= d.getValue("stage2_threshold") },
             "Sell price must be higher than the stage 2 ask trigger."),
-        Triple(listOf("max_execution_price", "trigger_threshold", "stage2_threshold", "stage3_threshold"),
-            { d -> d.getValue("max_execution_price") < maxOf(d.getValue("trigger_threshold"), d.getValue("stage2_threshold"), d.getValue("stage3_threshold")) },
-            "Must be at least the trigger and the stage 2/3 ask triggers."),
+        Triple(listOf("max_execution_price", "stage1_threshold", "stage2_threshold", "stage3_threshold"),
+            { d -> d.getValue("max_execution_price") < maxOf(d.getValue("stage1_threshold"), d.getValue("stage2_threshold"), d.getValue("stage3_threshold")) },
+            "Must be at least the stage 1, 2 and 3 ask triggers."),
     )
 
     /**

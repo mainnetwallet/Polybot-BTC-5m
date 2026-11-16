@@ -86,7 +86,7 @@ function PhaseTimeline() {
 
       <div className="mt-5 space-y-2 border-t hairline pt-4">
         {[
-          `Threshold $${snapshot.strategy.trigger_threshold.toFixed(2)} is a trigger, never a limit price.`,
+          `Threshold $${snapshot.strategy.stage1_threshold.toFixed(2)} is a trigger, never a limit price.`,
           "Order price is the live best ask, bounded by max execution price.",
           "Stale quotes, expired markets and thin liquidity are blocked before submission.",
           "Duplicate and conflict policies decide when both sides qualify.",
@@ -146,7 +146,7 @@ function ArmMeter({
 function LiveEvaluation() {
   const { snapshot } = useBot();
   const strategy = snapshot?.strategy;
-  const threshold = strategy?.trigger_threshold ?? null;
+  const threshold = strategy?.stage1_threshold ?? null;
   const config = snapshot?.config ?? {};
   const armedSide = strategy?.up_armed ? "UP" : strategy?.down_armed ? "DOWN" : null;
 
@@ -268,7 +268,7 @@ function PolicyPanel() {
   const strategy = snapshot?.strategy;
   const config = snapshot?.config ?? {};
   const rows: Array<[string, string]> = [
-    ["Trigger threshold", fmtCents(strategy?.trigger_threshold ?? null)],
+    ["Stage 1 threshold", fmtCents(strategy?.stage1_threshold ?? null)],
     ["Stage 1", strategy ? `${strategy.stage1_seconds}s` : "—"],
     [
       "Stages on (1 / 2 / 3)",

@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from app.config.settings import Settings
 
 OVERRIDABLE_KEYS = (
-    "trigger_threshold",
+    "stage1_threshold",
     "stage1_seconds",
     "stage1_enabled",
     "stage2_enabled",
@@ -76,7 +76,7 @@ STAGE0_MAX_TAKE_PROFIT_PRICE = 0.99
 
 
 class RuntimeSettings(BaseModel):
-    trigger_threshold: float = Field(ge=0.01, le=0.999)
+    stage1_threshold: float = Field(ge=0.01, le=0.999)
     stage1_seconds: int = Field(ge=1, le=300)
     # Master switch per entry stage (stage 0: stage0_enabled). Off = no buys, no take-profit, no stop-loss.
     stage1_enabled: bool = True
@@ -166,8 +166,8 @@ class RuntimeSettings(BaseModel):
             raise ValueError("duplicate_policy must be one_per_market, one_per_side or allow")
         if self.conflict_policy not in {"up_first", "down_first", "highest_ask", "block_both"}:
             raise ValueError("conflict_policy must be up_first, down_first, highest_ask or block_both")
-        if self.max_execution_price < self.trigger_threshold:
-            raise ValueError("max_execution_price must be >= trigger_threshold")
+        if self.max_execution_price < self.stage1_threshold:
+            raise ValueError("max_execution_price must be >= stage1_threshold")
         if self.max_execution_price < max(self.stage2_threshold, self.stage3_threshold):
             raise ValueError("max_execution_price must be >= the stage 2/3 thresholds")
         # Stage windows follow each other: stage 1 starts at stage1_seconds and ends where stage 2
@@ -353,7 +353,7 @@ class RuntimeSettings(BaseModel):
 
 
 # Override keys renamed over time: old DB key -> current key.
-LEGACY_KEYS = {"final_window_seconds": "stage1_seconds"}
+LEGACY_KEYS = {"final_window_seconds": "stage1_seconds", "trigger_threshold": "stage1_threshold"}
 
 
 class SettingsService:
