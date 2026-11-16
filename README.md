@@ -112,7 +112,7 @@ Most used keys:
 | `MAX_OPEN_POSITIONS` | `1` | Per-market position cap |
 | `DUPLICATE_POLICY` | `one_per_market` | or `one_per_side`, `allow` |
 | `CONFLICT_POLICY` | `up_first` | or `down_first`, `highest_ask`, `block_both` |
-| `PAPER_STARTING_BALANCE` / `PAPER_FILL_RATIO` / `PAPER_SLIPPAGE_BPS` / `PAPER_FEE_RATE` | `10.0` / `1.0` / `0` / `0.07` | Paper simulation |
+| `PAPER_STARTING_BALANCE` / `PAPER_FILL_RATIO` / `PAPER_SLIPPAGE_BPS` / `PAPER_FEE_RATE` | `100.0` / `1.0` / `0` / `0.07` | Paper simulation |
 | `API_TOKEN`, `ADMIN_USERNAME`, `ADMIN_PASSWORD` | empty / `admin` / empty | API secret and dashboard login (empty password = login disabled) |
 
 Settings page overrides (stored in SQLite): trigger, stage 1, max price, trade amount, daily loss/target, stale age, duplicate/conflict policy, paper slippage/fee, trades per day, open positions. Secrets and live switches are environment-only.

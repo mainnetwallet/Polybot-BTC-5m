@@ -173,7 +173,7 @@ class Settings(BaseSettings):
     kill_switch: bool = False
 
     # --- paper ----------------------------------------------------------
-    paper_starting_balance: float = 10.0
+    paper_starting_balance: float = 100.0
     paper_fill_ratio: float = 1.0
     paper_slippage_bps: float = 0.0
     paper_fee_rate: float = 0.07
