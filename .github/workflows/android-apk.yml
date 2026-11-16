@@ -52,7 +52,7 @@ jobs:
       # Caches the Gradle distribution, dependencies and the build cache (compiled Kotlin/resources).
       # Only runs on main write the cache; pull requests and other branches read it.
       - name: Set up Gradle (cache)
-        uses: gradle/actions/setup-gradle@v6
+        uses: gradle/actions/setup-gradle@v5
 
       - name: Make sure the Android SDK has what the app needs
         run: |
@@ -133,7 +133,7 @@ jobs:
           java-version: "17"
 
       - name: Set up Gradle (cache)
-        uses: gradle/actions/setup-gradle@v6
+        uses: gradle/actions/setup-gradle@v5
 
       - name: Make sure the Android SDK has what the app needs
         run: |
