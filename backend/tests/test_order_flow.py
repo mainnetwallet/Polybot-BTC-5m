@@ -181,9 +181,10 @@ async def test_expired_market_blocks_execution():
 
 
 async def test_max_execution_price_blocks():
-    stack = build_stack(make_config(stage1_max_ask=1.0))
+    # an ask of .99+ no longer reaches the risk manager in stage 1 (strategy blocks it), so lower the cap instead
+    stack = build_stack(make_config(stage1_max_ask=1.0, max_execution_price=0.90))
     market = make_market(remaining=55)
-    books = books_for(market, up_ask=0.995, down_ask=0.005)
+    books = books_for(market, up_ask=0.93, down_ask=0.07)
 
     _, results = await _submit(stack, market, books)
 

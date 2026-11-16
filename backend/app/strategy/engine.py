@@ -16,7 +16,9 @@ Entries are staged. Each stage may place ONE buy per market:
 
 * stage 1: inside the stage 1, best_ask >= stage1_threshold (default 0.80).
   If the ask is not there yet the strategy keeps watching and fires the moment it
-  gets there, any time before the market ends.
+  gets there, any time before the market ends. Once either side's best ask reaches 0.99 inside the
+  stage 1 window without a stage 1 buy, stage 1 does not buy in that market any more (even if the
+  ask drops back and the rules are met again). Stages 0, 2 and 3 are unaffected.
 * stage 2: stage3_seconds (default 30) < remaining <= stage2_seconds (default 50) and
   best_ask >= stage2_threshold (default 0.88). From stage3_seconds on stage 3 takes over.
 * stage 3: remaining <= stage3_seconds (default 30) and best_ask >= stage3_threshold
@@ -68,11 +70,17 @@ def stage0_active(config: RuntimeSettings, remaining: float) -> bool:
 STAGE0_BLOCK_ASK = 0.99
 _STAGE0_BLOCKED_KEEP = 64  # remembered markets; older ones are long expired
 
+# Once either side's best ask reaches this inside the stage 1 window, stage 1 stops buying in that market.
+STAGE1_BLOCK_ASK = 0.99
+_STAGE1_BLOCKED_KEEP = 64
+
 
 class Stage1Strategy:
     def __init__(self) -> None:
         # markets where an ask hit stage0_block_ask inside the stage 0 window (stage 0 buys stay off for them)
         self._stage0_blocked: dict[str, None] = {}
+        # markets where an ask hit STAGE1_BLOCK_ASK inside the stage 1 window (stage 1 buys stay off for them)
+        self._stage1_blocked: dict[str, None] = {}
 
     def stage0_blocked(self, market_id: str) -> bool:
         return market_id in self._stage0_blocked
@@ -81,6 +89,14 @@ class Stage1Strategy:
         self._stage0_blocked[market_id] = None
         while len(self._stage0_blocked) > _STAGE0_BLOCKED_KEEP:
             self._stage0_blocked.pop(next(iter(self._stage0_blocked)))
+
+    def stage1_blocked(self, market_id: str) -> bool:
+        return market_id in self._stage1_blocked
+
+    def _block_stage1(self, market_id: str) -> None:
+        self._stage1_blocked[market_id] = None
+        while len(self._stage1_blocked) > _STAGE1_BLOCKED_KEEP:
+            self._stage1_blocked.pop(next(iter(self._stage1_blocked)))
 
     def evaluate(
         self,
@@ -143,8 +159,17 @@ class Stage1Strategy:
                         stage=0,
                     )
                 )
+        in_stage1 = (
+            config.stage_enabled(1)
+            and config.stage_end_seconds(1) < remaining <= config.stage1_seconds
+        )
+        if in_stage1 and not self.stage1_blocked(market.market_id):
+            if any(a is not None and a + 1e-9 >= STAGE1_BLOCK_ASK for a in (up_ask, down_ask)):
+                self._block_stage1(market.market_id)  # an ask touched .99: no stage 1 buy in this market any more
         for stage, max_remaining, threshold in stage_plan(config):
             if remaining > max_remaining:
+                continue
+            if stage == 1 and self.stage1_blocked(market.market_id):
                 continue
             if stage == 2 and remaining <= config.stage_end_seconds(2):
                 continue  # stage 2 ends where stage 3 begins
@@ -177,4 +202,4 @@ class Stage1Strategy:
         )
 
 
-__all__ = ["STAGE0_BLOCK_ASK", "Stage1Strategy", "datetime_to_epoch_ms", "stage0_active", "stage_plan"]
+__all__ = ["STAGE0_BLOCK_ASK", "STAGE1_BLOCK_ASK", "Stage1Strategy", "datetime_to_epoch_ms", "stage0_active", "stage_plan"]

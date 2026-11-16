@@ -162,3 +162,53 @@ def test_stage_start_times_must_fall():
         make_config(stage1_seconds=60, stage2_seconds=70)
     with pytest.raises(Exception, match="stage3_seconds"):
         make_config(stage2_seconds=40, stage3_seconds=40)
+
+
+# ------------------------- an ask of .99 inside the stage 1 window stops stage 1 buys in that market
+def _stage1_run(strategy, market, config, remaining, up, down):
+    end_ms = datetime_to_epoch_ms(market.window_end)
+    result = strategy.evaluate(market, books_for(market, up, down), end_ms - int(remaining * 1000), config)
+    return [s for s in result.signals if s.stage == 1]
+
+
+def test_ask_touching_99_in_stage1_blocks_stage1_for_the_rest_of_the_market():
+    market = make_market(remaining=1000)
+    config = make_config()
+    strategy = Stage1Strategy()
+    # 0.79 -> no buy yet; then .99 touched without any stage 1 buy; afterwards the rules are met but stage 1 stays off
+    assert _stage1_run(strategy, market, config, 58, 0.79, 0.21) == []
+    assert _stage1_run(strategy, market, config, 56, 0.99, 0.01) == []  # the .99 tick itself does not buy either
+    assert strategy.stage1_blocked(market.market_id)
+    assert _stage1_run(strategy, market, config, 55, 0.85, 0.15) == []  # back to .85: still blocked
+    assert _stage1_run(strategy, market, config, 54, 0.15, 0.85) == []  # other side too
+
+
+def test_stage1_buys_normally_below_99_and_block_is_per_market():
+    market = make_market(remaining=1000)
+    config = make_config()
+    strategy = Stage1Strategy()
+    assert [s.side for s in _stage1_run(strategy, market, config, 58, 0.85, 0.15)] == ["UP"]
+    assert not strategy.stage1_blocked(market.market_id)
+    _stage1_run(strategy, market, config, 56, 0.99, 0.01)
+    assert strategy.stage1_blocked(market.market_id)
+    assert not strategy.stage1_blocked("another-market")
+
+
+def test_99_before_the_stage1_window_does_not_block_stage1():
+    market = make_market(remaining=1000)
+    config = make_config()
+    strategy = Stage1Strategy()
+    end_ms = datetime_to_epoch_ms(market.window_end)
+    strategy.evaluate(market, books_for(market, 0.99, 0.01), end_ms - 100_000, config)  # remaining 100 > 60
+    assert not strategy.stage1_blocked(market.market_id)
+    assert [s.side for s in _stage1_run(strategy, market, config, 58, 0.85, 0.15)] == ["UP"]
+
+
+def test_stage1_block_does_not_touch_stage2_and_stage3():
+    market = make_market(remaining=1000)
+    config = make_config()
+    strategy = Stage1Strategy()
+    end_ms = datetime_to_epoch_ms(market.window_end)
+    strategy.evaluate(market, books_for(market, 0.99, 0.01), end_ms - 58_000, config)
+    result = strategy.evaluate(market, books_for(market, 0.95, 0.05), end_ms - 20_000, config)
+    assert 3 in [s.stage for s in result.signals]
