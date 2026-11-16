@@ -1,15 +1,18 @@
 package com.mainnetwallet.polybot.ui.overview
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -40,7 +43,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -140,6 +147,56 @@ private fun MiniStat(
 }
 
 /**
+ * Countdown ring for the hero card: the arc is the share of the window that is left, with the state, the whole
+ * seconds left and a caption inside. It has no size of its own: it fills what the caller gives it (a square),
+ * and the text scales with that size.
+ */
+@Composable
+private fun HeroRing(
+    fraction: Float,
+    remainingSeconds: Double,
+    label: String,
+    color: Color,
+    modifier: Modifier = Modifier,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val track = scheme.surfaceVariant
+    val seconds = Math.ceil(Math.max(0.0, remainingSeconds)).toInt()
+    BoxWithConstraints(modifier, contentAlignment = Alignment.Center) {
+        val d = maxWidth.value
+        Canvas(Modifier.fillMaxSize()) {
+            val stroke = (d * 0.07f).dp.toPx()
+            val inset = stroke / 2
+            val arc = Size(size.width - stroke, size.height - stroke)
+            drawArc(track, 0f, 360f, false, Offset(inset, inset), arc, style = Stroke(stroke))
+            if (fraction > 0f) {
+                drawArc(color, -90f, 360f * fraction, false, Offset(inset, inset), arc, style = Stroke(stroke, cap = StrokeCap.Round))
+            }
+        }
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                label.uppercase(),
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = (d * 0.105f).sp, letterSpacing = 0.6.sp),
+                color = scheme.onSurfaceVariant,
+                maxLines = 1,
+            )
+            Text(
+                seconds.toString(),
+                style = Mono.large.copy(fontSize = (d * 0.30f).sp, fontWeight = FontWeight.Light),
+                color = color,
+                maxLines = 1,
+            )
+            Text(
+                "SEC LEFT",
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = (d * 0.085f).sp, letterSpacing = 0.5.sp),
+                color = scheme.onSurfaceVariant,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+/**
  * Hero card: the 5-minute window countdown, the BTC price and its gap to the price to beat, and the account
  * numbers (balance, PnL, trades) in one place. The clock follows the server, not the phone.
  * The card tints amber inside the stage 1.
@@ -185,72 +242,88 @@ fun HeroCard(
     ) {
         Box(Modifier.background(Brush.verticalGradient(listOf(accent.copy(alpha = 0.16f), Color.Transparent)))) {
             Column(Modifier.padding(horizontal = Space.md, vertical = Space.sm), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 20.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(Space.sm),
-                ) {
-                    Label(if (market == null) "Waiting for the next window" else "Closes in", Modifier.weight(1f))
-                    if (account.positionsAwaitingSettlement > 0) {
-                        val redeem = if (account.pendingRedeems > 0) " \u00B7 ${account.pendingRedeems} redeem" else ""
-                        Pill("${account.positionsAwaitingSettlement} settling$redeem", scheme.onSurfaceVariant, scheme.surfaceVariant)
-                    }
-                    if (market != null) {
-                        if (inWindow) {
-                            Pill("STAGE 1", c.warn, c.warnContainer)
-                        } else {
-                            Pill("OBSERVING", scheme.onSecondaryContainer, scheme.secondaryContainer)
+                // The ring fills the free middle of the top block: as tall as the countdown + BTC rows, drawn behind them.
+                Box(Modifier.fillMaxWidth()) {
+                    if (market != null && remaining != null) {
+                        Box(Modifier.matchParentSize(), contentAlignment = Alignment.Center) {
+                            HeroRing(
+                                fraction = fraction,
+                                remainingSeconds = remaining,
+                                label = if (inWindow) "Stage 1" else "Waiting",
+                                color = accent,
+                                modifier = Modifier.fillMaxHeight().aspectRatio(1f),
+                            )
                         }
                     }
-                }
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            if (remaining == null) "--:--" else Fmt.clock(remaining),
-                            style = Mono.xlarge.copy(fontSize = 30.sp),
-                            color = if (market == null) scheme.onSurfaceVariant else accent,
-                            maxLines = 1,
-                        )
-                    }
-                    Column(horizontalAlignment = Alignment.End) {
-                        Label("BTC")
-                        Text(
-                            Fmt.usdGrouped(btc?.price),
-                            style = Mono.large.copy(fontSize = 19.sp),
-                            maxLines = 1,
-                        )
-                        val feedText: String
-                        val feedColor: Color
-                        when {
-                            btc == null || !btc.enabled -> {
-                                feedText = "off"
-                                feedColor = scheme.onSurfaceVariant
-                            }
-                            !btc.connected -> {
-                                feedText = "disconnected"
-                                feedColor = c.down
-                            }
-                            btc.stale -> {
-                                feedText = "stale"
-                                feedColor = c.warn
-                            }
-                            else -> {
-                                feedText = "live"
-                                feedColor = c.up
+                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 20.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(Space.sm),
+                    ) {
+                        Label(if (market == null) "Waiting for the next window" else "Closes in", Modifier.weight(1f))
+                        if (account.positionsAwaitingSettlement > 0) {
+                            val redeem = if (account.pendingRedeems > 0) " \u00B7 ${account.pendingRedeems} redeem" else ""
+                            Pill("${account.positionsAwaitingSettlement} settling$redeem", scheme.onSurfaceVariant, scheme.surfaceVariant)
+                        }
+                        if (market != null) {
+                            if (inWindow) {
+                                Pill("STAGE 1", c.warn, c.warnContainer)
+                            } else {
+                                Pill("OBSERVING", scheme.onSecondaryContainer, scheme.secondaryContainer)
                             }
                         }
-                        val ageMs = btc?.ageMs
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Dot(feedColor, size = 6.dp)
+                    }
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+                        Column(Modifier.weight(1f)) {
                             Text(
-                                if (ageMs == null) feedText else feedText + " " + Fmt.num(ageMs / 1000.0, 1) + " s",
-                                style = Mono.small,
-                                color = scheme.onSurfaceVariant,
+                                if (remaining == null) "--:--" else Fmt.clock(remaining),
+                                style = Mono.xlarge.copy(fontSize = 30.sp),
+                                color = if (market == null) scheme.onSurfaceVariant else accent,
                                 maxLines = 1,
                             )
                         }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Label("BTC")
+                            Text(
+                                Fmt.usdGrouped(btc?.price),
+                                style = Mono.large.copy(fontSize = 19.sp),
+                                maxLines = 1,
+                            )
+                            val feedText: String
+                            val feedColor: Color
+                            when {
+                                btc == null || !btc.enabled -> {
+                                    feedText = "off"
+                                    feedColor = scheme.onSurfaceVariant
+                                }
+                                !btc.connected -> {
+                                    feedText = "disconnected"
+                                    feedColor = c.down
+                                }
+                                btc.stale -> {
+                                    feedText = "stale"
+                                    feedColor = c.warn
+                                }
+                                else -> {
+                                    feedText = "live"
+                                    feedColor = c.up
+                                }
+                            }
+                            val ageMs = btc?.ageMs
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Dot(feedColor, size = 6.dp)
+                                Text(
+                                    if (ageMs == null) feedText else feedText + " " + Fmt.num(ageMs / 1000.0, 1) + " s",
+                                    style = Mono.small,
+                                    color = scheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                )
+                            }
+                        }
+                    }
                     }
                 }
                 Box(
