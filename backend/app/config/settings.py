@@ -84,7 +84,7 @@ class Settings(BaseSettings):
     stage3_seconds: int = 30
     stage3_threshold: float = 0.90
     max_execution_price: float = 0.98
-    trade_amount_usdc: float = 1.0
+    trade_amount_usdc: float = 50.0
     # Book age only resets on a websocket book event, so a stable price on a quiet book looks
     # "old" without being wrong, so too low a limit blocks stage 2/3 (armed by the clock) on a quiet
     # book. 2s: a signal is never built on a book older than that. Exits do not check book age.
@@ -102,57 +102,57 @@ class Settings(BaseSettings):
     # price to beat in the bought direction (UP: current >= beat + gap, DOWN: current <= beat - gap).
     # 0 disables the rule. With the rule on, missing/stale BTC data blocks the buy (fail closed).
     min_price_gap_usd: float = 35.0  # stage 1
-    # Each add-on stage can demand a bigger gap: stage 2 = 25 USD, stage 3 = 30 USD by default.
-    stage2_min_price_gap_usd: float = 25.0
-    stage3_min_price_gap_usd: float = 30.0
+    # Each add-on stage has its own gap: stage 2 = 30 USD, stage 3 = 25 USD by default.
+    stage2_min_price_gap_usd: float = 30.0
+    stage3_min_price_gap_usd: float = 25.0
     # Stage 0: an early, independent entry with its own take-profit SELL. While more than `stage0_end_seconds`
     # and at most `stage0_start_seconds` remain (independent of the stage 1), buy a side whose best ask is
     # <= stage0_max_ask and whose BTC price gap beyond the price to beat is >= stage0_min_price_gap_usd.
     # The shares are sold again as soon as the best bid is the tier's take-profit percentage above the buy price.
     stage0_enabled: bool = True
-    stage0_start_seconds: int = 200
+    stage0_start_seconds: int = 160
     stage0_end_seconds: int = 100
-    stage0_min_ask: float = 0.69
+    stage0_min_ask: float = 0.70
     # Max ask by buy price: a buy below stage0_high_buy_price goes up to stage0_early_max_ask (0.85); an expensive
-    # buy (ask >= stage0_high_buy_price, after stage0_high_buy_after_pct of the window) up to stage0_max_ask (0.94).
-    # Asks in between (0.85 to 0.90) do not buy.
-    stage0_max_ask: float = 0.94
+    # buy (ask >= stage0_high_buy_price, after stage0_high_buy_after_pct of the window) up to stage0_max_ask (0.89).
+    # Asks in between (0.85 to 0.89) do not buy.
+    stage0_max_ask: float = 0.89
     stage0_early_max_ask: float = 0.85
     stage0_min_price_gap_usd: float = 70.0
     # Take-profit for stage 0: sell once the best bid is this many percent ABOVE the average price paid per
     # share (cost * (1 + pct / 100), capped at 0.99). The percentage depends on what stage 0 paid per share:
-    #   cost <  stage0_mid_from_ask   -> stage0_take_profit_pct_low  (default 0.60-0.70 buy -> +15 %)
-    #   cost <  stage0_high_from_ask  -> stage0_take_profit_pct_mid  (default 0.70-0.80 buy -> +10 %)
-    #   otherwise                     -> stage0_take_profit_pct_high (default 0.80-0.85 buy -> +5 %)
+    #   cost <  stage0_mid_from_ask   -> stage0_take_profit_pct_low  (default 0.70-0.80 buy -> +10 %)
+    #   cost <  stage0_high_from_ask  -> stage0_take_profit_pct_mid  (default 0.80-0.85 buy -> +7 %)
+    #   otherwise                     -> stage0_take_profit_pct_high (default 0.85+ buy -> +5 %)
     # 0 = no take-profit for that tier: the shares are held to settlement.
-    stage0_mid_from_ask: float = 0.70
-    stage0_high_from_ask: float = 0.80
-    stage0_take_profit_pct_low: float = 15.0
-    stage0_take_profit_pct_mid: float = 10.0
+    stage0_mid_from_ask: float = 0.80
+    stage0_high_from_ask: float = 0.85
+    stage0_take_profit_pct_low: float = 10.0
+    stage0_take_profit_pct_mid: float = 7.0
     stage0_take_profit_pct_high: float = 5.0
     # Stage 1 take-profit: stage 1 shares are sold again as soon as the best bid reaches a price that
     # depends on what they cost per share:
-    #   cost <= stage1_sell_max_buy (0.86) -> cost * (1 + stage1_take_profit_pct / 100), i.e. +8 %
+    #   cost <= stage1_sell_max_buy (0.88) -> cost * (1 + stage1_take_profit_pct / 100), i.e. +8 %
     #                                         (capped at 0.99; 0 = no take-profit for these shares)
-    #   cost above it                      -> stage1_sell_price_high (0.99).
+    #   cost above it                      -> stage1_sell_price_high (0.98).
     stage1_sell_enabled: bool = True
-    stage1_sell_max_buy: float = 0.86
+    stage1_sell_max_buy: float = 0.88
     stage1_take_profit_pct: float = 8.0
-    stage1_sell_price_high: float = 0.99
+    stage1_sell_price_high: float = 0.98
     # Stage 2 take-profit: stage 2 shares are sold as soon as the best bid reaches stage2_sell_price.
     stage2_sell_enabled: bool = True
-    stage2_sell_price: float = 0.99
+    stage2_sell_price: float = 0.98
     # Stop-loss per entry stage, in percent of the average price paid per share: once the best bid
     # is at or below cost * (1 - pct / 100), that stage's own shares are sold at the market.
-    # 0 switches the stop-loss off for that stage. Stage 0 = 70 %, stage 1 = 30 %, stage 2 = 9 %, stage 3 = 5 % by default.
+    # 0 switches the stop-loss off for that stage. Stage 0 = 70 %, stage 1 = 18 %, stage 2 = 10 %, stage 3 = 5 % by default.
     stage0_stop_loss_pct: float = 70.0
-    stage1_stop_loss_pct: float = 30.0
-    stage2_stop_loss_pct: float = 9.0
+    stage1_stop_loss_pct: float = 18.0
+    stage2_stop_loss_pct: float = 10.0
     stage3_stop_loss_pct: float = 5.0
-    # Stage 0 shares that cost stage0_high_buy_price (0.90) or more use this tighter stop-loss instead of
+    # Stage 0 shares that cost stage0_high_buy_price (0.89) or more use this tighter stop-loss instead of
     # stage0_stop_loss_pct. 0 = off (the normal stage 0 stop-loss applies to every buy price).
-    stage0_high_buy_price: float = 0.90
-    stage0_high_buy_stop_loss_pct: float = 15.0
+    stage0_high_buy_price: float = 0.89
+    stage0_high_buy_stop_loss_pct: float = 20.0
     # Last-seconds stop-loss for stage 3: once `stage3_last_seconds` or fewer seconds remain, stage 3
     # shares use this (tight) percentage instead of stage3_stop_loss_pct. 0 = off.
     # Middle tier: with `stage3_mid_seconds` or fewer seconds left (more than stage3_last_seconds).
@@ -160,7 +160,7 @@ class Settings(BaseSettings):
     stage3_mid_stop_loss_pct: float = 3.0
     stage3_last_seconds: int = 10
     stage3_last_seconds_stop_loss_pct: float = 2.0
-    # Buys at stage0_high_buy_price (0.90) or more are only allowed once this percent of the stage 0 window
+    # Buys at stage0_high_buy_price (0.89) or more are only allowed once this percent of the stage 0 window
     # (start -> end) has passed: 50 with the 200s -> 100s window = from 150s left. 0 = the whole window.
     stage0_high_buy_after_pct: float = 50.0
     duplicate_policy: str = "one_per_market"  # one_per_market | one_per_side | allow

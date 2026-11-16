@@ -30,6 +30,24 @@ os.environ["STAGE0_HIGH_BUY_STOP_LOSS_PCT"] = "0"
 os.environ["STAGE0_MIN_ASK"] = "0.60"
 os.environ["STAGE0_MIN_PRICE_GAP_USD"] = "80"
 os.environ["STAGE1_TAKE_PROFIT_PCT"] = "10"
+# The shipped defaults moved again (50 USDC per trade, stage 0 window 160-100s / max ask 0.89 / tiers 10-7-5 %,
+# stage 1 sell 0.88 / 0.98, stage 2 sell 0.98, stage 2/3 gaps 30/25). The bot-level tests keep the earlier values
+# they were written against; tests of the defaults themselves read Settings.model_fields.
+os.environ["TRADE_AMOUNT_USDC"] = "1.0"
+os.environ["STAGE0_START_SECONDS"] = "200"
+os.environ["STAGE0_MIN_ASK"] = "0.60"
+os.environ["STAGE0_MAX_ASK"] = "0.94"
+os.environ["STAGE0_MID_FROM_ASK"] = "0.70"
+os.environ["STAGE0_HIGH_FROM_ASK"] = "0.80"
+os.environ["STAGE0_TAKE_PROFIT_PCT_LOW"] = "15"
+os.environ["STAGE0_TAKE_PROFIT_PCT_MID"] = "10"
+os.environ["STAGE0_TAKE_PROFIT_PCT_HIGH"] = "5"
+os.environ["STAGE0_HIGH_BUY_PRICE"] = "0.90"
+os.environ["STAGE1_SELL_MAX_BUY"] = "0.86"
+os.environ["STAGE1_SELL_PRICE_HIGH"] = "0.99"
+os.environ["STAGE2_SELL_PRICE"] = "0.99"
+os.environ["STAGE2_MIN_PRICE_GAP_USD"] = "25"
+os.environ["STAGE3_MIN_PRICE_GAP_USD"] = "30"
 
 import pytest  # noqa: E402
 

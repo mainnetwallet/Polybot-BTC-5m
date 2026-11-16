@@ -88,7 +88,7 @@ export const FIELDS: FieldSpec[] = [
   {
     key: "stage0_early_max_ask",
     label: "Stage 0: max ask (earlier buy)",
-    hint: "Cheaper stage 0 buys (best ask below the expensive-buy price, default 0.90) happen only while the best ask is at or below this decimal. It is also the highest price they pay. Asks between this and the expensive-buy price do not buy. The lower of this and the expensive max ask applies.",
+    hint: "Cheaper stage 0 buys (best ask below the expensive-buy price, default 0.89) happen only while the best ask is at or below this decimal. It is also the highest price they pay. Asks between this and the expensive-buy price do not buy. The lower of this and the expensive max ask applies.",
     kind: "number",
     step: "0.01",
     min: "0.01",
@@ -106,7 +106,7 @@ export const FIELDS: FieldSpec[] = [
   {
     key: "stage0_high_buy_after_pct",
     label: "Stage 0: expensive buys start after (% of window)",
-    hint: "This is a PERCENT of the stage 0 window, not seconds. Buys at the expensive-buy price (default 0.90) or more only start once this % of the window (start to end) has passed. Example: 50 % with 200s to 100s = from 150s left; 50 % with 180s to 110s = from 145s left. 0 % = the whole window, 100 % = never.",
+    hint: "This is a PERCENT of the stage 0 window, not seconds. Buys at the expensive-buy price (default 0.89) or more only start once this % of the window (start to end) has passed. Example: 50 % with 160s to 100s = from 130s left; 50 % with 180s to 110s = from 145s left. 0 % = the whole window, 100 % = never.",
     kind: "number",
     step: "1",
     min: "0",
@@ -125,7 +125,7 @@ export const FIELDS: FieldSpec[] = [
   {
     key: "stage0_mid_from_ask",
     label: "Stage 0: mid tier from (buy price)",
-    hint: "Shares bought below this price use the low take-profit %; at or above it, the mid % (default 0.70).",
+    hint: "Shares bought below this price use the low take-profit %; at or above it, the mid % (default 0.80).",
     kind: "number",
     step: "0.01",
     min: "0.01",
@@ -134,7 +134,7 @@ export const FIELDS: FieldSpec[] = [
   {
     key: "stage0_high_from_ask",
     label: "Stage 0: high tier from (buy price)",
-    hint: "Shares bought at or above this price use the high take-profit % (default 0.80).",
+    hint: "Shares bought at or above this price use the high take-profit % (default 0.85).",
     kind: "number",
     step: "0.01",
     min: "0.01",
@@ -143,7 +143,7 @@ export const FIELDS: FieldSpec[] = [
   {
     key: "stage0_take_profit_pct_low",
     label: "Stage 0: take-profit % (low tier)",
-    hint: "Percent above the buy price at which shares bought below the mid-tier border are sold (default 15, i.e. 0.60-0.70 buy). 0 = held to settlement.",
+    hint: "Percent above the buy price at which shares bought below the mid-tier border are sold (default 10, i.e. 0.70-0.80 buy). 0 = held to settlement.",
     kind: "number",
     step: "1",
     min: "0",
@@ -153,7 +153,7 @@ export const FIELDS: FieldSpec[] = [
   {
     key: "stage0_take_profit_pct_mid",
     label: "Stage 0: take-profit % (mid tier)",
-    hint: "Percent above the buy price for shares bought between the mid and high borders (default 10, i.e. 0.70-0.80 buy). 0 = held to settlement.",
+    hint: "Percent above the buy price for shares bought between the mid and high borders (default 7, i.e. 0.80-0.85 buy). 0 = held to settlement.",
     kind: "number",
     step: "1",
     min: "0",
@@ -163,7 +163,7 @@ export const FIELDS: FieldSpec[] = [
   {
     key: "stage0_take_profit_pct_high",
     label: "Stage 0: take-profit % (high tier)",
-    hint: "Percent above the buy price for shares bought at the high border or above (default 5, i.e. 0.80-0.85 buy). The sell price is capped at 0.99. 0 = held to settlement.",
+    hint: "Percent above the buy price for shares bought at the high border or above (default 5, i.e. 0.85 or more). The sell price is capped at 0.99. 0 = held to settlement.",
     kind: "number",
     step: "1",
     min: "0",
@@ -179,7 +179,7 @@ export const FIELDS: FieldSpec[] = [
   {
     key: "stage1_sell_max_buy",
     label: "Stage 1: cheap buy up to",
-    hint: "Stage 1 shares that cost up to this per share use the first sell price, dearer ones the high sell price (default 0.86).",
+    hint: "Stage 1 shares that cost up to this per share use the first sell price, dearer ones the high sell price (default 0.88).",
     kind: "number",
     step: "0.01",
     min: "0.01",
@@ -198,7 +198,7 @@ export const FIELDS: FieldSpec[] = [
   {
     key: "stage1_sell_price_high",
     label: "Stage 1: sell at (dearer buy)",
-    hint: "Sell price for stage 1 shares bought above the limit (default 0.99).",
+    hint: "Sell price for stage 1 shares bought above the limit (default 0.98).",
     kind: "number",
     step: "0.01",
     min: "0.02",
@@ -213,7 +213,7 @@ export const FIELDS: FieldSpec[] = [
   {
     key: "stage2_sell_price",
     label: "Stage 2: sell at",
-    hint: "Stage 2 sells its shares as soon as the best bid reaches this decimal (default 0.99). Must be higher than the stage 2 threshold.",
+    hint: "Stage 2 sells its shares as soon as the best bid reaches this decimal (default 0.98). Must be higher than the stage 2 threshold.",
     kind: "number",
     step: "0.01",
     min: "0.02",
@@ -232,7 +232,7 @@ export const FIELDS: FieldSpec[] = [
   {
     key: "stage0_high_buy_price",
     label: "Stage 0: expensive buy from (entry timing + stop-loss)",
-    hint: "The price (default 0.90) from which a stage 0 buy counts as expensive. It does two things: asks at or above it only buy once the \"expensive buys after\" part of the window has passed, and shares bought at or above it use the expensive-buy stop-loss below instead of the normal stage 0 stop-loss. Stage 0 only buys up to its max ask, so raise that too if it is lower.",
+    hint: "The price (default 0.89) from which a stage 0 buy counts as expensive. It does two things: asks at or above it only buy once the \"expensive buys after\" part of the window has passed, and shares bought at or above it use the expensive-buy stop-loss below instead of the normal stage 0 stop-loss. Stage 0 only buys up to its max ask, so raise that too if it is lower.",
     kind: "number",
     step: "0.01",
     min: "0.01",
@@ -241,7 +241,7 @@ export const FIELDS: FieldSpec[] = [
   {
     key: "stage0_high_buy_stop_loss_pct",
     label: "Stage 0: expensive buy stop-loss %",
-    hint: "Stop-loss for stage 0 shares bought at or above the price above: sold at the market once the best bid is this many percent below the average buy price (default 15). 0 = off, the normal stage 0 stop-loss applies.",
+    hint: "Stop-loss for stage 0 shares bought at or above the price above: sold at the market once the best bid is this many percent below the average buy price (default 20). 0 = off, the normal stage 0 stop-loss applies.",
     kind: "number",
     step: "1",
     min: "0",
@@ -251,7 +251,7 @@ export const FIELDS: FieldSpec[] = [
   {
     key: "stage1_stop_loss_pct",
     label: "Stage 1: stop-loss %",
-    hint: "Stage 1 shares are sold at the market once the best bid is this many percent below the average buy price (default 30). 0 = off.",
+    hint: "Stage 1 shares are sold at the market once the best bid is this many percent below the average buy price (default 18). 0 = off.",
     kind: "number",
     step: "1",
     min: "0",
@@ -261,7 +261,7 @@ export const FIELDS: FieldSpec[] = [
   {
     key: "stage2_stop_loss_pct",
     label: "Stage 2: stop-loss %",
-    hint: "Stage 2 shares are sold at the market once the best bid is this many percent below the average buy price (default 9). 0 = off.",
+    hint: "Stage 2 shares are sold at the market once the best bid is this many percent below the average buy price (default 10). 0 = off.",
     kind: "number",
     step: "1",
     min: "0",

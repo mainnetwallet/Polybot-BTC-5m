@@ -79,12 +79,12 @@ All values are defaults and can be changed in Settings or `.env`. Up to 3 buys p
 
 | Stage | Entry | Take-profit | Stop-loss |
 | --- | --- | --- | --- |
-| **0** early buy | `200`-`100`s left, ask `0.60`-`0.94`, BTC gap >= `$80` beyond the price to beat. One buy per market | Best bid `+15%` / `+10%` / `+5%` over avg cost (buy below `0.70` / `0.70`-`0.80` / above); `0` = hold | `50%` below avg cost (`15%` if bought at `0.90`+) |
-| **1** stage 1 | Last `80`s, best ask >= `0.80`, gap >= `$20` (waits and buys as soon as it gets there) | Bought up to `0.86`: `+10%`; dearer: bid `0.99` | `15%` |
-| **2** add-on | `<= 50`s left, ask >= `0.90`, gap >= `$25` | Bid `0.99` | `9%` |
-| **3** add-on | `<= 30`s left, ask >= `0.90`, gap >= `$30` | held to settlement | `5%` |
+| **0** early buy | `160`-`100`s left, ask `0.70`-`0.89` (cheaper buys up to `0.85`; `0.89`+ only after 50% of the window), BTC gap >= `$70` beyond the price to beat. One buy per market | Best bid `+10%` / `+7%` / `+5%` over avg cost (buy below `0.80` / `0.80`-`0.85` / `0.85`+); `0` = hold | `70%` below avg cost (`20%` if bought at `0.89`+) |
+| **1** stage 1 | Last `90`s, best ask >= `0.85`, gap >= `$35` (waits and buys as soon as it gets there) | Bought up to `0.88`: `+8%`; dearer: bid `0.98` | `18%` |
+| **2** add-on | `<= 50`s left, ask >= `0.88`, gap >= `$30` | Bid `0.98` | `10%` |
+| **3** add-on | `<= 30`s left, ask >= `0.90`, gap >= `$25` | held to settlement | `5%` |
 
-- Orders are marketable BUY (FOK) at the current ask. `0.80` / `0.90` are triggers, never limit prices; `MAX_EXECUTION_PRICE` caps the price paid.
+- Orders are marketable BUY (FOK) at the current ask. `0.85` / `0.88` / `0.90` are triggers, never limit prices; `MAX_EXECUTION_PRICE` caps the price paid.
 - Take-profit sells are marketable and never below their sell price. Stop-loss sells at market with no floor. `0` turns a stop-loss off.
 - A blocked or failed entry is retried on the next book event and every 0.5s while the book is quiet.
 - Execution is WebSocket/event-driven, no sleeps in the trigger path.
@@ -101,12 +101,12 @@ Most used keys:
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `STAGE1_THRESHOLD` / `STAGE1_SECONDS` | `0.80` / `80` | Stage 1 ask trigger and window |
+| `STAGE1_THRESHOLD` / `STAGE1_SECONDS` | `0.85` / `90` | Stage 1 ask trigger and window |
 | `STAGE0..3_ENABLED` | `true` | Switch a stage fully on/off |
 | `STAGE0_*`, `STAGE1_*`, `STAGE2_*`, `STAGE3_*` | see table above | Timing, ask range, take-profit, stop-loss per stage |
-| `MIN_PRICE_GAP_USD` / `STAGE2_...` / `STAGE3_...` | `20` / `25` / `30` | BTC (Chainlink TWAP60) must be this far beyond the price to beat; `0` = off; missing BTC data blocks the buy |
-| `TRADE_AMOUNT_USDC` | `1.0` | Notional per trade |
-| `MAX_EXECUTION_PRICE` | `0.99` | Hard price cap |
+| `MIN_PRICE_GAP_USD` / `STAGE2_...` / `STAGE3_...` | `35` / `30` / `25` | BTC (Chainlink TWAP60) must be this far beyond the price to beat; `0` = off; missing BTC data blocks the buy |
+| `TRADE_AMOUNT_USDC` | `50` | Notional per trade |
+| `MAX_EXECUTION_PRICE` | `0.98` | Hard price cap |
 | `STALE_DATA_MAX_AGE_MS` | `2000` | Max book age for a buy (exits skip the check) |
 | `MAX_DAILY_LOSS` / `DAILY_PROFIT_TARGET` / `MAX_TRADES_PER_DAY` | `5.0` / `10.0` / `600` | Risk limits |
 | `MAX_OPEN_POSITIONS` | `1` | Per-market position cap |
