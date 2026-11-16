@@ -32,6 +32,15 @@ export const FIELDS: FieldSpec[] = [
     max: "1",
   },
   {
+    key: "stage1_block_ask",
+    label: "Stage 1: stop buying in a market once an ask reaches",
+    hint: "If either side's best ask touches this decimal during the stage 1 window and stage 1 has not bought in that market yet, stage 1 buys nothing in that market any more, even if the ask falls back and the rules are met again. It only counts inside the stage 1 window and only for that one market (the next market starts normally). Stages 0, 2 and 3 and the sell rules of shares you already hold are not affected. Default 0.98; asks never go above 0.99, so a value above that turns the block off.",
+    kind: "number",
+    step: "0.01",
+    min: "0.01",
+    max: "0.999",
+  },
+  {
     key: "stage1_seconds",
     label: "Stage 1",
     hint: "Seconds before expiry in which trading is enabled.",
@@ -115,7 +124,7 @@ export const FIELDS: FieldSpec[] = [
   {
     key: "stage0_block_ask",
     label: "Stage 0: stop buying in a market once an ask reaches",
-    hint: "If either side's best ask touches this decimal during the stage 0 window, stage 0 buys nothing more in that market, even if the ask falls back later. It only counts inside the stage 0 window and only for that one market (the next market starts normally). Stages 1 to 3 and the sell rules of shares you already hold are not affected. Default 0.99; asks never go above 0.99, so a value above that turns the block off.",
+    hint: "If either side's best ask touches this decimal during the stage 0 window, stage 0 buys nothing more in that market, even if the ask falls back later. It only counts inside the stage 0 window and only for that one market (the next market starts normally). Stages 1 to 3 and the sell rules of shares you already hold are not affected. Default 0.98; asks never go above 0.99, so a value above that turns the block off.",
     kind: "number",
     step: "0.01",
     min: "0.01",

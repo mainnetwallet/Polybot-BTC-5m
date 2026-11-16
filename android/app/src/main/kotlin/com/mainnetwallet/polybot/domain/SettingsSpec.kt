@@ -40,10 +40,11 @@ object SettingsSpec {
         SettingField("stage0_enabled", "Stage 0: early buy + sell", "On: before the stage 1, buy when the ask is low enough and BTC is far enough beyond the price to beat.", SettingKind.Toggle),
         SettingField("stage0_start_seconds", "Starts at (seconds left)", "Stage 0 may start buying when this many seconds are left.", num(1.0, 300.0, true, "s")),
         SettingField("stage0_end_seconds", "Ends at (seconds left)", "Stage 0 stops buying when this many seconds are left.", num(0.0, 299.0, true, "s")),
+        SettingField("stage1_block_ask", "Stage 1 block market at ask", "If either side's best ask touches this decimal during the stage 1 window and stage 1 has not bought in that market yet, stage 1 buys nothing more in that market (even if the ask falls back). Only that market; stages 0, 2 and 3 and existing sells are not affected. Default 0.98; above that the block is off.", price),
         SettingField("stage0_min_ask", "Min ask", "Buys only while the best ask is at or above this decimal.", price),
         SettingField("stage0_early_max_ask", "Max ask (earlier buy)", "Cheaper buys (ask below the expensive-buy price) only while the best ask is at or below this decimal; also the highest price they pay. Asks between this and the expensive-buy price do not buy.", price),
         SettingField("stage0_max_ask", "Max ask (expensive buy)", "Expensive buys (ask at or above the expensive-buy price) only while the best ask is at or below this decimal; also the highest price they pay.", price),
-        SettingField("stage0_block_ask", "Block market at ask", "If either side's best ask touches this decimal during the stage 0 window, stage 0 buys nothing more in that market (even if the ask falls back). Only that market; stages 1 to 3 and existing sells are not affected. Default 0.99; above that the block is off.", price),
+        SettingField("stage0_block_ask", "Block market at ask", "If either side's best ask touches this decimal during the stage 0 window, stage 0 buys nothing more in that market (even if the ask falls back). Only that market; stages 1 to 3 and existing sells are not affected. Default 0.98; above that the block is off.", price),
         SettingField("stage0_high_buy_after_pct", "Expensive buys start after", "PERCENT of the stage 0 window (not seconds) that must pass before buys at the expensive-buy price or more. 0 = whole window, 100 = never.", num(0.0, 100.0, suffix = "%")),
         SettingField("stage0_min_price_gap_usd", "Min price gap", "BTC must already be this many USD past the price to beat. 0 = filter off.", num(0.0, 1_000_000.0, suffix = "USD")),
         SettingField("stage0_mid_from_ask", "Mid tier from (buy price)", "Shares bought below this price use the low take-profit %.", price),
@@ -111,7 +112,7 @@ object SettingsSpec {
     val sections: List<SettingSection> = listOf(
         SettingSection("entry", "Entry", listOf(
             SettingGroup("Stage 1 entry", "When stages 1 to 3 fire a marketable BUY.",
-                listOf("stage1_seconds", "stage1_threshold")),
+                listOf("stage1_seconds", "stage1_threshold", "stage1_block_ask")),
             SettingGroup("Order handling", null, listOf("duplicate_policy", "conflict_policy")),
         )),
         SettingSection("stage0", "Stage 0", listOf(
@@ -202,6 +203,9 @@ object SettingsLogic {
         Triple(listOf("stage2_sell_price", "stage2_threshold"),
             { d -> d.getValue("stage2_sell_price") <= d.getValue("stage2_threshold") },
             "Sell price must be higher than the stage 2 ask trigger."),
+        Triple(listOf("stage1_threshold", "stage1_block_ask"),
+            { d -> d.getValue("stage1_block_ask") < d.getValue("stage1_threshold") },
+            "The stage 1 block ask must not be lower than the stage 1 ask trigger, or stage 1 could never buy."),
         Triple(listOf("max_execution_price", "stage1_threshold", "stage2_threshold", "stage3_threshold"),
             { d -> d.getValue("max_execution_price") < maxOf(d.getValue("stage1_threshold"), d.getValue("stage2_threshold"), d.getValue("stage3_threshold")) },
             "Must be at least the stage 1, 2 and 3 ask triggers."),

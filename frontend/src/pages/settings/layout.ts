@@ -80,7 +80,7 @@ export const TABS: TabSpec[] = [
       {
         title: "Entry",
         description: "Best ask at or above the trigger fires a marketable BUY. BTC gap 0 turns the filter off.",
-        keys: ["stage1_threshold", "stage1_max_ask", "min_price_gap_usd"],
+        keys: ["stage1_threshold", "stage1_max_ask", "stage1_block_ask", "min_price_gap_usd"],
       },
       {
         title: "Exits: take-profit",

@@ -11,13 +11,13 @@ Entries are staged. Each stage may place ONE buy per market:
   only buy once stage0_high_buy_after_pct of the window has passed. The risk manager also
   demands the BTC price gap (stage0_min_price_gap_usd) and the order manager sells the shares again once the
   best bid is the tier's take-profit percentage above the buy price (by buy price, capped at 0.99).
-  Values: see Settings / .env. Once either side's best ask reaches stage0_block_ask (default 0.99) inside the stage 0 window, stage 0 does not
+  Values: see Settings / .env. Once either side's best ask reaches stage0_block_ask (default 0.98) inside the stage 0 window, stage 0 does not
   buy again in that market (even if the ask drops back).
 
 * stage 1: inside the stage 1, best_ask >= stage1_threshold (default 0.80).
   If the ask is not there yet the strategy keeps watching and fires the moment it
-  gets there, any time before the market ends. Once either side's best ask reaches 0.99 inside the
-  stage 1 window without a stage 1 buy, stage 1 does not buy in that market any more (even if the
+  gets there, any time before the market ends. Once either side's best ask reaches stage1_block_ask
+  (default 0.98) inside the stage 1 window without a stage 1 buy, stage 1 does not buy in that market any more (even if the
   ask drops back and the rules are met again). Stages 0, 2 and 3 are unaffected.
 * stage 2: stage3_seconds (default 30) < remaining <= stage2_seconds (default 50) and
   best_ask >= stage2_threshold (default 0.88). From stage3_seconds on stage 3 takes over.
@@ -67,11 +67,12 @@ def stage0_active(config: RuntimeSettings, remaining: float) -> bool:
 
 # Default of the stage0_block_ask setting: once either side's best ask reaches it during the stage 0 window,
 # stage 0 stops buying in that market.
-STAGE0_BLOCK_ASK = 0.99
+STAGE0_BLOCK_ASK = 0.98
 _STAGE0_BLOCKED_KEEP = 64  # remembered markets; older ones are long expired
 
-# Once either side's best ask reaches this inside the stage 1 window, stage 1 stops buying in that market.
-STAGE1_BLOCK_ASK = 0.99
+# Default of the stage1_block_ask setting: once either side's best ask reaches it inside the stage 1 window,
+# stage 1 stops buying in that market.
+STAGE1_BLOCK_ASK = 0.98
 _STAGE1_BLOCKED_KEEP = 64
 
 
@@ -79,7 +80,7 @@ class Stage1Strategy:
     def __init__(self) -> None:
         # markets where an ask hit stage0_block_ask inside the stage 0 window (stage 0 buys stay off for them)
         self._stage0_blocked: dict[str, None] = {}
-        # markets where an ask hit STAGE1_BLOCK_ASK inside the stage 1 window (stage 1 buys stay off for them)
+        # markets where an ask hit stage1_block_ask inside the stage 1 window (stage 1 buys stay off for them)
         self._stage1_blocked: dict[str, None] = {}
 
     def stage0_blocked(self, market_id: str) -> bool:
@@ -164,8 +165,8 @@ class Stage1Strategy:
             and config.stage_end_seconds(1) < remaining <= config.stage1_seconds
         )
         if in_stage1 and not self.stage1_blocked(market.market_id):
-            if any(a is not None and a + 1e-9 >= STAGE1_BLOCK_ASK for a in (up_ask, down_ask)):
-                self._block_stage1(market.market_id)  # an ask touched .99: no stage 1 buy in this market any more
+            if any(a is not None and a + 1e-9 >= config.stage1_block_ask for a in (up_ask, down_ask)):
+                self._block_stage1(market.market_id)  # an ask touched stage1_block_ask: no stage 1 buy in this market any more
         for stage, max_remaining, threshold in stage_plan(config):
             if remaining > max_remaining:
                 continue

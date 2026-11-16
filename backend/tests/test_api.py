@@ -504,8 +504,19 @@ def test_gap_inputs_are_read_on_the_event_loop_not_in_the_db_thread():
 
 def test_stage0_block_ask_setting_roundtrip():
     with TestClient(create_app()) as client:
-        assert client.get("/api/settings").json()["stage0_block_ask"] == 0.99
+        assert client.get("/api/settings").json()["stage0_block_ask"] == 0.98
         ok = client.patch("/api/settings", json={"stage0_block_ask": 0.95})
         assert ok.status_code == 200 and ok.json()["stage0_block_ask"] == 0.95
         assert client.get("/api/settings").json()["stage0_block_ask"] == 0.95
         assert client.patch("/api/settings", json={"stage0_block_ask": 1.5}).status_code in {400, 422}
+
+
+def test_stage1_block_ask_setting_roundtrip():
+    with TestClient(create_app()) as client:
+        assert client.get("/api/settings").json()["stage1_block_ask"] == 0.98
+        ok = client.patch("/api/settings", json={"stage1_block_ask": 0.95})
+        assert ok.status_code == 200 and ok.json()["stage1_block_ask"] == 0.95
+        assert client.get("/api/settings").json()["stage1_block_ask"] == 0.95
+        assert client.patch("/api/settings", json={"stage1_block_ask": 1.5}).status_code in {400, 422}
+        # below the stage 1 ask trigger stage 1 could never buy
+        assert client.patch("/api/settings", json={"stage1_block_ask": 0.5}).status_code in {400, 422}

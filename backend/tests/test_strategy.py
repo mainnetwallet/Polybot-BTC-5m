@@ -212,3 +212,41 @@ def test_stage1_block_does_not_touch_stage2_and_stage3():
     strategy.evaluate(market, books_for(market, 0.99, 0.01), end_ms - 58_000, config)
     result = strategy.evaluate(market, books_for(market, 0.95, 0.05), end_ms - 20_000, config)
     assert 3 in [s.stage for s in result.signals]
+
+
+def test_stage1_block_ask_is_a_setting_with_default_098():
+    from app.config.settings import Settings
+
+    assert Settings.model_fields["stage1_block_ask"].default == 0.98
+    assert make_config().stage1_block_ask == 0.98
+    assert "stage1_block_ask" in make_config().model_dump()
+
+
+def test_stage1_ask_of_097_does_not_block_but_098_does():
+    market = make_market(remaining=1000)
+    strategy = Stage1Strategy()
+    config = make_config()
+    assert [s.side for s in _stage1_run(strategy, market, config, 58, 0.97, 0.03)] == ["UP"]
+    assert not strategy.stage1_blocked(market.market_id)
+    assert _stage1_run(strategy, market, config, 56, 0.98, 0.02) == []
+    assert strategy.stage1_blocked(market.market_id)
+
+
+def test_stage1_block_ask_setting_changes_when_the_market_is_blocked():
+    market = make_market(remaining=1000)
+    strategy = Stage1Strategy()
+    config = make_config(stage1_block_ask=0.92)
+    assert _stage1_run(strategy, market, config, 58, 0.93, 0.07) == []  # 0.93 >= 0.92: blocked
+    assert strategy.stage1_blocked(market.market_id)
+    assert _stage1_run(strategy, market, config, 56, 0.85, 0.15) == []
+    # a higher block ask keeps the market open
+    fresh = Stage1Strategy()
+    relaxed = make_config(stage1_block_ask=0.99)
+    assert [s.side for s in _stage1_run(fresh, market, relaxed, 58, 0.93, 0.07)] == ["UP"]
+
+
+def test_stage1_block_ask_must_not_be_below_the_trigger():
+    import pytest
+
+    with pytest.raises(ValueError):
+        make_config(stage1_threshold=0.85, stage1_block_ask=0.80)

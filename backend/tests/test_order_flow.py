@@ -195,7 +195,8 @@ async def test_max_execution_price_blocks():
 async def test_stage1_max_ask_blocks_above_97():
     stack = build_stack()
     market = make_market(remaining=55)
-    books = books_for(market, up_ask=0.98, down_ask=0.02)
+    # .98 would already be blocked by the strategy (stage1_block_ask), so test just below it
+    books = books_for(market, up_ask=0.975, down_ask=0.025)
 
     _, results = await _submit(stack, market, books)
 

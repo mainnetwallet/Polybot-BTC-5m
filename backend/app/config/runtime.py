@@ -47,6 +47,7 @@ OVERRIDABLE_KEYS = (
     "stage0_max_ask",
     "stage0_early_max_ask",
     "stage0_block_ask",
+    "stage1_block_ask",
     "stage0_min_price_gap_usd",
     "stage0_mid_from_ask",
     "stage0_high_from_ask",
@@ -82,6 +83,10 @@ class RuntimeSettings(BaseModel):
     stage1_seconds: int = Field(ge=1, le=300)
     # Stage 1 does not buy when the best ask is above this (default 0.97). Never pays more than this either.
     stage1_max_ask: float = Field(default=0.97, ge=0.01, le=1.0)
+    # Once either side's best ask reaches this inside the stage 1 window without a stage 1 buy, stage 1 stops
+    # buying in that market for good (the ask dropping again does not lift it). Asks never exceed 0.99, so a
+    # value above 0.99 effectively turns the block off.
+    stage1_block_ask: float = Field(default=0.98, ge=0.01, le=0.999)
     # Master switch per entry stage (stage 0: stage0_enabled). Off = no buys, no take-profit, no stop-loss.
     stage1_enabled: bool = True
     stage2_enabled: bool = True
@@ -120,7 +125,7 @@ class RuntimeSettings(BaseModel):
     # Once either side's best ask reaches this inside the stage 0 window, stage 0 stops buying in that
     # market for good (the ask dropping again does not lift it). Asks never exceed 0.99, so a value above
     # 0.99 effectively turns the block off.
-    stage0_block_ask: float = Field(default=0.99, ge=0.01, le=0.999)
+    stage0_block_ask: float = Field(default=0.98, ge=0.01, le=0.999)
     stage0_min_price_gap_usd: float = Field(default=70.0, ge=0.0, le=1_000_000.0)
     # Stage 0 take-profit in percent above the average buy price, by what stage 0 paid per share:
     #   cost <  stage0_mid_from_ask   -> stage0_take_profit_pct_low  (default 0.60-0.70 buy -> +15 %)
@@ -174,6 +179,8 @@ class RuntimeSettings(BaseModel):
             raise ValueError("duplicate_policy must be one_per_market, one_per_side or allow")
         if self.conflict_policy not in {"up_first", "down_first", "highest_ask", "block_both"}:
             raise ValueError("conflict_policy must be up_first, down_first, highest_ask or block_both")
+        if self.stage1_block_ask < self.stage1_threshold:
+            raise ValueError("stage1_block_ask must be >= stage1_threshold, or stage 1 could never buy")
         if self.stage1_max_ask < self.stage1_threshold:
             raise ValueError("stage1_max_ask must be >= stage1_threshold")
         if self.max_execution_price < self.stage1_threshold:

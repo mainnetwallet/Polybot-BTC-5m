@@ -270,6 +270,7 @@ function PolicyPanel() {
   const rows: Array<[string, string]> = [
     ["Stage 1 threshold", fmtCents(strategy?.stage1_threshold ?? null)],
     ["Stage 1", strategy ? `${strategy.stage1_seconds}s` : "—"],
+    ["Stage 1 block ask", fmtCents(strategy?.stage1_block_ask ?? null)],
     [
       "Stages on (1 / 2 / 3)",
       strategy

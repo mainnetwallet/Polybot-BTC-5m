@@ -68,6 +68,8 @@ class Settings(BaseSettings):
     stage1_threshold: float = Field(
         default=0.85, validation_alias=AliasChoices("STAGE1_THRESHOLD", "TRIGGER_THRESHOLD")
     )
+    # An ask at or above this inside the stage 1 window blocks further stage 1 buys in that market.
+    stage1_block_ask: float = 0.98
     # FINAL_WINDOW_SECONDS is the old env name and is still read.
     stage1_seconds: int = Field(
         default=90, validation_alias=AliasChoices("STAGE1_SECONDS", "FINAL_WINDOW_SECONDS")
@@ -121,7 +123,7 @@ class Settings(BaseSettings):
     stage0_max_ask: float = 0.96
     stage0_early_max_ask: float = 0.85
     # An ask at or above this inside the stage 0 window blocks further stage 0 buys in that market.
-    stage0_block_ask: float = 0.99
+    stage0_block_ask: float = 0.98
     stage0_min_price_gap_usd: float = 70.0
     # Take-profit for stage 0: sell once the best bid is this many percent ABOVE the average price paid per
     # share (cost * (1 + pct / 100), capped at 0.99). The percentage depends on what stage 0 paid per share:
