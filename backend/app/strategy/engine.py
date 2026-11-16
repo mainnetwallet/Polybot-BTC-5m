@@ -5,12 +5,13 @@ Stage 1, last N seconds (default 80): monitor UP and DOWN best asks.
 
 Entries are staged. Each stage may place ONE buy per market:
 
-* stage 0 (optional, independent): while more than stage0_end_seconds (default 100) and at most stage0_start_seconds (default 200) remain
-  (independent of the stage 1), stage0_min_ask (default 0.60) <= best_ask <= the stage 0 limit: stage0_early_max_ask (default 0.85) for a cheaper buy,
-  stage0_max_ask (default 0.94) for an expensive one (so 0.85 to 0.90 does not buy). Asks of stage0_high_buy_price (0.90) or more
-  only buy once stage0_high_buy_after_pct (50 %) of the window has passed (150s left). The risk manager also
-  demands the BTC price gap (default $80) and the order manager sells the shares again once the
-  best bid is the tier's take-profit percentage above the buy price (15 / 10 / 5 % by buy price, capped at 0.99).
+* stage 0 (optional, independent): while more than stage0_end_seconds and at most stage0_start_seconds remain
+  (independent of the stage 1), stage0_min_ask <= best_ask <= the stage 0 limit: stage0_early_max_ask for a cheaper buy,
+  stage0_max_ask for an expensive one (asks between the two do not buy). Asks of stage0_high_buy_price or more
+  only buy once stage0_high_buy_after_pct of the window has passed. The risk manager also
+  demands the BTC price gap (stage0_min_price_gap_usd) and the order manager sells the shares again once the
+  best bid is the tier's take-profit percentage above the buy price (by buy price, capped at 0.99).
+  Values: see Settings / .env.
 
 * stage 1: inside the stage 1, best_ask >= stage1_threshold (default 0.80).
   If the ask is not there yet the strategy keeps watching and fires the moment it

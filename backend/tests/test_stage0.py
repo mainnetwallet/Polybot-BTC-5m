@@ -696,7 +696,7 @@ def test_stage0_take_profit_tiers_15_10_5_by_buy_price():
 
 def test_stage0_defaults_are_max_ask_89_and_tiers_10_7_5():
     fields = Settings.model_fields
-    assert fields["stage0_max_ask"].default == 0.89
+    assert fields["stage0_max_ask"].default == 0.96
     assert fields["stage0_high_buy_after_pct"].default == 50.0
     assert (fields["stage0_mid_from_ask"].default, fields["stage0_high_from_ask"].default) == (0.80, 0.85)
     assert [fields[f"stage0_take_profit_pct_{t}"].default for t in ("low", "mid", "high")] == [10.0, 7.0, 5.0]

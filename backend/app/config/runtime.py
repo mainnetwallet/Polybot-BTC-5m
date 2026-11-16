@@ -110,10 +110,10 @@ class RuntimeSettings(BaseModel):
     stage0_end_seconds: int = Field(default=100, ge=0, le=299)
     stage0_min_ask: float = Field(default=0.69, ge=0.01, le=0.999)
     # Max ask by buy price: a buy below stage0_high_buy_price (the earlier, cheaper buys) goes up to
-    # stage0_early_max_ask (0.85); an expensive buy (ask >= stage0_high_buy_price, only after
-    # stage0_high_buy_after_pct of the window) goes up to stage0_max_ask (0.94). Asks between
+    # stage0_early_max_ask; an expensive buy (ask >= stage0_high_buy_price, only after
+    # stage0_high_buy_after_pct of the window) goes up to stage0_max_ask. Asks between
     # stage0_early_max_ask and stage0_high_buy_price do not buy. An early value above stage0_max_ask has no
-    # effect: the lower of the two applies.
+    # effect: the lower of the two applies. (The app's real values come from Settings/.env; these are fallbacks.)
     stage0_max_ask: float = Field(default=0.94, ge=0.01, le=0.999)
     stage0_early_max_ask: float = Field(default=0.85, ge=0.01, le=0.999)
     stage0_min_price_gap_usd: float = Field(default=70.0, ge=0.0, le=1_000_000.0)
@@ -146,7 +146,7 @@ class RuntimeSettings(BaseModel):
     stage0_high_buy_price: float = Field(default=0.90, ge=0.01, le=0.999)
     stage0_high_buy_stop_loss_pct: float = Field(default=0.0, ge=0.0, le=99.0)
     # Buys at stage0_high_buy_price or more wait until this percent of the stage 0 window (start -> end)
-    # has passed (50 with 200s -> 100s = from 150s left; 0 = the whole window).
+    # has passed (0 = the whole window).
     stage0_high_buy_after_pct: float = Field(default=50.0, ge=0.0, le=100.0)
     # Last-seconds stop-loss for stage 3: with `stage3_last_seconds` or fewer seconds left, stage 3 shares
     # use stage3_last_seconds_stop_loss_pct (percent below cost) instead of stage3_stop_loss_pct. 0 = off.
