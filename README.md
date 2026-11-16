@@ -108,6 +108,7 @@ Most used keys:
 | `TRADE_AMOUNT_USDC` | `50` | Notional per trade |
 | `MAX_EXECUTION_PRICE` | `0.98` | Hard price cap |
 | `STAGE1_MAX_ASK` | `0.97` | Stage 1 does not buy when the best ask is above this |
+| `STAGE0..3_BLOCK_ASK` | `0.98` | Once either side's best ask reaches this inside that stage's window, the stage stops buying in that market (even if the ask falls back). Per market and per stage; resets on restart |
 | `STALE_DATA_MAX_AGE_MS` | `2000` | Max book age for a buy (exits skip the check) |
 | `MAX_DAILY_LOSS` / `DAILY_PROFIT_TARGET` / `MAX_TRADES_PER_DAY` | `5.0` / `10.0` / `600` | Risk limits |
 | `MAX_OPEN_POSITIONS` | `1` | Per-market position cap |
