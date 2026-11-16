@@ -29,7 +29,7 @@ def test_all_stages_are_on_by_default():
     assert all(config.stage_enabled(stage) for stage in ALL_STAGES)
 
 
-STAGE_TIME = {1: 55, 2: 40, 3: 20}  # seconds left inside each stage's own window (test final window = 60s)
+STAGE_TIME = {1: 55, 2: 40, 3: 20}  # seconds left inside each stage's own window (test stage 1 = 60s)
 
 
 @pytest.mark.parametrize("stage", ALL_STAGES)

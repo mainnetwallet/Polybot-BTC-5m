@@ -142,7 +142,7 @@ private fun MiniStat(
 /**
  * Hero card: the 5-minute window countdown, the BTC price and its gap to the price to beat, and the account
  * numbers (balance, PnL, trades) in one place. The clock follows the server, not the phone.
- * The card tints amber inside the final window.
+ * The card tints amber inside the stage 1.
  */
 @Composable
 fun HeroCard(
@@ -199,7 +199,7 @@ fun HeroCard(
                     }
                     if (market != null) {
                         if (inWindow) {
-                            Pill("FINAL WINDOW", c.warn, c.warnContainer)
+                            Pill("STAGE 1", c.warn, c.warnContainer)
                         } else {
                             Pill("OBSERVING", scheme.onSecondaryContainer, scheme.secondaryContainer)
                         }

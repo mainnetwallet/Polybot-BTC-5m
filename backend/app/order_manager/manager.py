@@ -42,7 +42,7 @@ _STAGE_SUFFIX = re.compile(r":s(\d+)$")
 _SELL_STAGE = re.compile(r":s(\d+):sell:")
 # Stage 0 take-profit SELL orders carry this marker in their order key.
 _SELL_MARK = ":sell:"
-# With the short exit retry gap this still covers the whole final window.
+# With the short exit retry gap this still covers the whole stage 1.
 MAX_SELL_ATTEMPTS = 450
 SELL_DUST = 0.01
 # Entry stages whose shares are watched for an exit: stages 0-2 have a take-profit sell, and every

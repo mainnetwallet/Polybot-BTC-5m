@@ -9,7 +9,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ROOT_DIR = Path(__file__).resolve().parents[3]
@@ -22,6 +22,7 @@ class Settings(BaseSettings):
         env_file=str(ROOT_DIR / ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
+        populate_by_name=True,
         case_sensitive=False,
     )
 
@@ -64,8 +65,11 @@ class Settings(BaseSettings):
 
     # --- strategy -------------------------------------------------------
     trigger_threshold: float = 0.85
-    final_window_seconds: int = 90
-    # Extra staged entries inside the final window: once `remaining <= stageN_seconds`
+    # FINAL_WINDOW_SECONDS is the old env name and is still read.
+    stage1_seconds: int = Field(
+        default=90, validation_alias=AliasChoices("STAGE1_SECONDS", "FINAL_WINDOW_SECONDS")
+    )
+    # Extra staged entries inside the stage 1: once `remaining <= stageN_seconds`
     # and a best ask >= stageN_threshold, one more buy per stage (same market).
     # Per-stage master switches. A stage that is switched off does nothing at all: no buys, no
     # take-profit sell and no stop-loss for its shares (stage 0 has its own switch, stage0_enabled).
@@ -99,7 +103,7 @@ class Settings(BaseSettings):
     stage2_min_price_gap_usd: float = 25.0
     stage3_min_price_gap_usd: float = 30.0
     # Stage 0: an early, independent entry with its own take-profit SELL. While more than `stage0_end_seconds`
-    # and at most `stage0_start_seconds` remain (independent of the final window), buy a side whose best ask is
+    # and at most `stage0_start_seconds` remain (independent of the stage 1), buy a side whose best ask is
     # <= stage0_max_ask and whose BTC price gap beyond the price to beat is >= stage0_min_price_gap_usd.
     # The shares are sold again as soon as the best bid is the tier's take-profit percentage above the buy price.
     stage0_enabled: bool = True

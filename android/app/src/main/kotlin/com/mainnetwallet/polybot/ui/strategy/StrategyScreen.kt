@@ -216,7 +216,7 @@ private fun triggerCounts(rows: List<TriggerRow>): List<Int> = TriggerFilter.ent
 private fun stageSpecs(snap: StrategyView, remaining: Double?): List<StageSpec> {
     val s = snap.strategy
     val open0 = remaining != null && remaining <= s.stage0StartSeconds && remaining > s.stage0EndSeconds
-    val open1 = remaining != null && remaining <= s.finalWindowSeconds
+    val open1 = remaining != null && remaining <= s.stage1Seconds
     val open2 = remaining != null && remaining <= s.stage2Seconds
     val open3 = remaining != null && remaining <= s.stage3Seconds
     val tierValues = listOf(s.stage0TakeProfitPctLow, s.stage0TakeProfitPctMid, s.stage0TakeProfitPctHigh)
@@ -248,8 +248,8 @@ private fun stageSpecs(snap: StrategyView, remaining: Double?): List<StageSpec> 
         ),
         StageSpec(
             index = 1,
-            title = "Final window",
-            window = "last ${secs(s.finalWindowSeconds)}",
+            title = "Stage 1",
+            window = "last ${secs(s.stage1Seconds)}",
             enabled = s.stage1Enabled,
             active = s.stage1Enabled && open1,
             highlights = listOf(
@@ -258,7 +258,7 @@ private fun stageSpecs(snap: StrategyView, remaining: Double?): List<StageSpec> 
                 "Stop-loss" to pct(s.stage1StopLossPct),
             ),
             entry = listOf(
-                "Window" to "last ${secs(s.finalWindowSeconds)}",
+                "Window" to "last ${secs(s.stage1Seconds)}",
                 "Ask trigger" to Fmt.cents(s.triggerThreshold),
                 "Min price gap" to usdGap(cfg(snap, "min_price_gap_usd")),
             ),
@@ -333,15 +333,15 @@ private fun TimelineCard(snap: StrategyView, remaining: Double?) {
                     "S0", s.stage0StartSeconds, s.stage0EndSeconds, s.stage0Enabled,
                     s.stage0Enabled && remaining != null && remaining <= s.stage0StartSeconds && remaining > s.stage0EndSeconds,
                 ),
-                StageLane("S1", s.finalWindowSeconds, 0.0, s.stage1Enabled, s.stage1Enabled && remaining != null && remaining <= s.finalWindowSeconds),
+                StageLane("S1", s.stage1Seconds, 0.0, s.stage1Enabled, s.stage1Enabled && remaining != null && remaining <= s.stage1Seconds),
                 StageLane("S2", s.stage2Seconds, 0.0, s.stage2Enabled, s.stage2Enabled && remaining != null && remaining <= s.stage2Seconds),
                 StageLane("S3", s.stage3Seconds, 0.0, s.stage3Enabled, s.stage3Enabled && remaining != null && remaining <= s.stage3Seconds),
             )
             StageTimeline(duration = duration, remaining = remaining, lanes = lanes)
             TimelineLegend()
-            val observe = Math.max(0.0, duration - s.finalWindowSeconds)
+            val observe = Math.max(0.0, duration - s.stage1Seconds)
             Text(
-                "Early buy can trade during the observation phase; the final window starts after ${secs(observe)}.",
+                "Early buy can trade during the observation phase; the stage 1 starts after ${secs(observe)}.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

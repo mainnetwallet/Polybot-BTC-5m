@@ -63,12 +63,12 @@ function MarketPanel() {
   const market = snapshot.market;
   const strategy = snapshot.strategy;
   const duration = market?.duration_seconds ?? null;
-  const finalWindow = strategy.final_window_seconds;
-  const inWindow = remaining !== null && remaining > 0 && remaining <= finalWindow;
-  const phaseLabel = inWindow ? "Final window" : remaining !== null ? "Observation" : "—";
+  const stage1Window = strategy.stage1_seconds;
+  const inWindow = remaining !== null && remaining > 0 && remaining <= stage1Window;
+  const phaseLabel = inWindow ? "Stage 1" : remaining !== null ? "Observation" : "—";
   const elapsed = duration !== null && remaining !== null ? clamp(duration - remaining, 0, duration) : null;
   const progress = duration && elapsed !== null ? (elapsed / duration) * 100 : null;
-  const finalStart = duration ? ((duration - finalWindow) / duration) * 100 : null;
+  const finalStart = duration ? ((duration - stage1Window) / duration) * 100 : null;
   const durationLabel = duration == null
     ? "—"
     : duration % 60 === 0
@@ -150,7 +150,7 @@ function MarketPanel() {
               <div className="mt-2 flex items-center justify-between text-[10px] text-slate-600">
                 <span className="mono">0:00 · open</span>
                 <span className="mono text-amber/80">
-                  {duration !== null ? Math.round(duration - finalWindow) : "—"}s · final window
+                  {duration !== null ? Math.round(duration - stage1Window) : "—"}s · stage 1
                 </span>
                 <span className="mono">{duration ? `${Math.round(duration / 60)}:00 · expiry` : "expiry"}</span>
               </div>
@@ -160,7 +160,7 @@ function MarketPanel() {
           <CountdownRing
             remaining={remaining}
             inWindow={inWindow}
-            finalWindow={finalWindow}
+            stage1Window={stage1Window}
             duration={duration}
             armed={strategy.up_armed || strategy.down_armed}
             stage0Enabled={strategy.stage0_enabled}

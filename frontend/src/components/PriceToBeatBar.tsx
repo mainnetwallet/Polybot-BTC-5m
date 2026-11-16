@@ -30,7 +30,7 @@ export function PriceToBeatBar({ className }: { className?: string }) {
   const { snapshot } = useBot();
   const remaining = useRemainingSeconds();
   const btc = snapshot?.btc;
-  const finalWindow = snapshot?.strategy.final_window_seconds ?? 60;
+  const stage1Window = snapshot?.strategy.stage1_seconds ?? 60;
 
   const beat = btc?.price_to_beat ?? null;
   const price = btc?.price ?? null;
@@ -40,7 +40,7 @@ export function PriceToBeatBar({ className }: { className?: string }) {
   const total = remaining === null ? null : Math.max(0, Math.ceil(remaining));
   const mins = total === null ? "--" : String(Math.floor(total / 60)).padStart(2, "0");
   const secs = total === null ? "--" : String(total % 60).padStart(2, "0");
-  const urgent = remaining !== null && remaining <= finalWindow;
+  const urgent = remaining !== null && remaining <= stage1Window;
 
   return (
     <section className={cx("panel flex flex-wrap items-center justify-between gap-x-8 gap-y-4 px-6 py-4", className)}>

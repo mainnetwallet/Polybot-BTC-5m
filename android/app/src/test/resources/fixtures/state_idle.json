@@ -22,7 +22,7 @@
   "down_armed": false,
   "reason": "no_market",
   "trigger_threshold": 0.85,
-  "final_window_seconds": 90,
+  "stage1_seconds": 90,
   "stage1_enabled": true,
   "stage2_enabled": true,
   "stage3_enabled": true,
@@ -114,7 +114,7 @@
  },
  "config": {
   "trigger_threshold": 0.85,
-  "final_window_seconds": 90,
+  "stage1_seconds": 90,
   "stage1_enabled": true,
   "stage2_enabled": true,
   "stage3_enabled": true,

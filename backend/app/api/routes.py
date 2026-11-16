@@ -252,7 +252,7 @@ def build_router(
             "clob_ws_url": settings.clob_ws_url,
             "strategy": "FINAL_60_SECONDS_MARKET_BUY",
             "trigger_threshold": runtime.get().trigger_threshold,
-            "final_window_seconds": runtime.get().final_window_seconds,
+            "stage1_seconds": runtime.get().stage1_seconds,
         }
 
     root = APIRouter()

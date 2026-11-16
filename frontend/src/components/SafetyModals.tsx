@@ -197,7 +197,7 @@ export function StartLiveModal({ open, onClose }: { open: boolean; onClose: () =
       onClose={onClose}
       eyebrow="Live execution"
       title="Start the LIVE engine"
-      subtitle={`The engine will submit real FOK marketable buys when an ask reaches the trigger inside the final window${snapshot ? ` (${snapshot.strategy.final_window_seconds} seconds)` : ""}.`}
+      subtitle={`The engine will submit real FOK marketable buys when an ask reaches the trigger inside the stage 1${snapshot ? ` (${snapshot.strategy.stage1_seconds} seconds)` : ""}.`}
       danger
       footer={
         <>

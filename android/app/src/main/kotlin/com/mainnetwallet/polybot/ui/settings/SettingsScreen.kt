@@ -468,7 +468,7 @@ private enum class Tone { Primary, Warn, Info }
 private data class SectionMeta(val icon: ImageVector, val summary: String, val tone: Tone = Tone.Primary)
 
 private fun sectionMeta(id: String): SectionMeta = when (id) {
-    "entry" -> SectionMeta(Icons.Filled.Bolt, "Final window, trigger and order policy")
+    "entry" -> SectionMeta(Icons.Filled.Bolt, "Stage 1, trigger and order policy")
     "stage0" -> SectionMeta(Icons.Filled.Timer, "Early buy with tiered take-profit")
     "stage1" -> SectionMeta(Icons.Filled.TrendingUp, "Price gap, take-profit and stop-loss")
     "stage2" -> SectionMeta(Icons.Filled.Layers, "One extra buy close to expiry")

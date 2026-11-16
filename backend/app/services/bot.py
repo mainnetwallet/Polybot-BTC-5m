@@ -30,7 +30,7 @@ from app.portfolio.analytics import AnalyticsService
 from app.portfolio.service import Portfolio
 from app.risk_manager.manager import RiskContext, RiskManager
 from app.services.order_outcomes import sell_outcomes
-from app.strategy.engine import FinalWindowStrategy
+from app.strategy.engine import Stage1Strategy
 from app.strategy.types import StrategyEvaluation
 
 logger = logging.getLogger(__name__)
@@ -77,7 +77,7 @@ class TradingBot:
         self.hub = hub
 
         self.logs = LogService(publisher=hub)
-        self.strategy = FinalWindowStrategy()
+        self.strategy = Stage1Strategy()
         self.risk = RiskManager()
 
         self.discovery = MarketDiscovery(settings)
@@ -1101,7 +1101,7 @@ class TradingBot:
 
         Trading is book-event driven. If an entry is blocked (stale book, balance, ...)
         or rejected and the book then goes quiet, no event would re-trigger it. While
-        the market is in its final window and the book has been silent for a moment,
+        the market is in its stage 1 and the book has been silent for a moment,
         re-evaluate so every stage whose condition still holds is tried again. Duplicate
         protection in the order manager keeps this from double-buying. The same pass
         re-checks the exits (stop-loss / take-profit) of every stage that holds shares.
@@ -1116,7 +1116,7 @@ class TradingBot:
                 if now_ms - self._last_book_event_ms < self._retry_timing()[1]:
                     continue
                 config = self.runtime.get()
-                window = config.final_window_seconds
+                window = config.stage1_seconds
                 if config.stage0_enabled:
                     window = max(window, config.stage0_start_seconds)
                 has_exit = self.orders.has_stage0_holding(self._mode, market.market_id)
@@ -1174,7 +1174,7 @@ class TradingBot:
         self.logs.log(
             "INFO",
             "market",
-            f"final {self.runtime.get().final_window_seconds}s window closed for {market.slug}",
+            f"stage 1 {self.runtime.get().stage1_seconds}s window closed for {market.slug}",
             payload={"market_id": market.market_id},
             mode=self._mode,
         )
@@ -1716,7 +1716,7 @@ class TradingBot:
                     }
                 ),
                 "trigger_threshold": config.trigger_threshold,
-                "final_window_seconds": config.final_window_seconds,
+                "stage1_seconds": config.stage1_seconds,
                 "stage1_enabled": config.stage1_enabled,
                 "stage2_enabled": config.stage2_enabled,
                 "stage3_enabled": config.stage3_enabled,

@@ -23,7 +23,7 @@ export const TABS: TabSpec[] = [
     id: "entry",
     label: "Entry",
     title: "Entry logic",
-    description: "When the final-window stages fire a marketable BUY.",
+    description: "When stages 1 to 3 fire a marketable BUY.",
     groups: [
       {
         title: "Stages on / off",
@@ -33,7 +33,7 @@ export const TABS: TabSpec[] = [
       {
         title: "Timing",
         description: "How many seconds before expiry each stage becomes active.",
-        keys: ["final_window_seconds", "stage2_seconds", "stage3_seconds"],
+        keys: ["stage1_seconds", "stage2_seconds", "stage3_seconds"],
       },
       {
         title: "Ask triggers",

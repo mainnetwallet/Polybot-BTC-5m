@@ -76,8 +76,8 @@ export function Sidebar({ page, onNavigate }: SidebarProps) {
             <span className="text-slate-400">no trades</span>
           </div>
           <div className="flex items-center justify-between">
-            <span>Final window</span>
-            <span className="mono text-slate-400">{snapshot ? `${snapshot.strategy.final_window_seconds}s` : "—"}</span>
+            <span>Stage 1</span>
+            <span className="mono text-slate-400">{snapshot ? `${snapshot.strategy.stage1_seconds}s` : "—"}</span>
           </div>
           <div className="flex items-center justify-between">
             <span>Trigger ask</span>

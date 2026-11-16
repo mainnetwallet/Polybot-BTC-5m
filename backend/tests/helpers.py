@@ -14,7 +14,7 @@ from app.order_manager.manager import OrderManager
 from app.paper_trading.engine import PaperExecutionEngine
 from app.portfolio.service import Portfolio
 from app.risk_manager.manager import RiskContext, RiskManager
-from app.strategy.engine import FinalWindowStrategy
+from app.strategy.engine import Stage1Strategy
 
 
 def make_market(
@@ -58,7 +58,7 @@ def make_book(
 def make_config(**overrides) -> RuntimeSettings:
     values = dict(
         trigger_threshold=0.80,
-        final_window_seconds=60,
+        stage1_seconds=60,
         max_execution_price=0.99,
         trade_amount_usdc=5.0,
         max_daily_loss=5.0,
@@ -164,7 +164,7 @@ def build_stack(config: RuntimeSettings | None = None):
     manager = OrderManager(
         settings, runtime, portfolio, RiskManager(), provider, LogService()
     )
-    strategy = FinalWindowStrategy()
+    strategy = Stage1Strategy()
     return {
         "manager": manager,
         "strategy": strategy,

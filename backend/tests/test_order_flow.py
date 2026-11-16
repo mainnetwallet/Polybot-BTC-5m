@@ -569,7 +569,7 @@ def _keys() -> list[str]:
 
 def _timeline_config():
     return make_config(
-        final_window_seconds=80, min_price_gap_usd=20.0, stage2_min_price_gap_usd=25.0,
+        stage1_seconds=80, min_price_gap_usd=20.0, stage2_min_price_gap_usd=25.0,
         stage3_min_price_gap_usd=30.0, trade_amount_usdc=1.0,
         stale_data_max_age_ms=60_000, max_open_positions=1,
     )

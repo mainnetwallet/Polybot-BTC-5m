@@ -23,8 +23,8 @@ export const FIELDS: FieldSpec[] = [
     max: "0.999",
   },
   {
-    key: "final_window_seconds",
-    label: "Final window",
+    key: "stage1_seconds",
+    label: "Stage 1",
     hint: "Seconds before expiry in which trading is enabled.",
     kind: "number",
     step: "1",
@@ -53,7 +53,7 @@ export const FIELDS: FieldSpec[] = [
   {
     key: "stage0_enabled",
     label: "Stage 0: early buy + sell",
-    hint: "On: before the final window, buy when the ask is low enough and BTC is far enough beyond the price to beat, then sell at the sell price.",
+    hint: "On: before the stage 1, buy when the ask is low enough and BTC is far enough beyond the price to beat, then sell at the sell price.",
     kind: "toggle",
   },
   {
@@ -69,7 +69,7 @@ export const FIELDS: FieldSpec[] = [
   {
     key: "stage0_end_seconds",
     label: "Stage 0: ends at (seconds left)",
-    hint: "Stage 0 stops buying when this many seconds are left. Independent of the final window.",
+    hint: "Stage 0 stops buying when this many seconds are left. Independent of the stage 1.",
     kind: "number",
     step: "1",
     min: "0",

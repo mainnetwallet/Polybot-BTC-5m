@@ -58,24 +58,24 @@ class SettingsLogicTest {
 
     @Test fun wholeNumbersShowWithoutADecimalPoint() {
         val draft = fresh()
-        assertEquals("90", draft["final_window_seconds"])
+        assertEquals("90", draft["stage1_seconds"])
         assertEquals("0.85", draft["trigger_threshold"])
         assertEquals("true", draft["stage1_enabled"])
         assertEquals("one_per_market", draft["duplicate_policy"])
     }
 
     @Test fun onlyChangedKeysAreSentAndTyped() {
-        val draft = fresh() + mapOf("trigger_threshold" to "0.9", "final_window_seconds" to "75", "stage1_enabled" to "false", "conflict_policy" to "down_first")
+        val draft = fresh() + mapOf("trigger_threshold" to "0.9", "stage1_seconds" to "75", "stage1_enabled" to "false", "conflict_policy" to "down_first")
         val diff = SettingsLogic.diff(draft, saved)
-        assertEquals(setOf("trigger_threshold", "final_window_seconds", "stage1_enabled", "conflict_policy"), diff.keys)
+        assertEquals(setOf("trigger_threshold", "stage1_seconds", "stage1_enabled", "conflict_policy"), diff.keys)
         assertEquals(JsonPrimitive(0.9), diff["trigger_threshold"])
-        assertEquals(JsonPrimitive(75L), diff["final_window_seconds"]) // an integer field is sent as an integer
+        assertEquals(JsonPrimitive(75L), diff["stage1_seconds"]) // an integer field is sent as an integer
         assertEquals(JsonPrimitive(false), diff["stage1_enabled"])
         assertEquals(JsonPrimitive("down_first"), diff["conflict_policy"])
     }
 
     @Test fun sameNumberWithDifferentFormattingIsNotAChange() {
-        val draft = fresh() + mapOf("trigger_threshold" to "0.850", "final_window_seconds" to "90.0")
+        val draft = fresh() + mapOf("trigger_threshold" to "0.850", "stage1_seconds" to "90.0")
         assertTrue(SettingsLogic.dirtyKeys(draft, saved).isEmpty())
     }
 
@@ -84,9 +84,9 @@ class SettingsLogicTest {
         assertEquals("Must be at least 0.01.", error("trigger_threshold", "0"))
         assertEquals("Must be at most 0.999.", error("trigger_threshold", "1"))
         assertNull(error("trigger_threshold", "0.95"))
-        assertEquals("Must be at most 300.", error("final_window_seconds", "301"))
-        assertEquals("Must be at least 1.", error("final_window_seconds", "0"))
-        assertEquals("Whole numbers only.", error("final_window_seconds", "45.5"))
+        assertEquals("Must be at most 300.", error("stage1_seconds", "301"))
+        assertEquals("Must be at least 1.", error("stage1_seconds", "0"))
+        assertEquals("Whole numbers only.", error("stage1_seconds", "45.5"))
         assertEquals("Must be at most 99.", error("stage1_stop_loss_pct", "100"))
         assertNull(error("stage1_stop_loss_pct", "0"))
         assertEquals("Must be at least 100.", error("stale_data_max_age_ms", "99"))

@@ -3,7 +3,7 @@ import { clamp, cx } from "../lib/format";
 interface CountdownRingProps {
   remaining: number | null;
   inWindow: boolean;
-  finalWindow: number;
+  stage1Window: number;
   duration: number | null;
   armed: boolean;
   stage0Enabled?: boolean;
@@ -17,7 +17,7 @@ interface CountdownRingProps {
 /** Which entry stage is live right now, from the seconds left in the market. */
 export function activeStageLabel(
   remaining: number,
-  finalWindow: number,
+  stage1Window: number,
   stage0Enabled: boolean,
   stage0Start: number,
   stage0End: number,
@@ -28,14 +28,14 @@ export function activeStageLabel(
   if (remaining <= stage3Seconds) return "STAGE 3";
   if (remaining <= stage2Seconds) return "STAGE 2";
   if (stage0Enabled && remaining > stage0End && remaining <= stage0Start) return "STAGE 0";
-  if (remaining <= finalWindow) return "STAGE 1";
+  if (remaining <= stage1Window) return "STAGE 1";
   return "WAITING";
 }
 
 export function CountdownRing({
   remaining,
   inWindow,
-  finalWindow,
+  stage1Window,
   duration,
   armed,
   stage0Enabled = false,
@@ -66,7 +66,7 @@ export function CountdownRing({
   const label =
     remaining === null
       ? "NO ACTIVE MARKET"
-      : activeStageLabel(remaining, finalWindow, stage0Enabled, stage0Start, stage0End, stage2Seconds, stage3Seconds);
+      : activeStageLabel(remaining, stage1Window, stage0Enabled, stage0Start, stage0End, stage2Seconds, stage3Seconds);
 
   return (
     <div className="relative shrink-0" style={{ width: size, height: size }}>

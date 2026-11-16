@@ -1,17 +1,17 @@
-"""FINAL_WINDOW_STAGED_MARKET_BUY.
+"""STAGE1_STAGED_MARKET_BUY.
 
 First part of the market: no trading.
-Final N seconds (default 80): monitor UP and DOWN best asks.
+Stage 1, last N seconds (default 80): monitor UP and DOWN best asks.
 
 Entries are staged. Each stage may place ONE buy per market:
 
 * stage 0 (optional, independent): while more than stage0_end_seconds (default 100) and at most stage0_start_seconds (default 200) remain
-  (independent of the final window), stage0_min_ask (default 0.60) <= best_ask <= stage0_max_ask (default 0.94). Asks of stage0_high_buy_price (0.90) or more
+  (independent of the stage 1), stage0_min_ask (default 0.60) <= best_ask <= stage0_max_ask (default 0.94). Asks of stage0_high_buy_price (0.90) or more
   only buy once stage0_high_buy_after_pct (50 %) of the window has passed (150s left). The risk manager also
   demands the BTC price gap (default $80) and the order manager sells the shares again once the
   best bid is the tier's take-profit percentage above the buy price (15 / 10 / 5 % by buy price, capped at 0.99).
 
-* stage 1: inside the final window, best_ask >= trigger_threshold (default 0.80).
+* stage 1: inside the stage 1, best_ask >= trigger_threshold (default 0.80).
   If the ask is not there yet the strategy keeps watching and fires the moment it
   gets there, any time before the market ends.
 * stage 2: stage3_seconds (default 30) < remaining <= stage2_seconds (default 50) and
@@ -45,7 +45,7 @@ def datetime_to_epoch_ms(value: datetime) -> int:
 def stage_plan(config: RuntimeSettings) -> list[tuple[int, float, float]]:
     """(stage, max remaining seconds, ask threshold) for every entry stage that is switched on."""
     plan = [
-        (1, float(config.final_window_seconds), config.trigger_threshold),
+        (1, float(config.stage1_seconds), config.trigger_threshold),
         (2, float(config.stage2_seconds), config.stage2_threshold),
         (3, float(config.stage3_seconds), config.stage3_threshold),
     ]
@@ -53,14 +53,14 @@ def stage_plan(config: RuntimeSettings) -> list[tuple[int, float, float]]:
 
 
 def stage0_active(config: RuntimeSettings, remaining: float) -> bool:
-    """Stage 0 buys between `stage0_start_seconds` left and `stage0_end_seconds` left (independent of the final window)."""
+    """Stage 0 buys between `stage0_start_seconds` left and `stage0_end_seconds` left (independent of the stage 1)."""
     return bool(
         config.stage0_enabled
         and config.stage0_end_seconds < remaining <= config.stage0_start_seconds
     )
 
 
-class FinalWindowStrategy:
+class Stage1Strategy:
     def evaluate(
         self,
         market: MarketInfo,
@@ -88,9 +88,9 @@ class FinalWindowStrategy:
                 False, remaining, up_ask, down_ask, up_armed, down_armed, reason="market_expired"
             )
         in_stage0 = stage0_active(config, remaining)
-        if remaining > config.final_window_seconds and not in_stage0:
+        if remaining > config.stage1_seconds and not in_stage0:
             return StrategyEvaluation(
-                False, remaining, up_ask, down_ask, up_armed, down_armed, reason="outside_final_window"
+                False, remaining, up_ask, down_ask, up_armed, down_armed, reason="outside_stage1"
             )
 
         signals: list[Signal] = []
@@ -153,4 +153,4 @@ class FinalWindowStrategy:
         )
 
 
-__all__ = ["FinalWindowStrategy", "datetime_to_epoch_ms", "stage0_active", "stage_plan"]
+__all__ = ["Stage1Strategy", "datetime_to_epoch_ms", "stage0_active", "stage_plan"]

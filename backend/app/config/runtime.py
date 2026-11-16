@@ -17,7 +17,7 @@ from app.config.settings import Settings
 
 OVERRIDABLE_KEYS = (
     "trigger_threshold",
-    "final_window_seconds",
+    "stage1_seconds",
     "stage1_enabled",
     "stage2_enabled",
     "stage3_enabled",
@@ -76,7 +76,7 @@ STAGE0_MAX_TAKE_PROFIT_PRICE = 0.99
 
 class RuntimeSettings(BaseModel):
     trigger_threshold: float = Field(ge=0.01, le=0.999)
-    final_window_seconds: int = Field(ge=1, le=300)
+    stage1_seconds: int = Field(ge=1, le=300)
     # Master switch per entry stage (stage 0: stage0_enabled). Off = no buys, no take-profit, no stop-loss.
     stage1_enabled: bool = True
     stage2_enabled: bool = True
@@ -163,12 +163,12 @@ class RuntimeSettings(BaseModel):
             raise ValueError("max_execution_price must be >= trigger_threshold")
         if self.max_execution_price < max(self.stage2_threshold, self.stage3_threshold):
             raise ValueError("max_execution_price must be >= the stage 2/3 thresholds")
-        # Stage windows follow each other: stage 1 starts at final_window_seconds and ends where stage 2
+        # Stage windows follow each other: stage 1 starts at stage1_seconds and ends where stage 2
         # starts, stage 2 ends where stage 3 starts. So the start times of the enabled stages must fall.
         starts = [
             (stage, label, float(value))
             for stage, label, value in (
-                (1, "final_window_seconds", self.final_window_seconds),
+                (1, "stage1_seconds", self.stage1_seconds),
                 (2, "stage2_seconds", self.stage2_seconds),
                 (3, "stage3_seconds", self.stage3_seconds),
             )
@@ -338,6 +338,10 @@ class RuntimeSettings(BaseModel):
         return data
 
 
+# Override keys renamed over time: old DB key -> current key.
+LEGACY_KEYS = {"final_window_seconds": "stage1_seconds"}
+
+
 class SettingsService:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
@@ -346,11 +350,29 @@ class SettingsService:
     def load(self, session: Session) -> None:
         from app.database.models import BotSetting
 
+        self._rename_legacy_keys(session)
         rows = session.execute(select(BotSetting)).scalars().all()
         self._overrides = {}
         for row in rows:
             if row.key in OVERRIDABLE_KEYS:
                 self._overrides[row.key] = row.value
+
+    @staticmethod
+    def _rename_legacy_keys(session: Session) -> None:
+        """Move a saved override from its old key to the new one (an existing new key wins)."""
+        from app.database.models import BotSetting
+
+        changed = False
+        for old, new in LEGACY_KEYS.items():
+            row = session.get(BotSetting, old)
+            if row is None:
+                continue
+            if session.get(BotSetting, new) is None:
+                session.add(BotSetting(key=new, value=row.value))
+            session.delete(row)
+            changed = True
+        if changed:
+            session.commit()
 
     def get(self) -> RuntimeSettings:
         merged: dict[str, Any] = {}

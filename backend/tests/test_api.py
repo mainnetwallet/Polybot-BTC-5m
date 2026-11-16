@@ -226,7 +226,7 @@ def test_settings_patch_and_validation():
         bad = client.patch("/api/settings", json={"max_execution_price": 0.5})
         assert bad.status_code == 400
 
-        bad_window = client.patch("/api/settings", json={"final_window_seconds": 0})
+        bad_window = client.patch("/api/settings", json={"stage1_seconds": 0})
         assert bad_window.status_code in {400, 422}
 
 

@@ -15,9 +15,9 @@ function mmss(seconds: number): string {
 function PhaseTimeline() {
   const { snapshot } = useBot();
   if (!snapshot) return <LoadingPanel className="xl:col-span-12" />;
-  const finalWindow = snapshot.strategy.final_window_seconds;
+  const stage1Window = snapshot.strategy.stage1_seconds;
   const duration = snapshot.market?.duration_seconds ?? null;
-  const observeSeconds = duration === null ? null : Math.max(0, duration - finalWindow);
+  const observeSeconds = duration === null ? null : Math.max(0, duration - stage1Window);
   const observePct = duration && observeSeconds !== null ? (observeSeconds / duration) * 100 : null;
   const active = snapshot.strategy.in_window;
 
@@ -29,12 +29,12 @@ function PhaseTimeline() {
           <div className="mt-1 text-[15px] font-semibold tracking-tight text-slate-100">
             {duration === null || observeSeconds === null
               ? "Market timing unavailable"
-              : `${observeSeconds % 60 === 0 ? `${observeSeconds / 60} minutes` : `${observeSeconds} seconds`} observation · ${finalWindow} seconds active`}
+              : `${observeSeconds % 60 === 0 ? `${observeSeconds / 60} minutes` : `${observeSeconds} seconds`} observation · ${stage1Window} seconds active`}
           </div>
         </div>
         <span className={cx("chip", active ? "border-amber/30 bg-amber/10 text-amber" : "border-sky/25 bg-sky/10 text-sky")}>
           <IconClock size={10} />
-          {active ? "In final window" : "Observation"}
+          {active ? "In stage 1" : "Observation"}
         </span>
       </div>
 
@@ -50,7 +50,7 @@ function PhaseTimeline() {
           </div>
           <div className="relative flex flex-1 items-center justify-center bg-amber/[0.12]">
             <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-amber">
-              Trade · {finalWindow}s
+              Trade · {stage1Window}s
             </span>
           </div>
         </div>
@@ -75,7 +75,7 @@ function PhaseTimeline() {
         <div className="rounded-lg border border-amber/20 bg-amber/[0.04] p-3.5">
           <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-amber">
             <span className="flex h-5 w-5 items-center justify-center rounded-md bg-amber/10 text-[10px]">02</span>
-            Final {finalWindow}s
+            Stage 1 · {stage1Window}s
           </div>
           <p className="mt-2 text-[11.5px] leading-relaxed text-slate-400">
             Each WebSocket update re-evaluates both best asks. The first ask at or above the trigger fires an
@@ -269,7 +269,7 @@ function PolicyPanel() {
   const config = snapshot?.config ?? {};
   const rows: Array<[string, string]> = [
     ["Trigger threshold", fmtCents(strategy?.trigger_threshold ?? null)],
-    ["Final window", strategy ? `${strategy.final_window_seconds}s` : "—"],
+    ["Stage 1", strategy ? `${strategy.stage1_seconds}s` : "—"],
     [
       "Stages on (1 / 2 / 3)",
       strategy

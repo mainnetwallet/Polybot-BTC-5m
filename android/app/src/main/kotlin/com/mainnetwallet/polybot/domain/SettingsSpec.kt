@@ -31,13 +31,13 @@ object SettingsSpec {
 
     val fields: List<SettingField> = listOf(
         SettingField("trigger_threshold", "Trigger threshold", "Ask at or above this decimal fires a marketable BUY. Never used as a limit price.", price),
-        SettingField("final_window_seconds", "Final window", "Seconds before expiry in which trading is enabled.", num(1.0, 300.0, true, "s")),
+        SettingField("stage1_seconds", "Stage 1", "Seconds before expiry in which trading is enabled.", num(1.0, 300.0, true, "s")),
         SettingField("duplicate_policy", "Duplicate policy", "Controls repeat entries for the same market or side.", SettingKind.Choice(listOf(
             "one_per_market" to "One order per market", "one_per_side" to "One per side", "allow" to "Allow duplicates"))),
         SettingField("conflict_policy", "Conflict policy", "Decision when UP and DOWN both qualify.", SettingKind.Choice(listOf(
             "up_first" to "UP first", "down_first" to "DOWN first", "highest_ask" to "Highest ask", "block_both" to "Block both"))),
 
-        SettingField("stage0_enabled", "Stage 0: early buy + sell", "On: before the final window, buy when the ask is low enough and BTC is far enough beyond the price to beat.", SettingKind.Toggle),
+        SettingField("stage0_enabled", "Stage 0: early buy + sell", "On: before the stage 1, buy when the ask is low enough and BTC is far enough beyond the price to beat.", SettingKind.Toggle),
         SettingField("stage0_start_seconds", "Starts at (seconds left)", "Stage 0 may start buying when this many seconds are left.", num(1.0, 300.0, true, "s")),
         SettingField("stage0_end_seconds", "Ends at (seconds left)", "Stage 0 stops buying when this many seconds are left.", num(0.0, 299.0, true, "s")),
         SettingField("stage0_min_ask", "Min ask", "Buys only while the best ask is at or above this decimal.", price),
@@ -108,8 +108,8 @@ object SettingsSpec {
 
     val sections: List<SettingSection> = listOf(
         SettingSection("entry", "Entry", listOf(
-            SettingGroup("Final-window entry", "When the final-window stages fire a marketable BUY.",
-                listOf("final_window_seconds", "trigger_threshold")),
+            SettingGroup("Stage 1 entry", "When stages 1 to 3 fire a marketable BUY.",
+                listOf("stage1_seconds", "trigger_threshold")),
             SettingGroup("Order handling", null, listOf("duplicate_policy", "conflict_policy")),
         )),
         SettingSection("stage0", "Stage 0", listOf(

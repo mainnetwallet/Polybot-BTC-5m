@@ -80,7 +80,7 @@ All values are defaults and can be changed in Settings or `.env`. Up to 3 buys p
 | Stage | Entry | Take-profit | Stop-loss |
 | --- | --- | --- | --- |
 | **0** early buy | `200`-`100`s left, ask `0.60`-`0.94`, BTC gap >= `$80` beyond the price to beat. One buy per market | Best bid `+15%` / `+10%` / `+5%` over avg cost (buy below `0.70` / `0.70`-`0.80` / above); `0` = hold | `50%` below avg cost (`15%` if bought at `0.90`+) |
-| **1** final window | Last `80`s, best ask >= `0.80`, gap >= `$20` (waits and buys as soon as it gets there) | Bought up to `0.86`: `+10%`; dearer: bid `0.99` | `15%` |
+| **1** stage 1 | Last `80`s, best ask >= `0.80`, gap >= `$20` (waits and buys as soon as it gets there) | Bought up to `0.86`: `+10%`; dearer: bid `0.99` | `15%` |
 | **2** add-on | `<= 50`s left, ask >= `0.90`, gap >= `$25` | Bid `0.99` | `9%` |
 | **3** add-on | `<= 30`s left, ask >= `0.90`, gap >= `$30` | held to settlement | `5%` |
 
@@ -101,7 +101,7 @@ Most used keys:
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `TRIGGER_THRESHOLD` / `FINAL_WINDOW_SECONDS` | `0.80` / `80` | Stage 1 ask trigger and window |
+| `TRIGGER_THRESHOLD` / `STAGE1_SECONDS` | `0.80` / `80` | Stage 1 ask trigger and window |
 | `STAGE0..3_ENABLED` | `true` | Switch a stage fully on/off |
 | `STAGE0_*`, `STAGE1_*`, `STAGE2_*`, `STAGE3_*` | see table above | Timing, ask range, take-profit, stop-loss per stage |
 | `MIN_PRICE_GAP_USD` / `STAGE2_...` / `STAGE3_...` | `20` / `25` / `30` | BTC (Chainlink TWAP60) must be this far beyond the price to beat; `0` = off; missing BTC data blocks the buy |
@@ -115,7 +115,7 @@ Most used keys:
 | `PAPER_STARTING_BALANCE` / `PAPER_FILL_RATIO` / `PAPER_SLIPPAGE_BPS` / `PAPER_FEE_RATE` | `10.0` / `1.0` / `0` / `0.07` | Paper simulation |
 | `API_TOKEN`, `ADMIN_USERNAME`, `ADMIN_PASSWORD` | empty / `admin` / empty | API secret and dashboard login (empty password = login disabled) |
 
-Settings page overrides (stored in SQLite): trigger, final window, max price, trade amount, daily loss/target, stale age, duplicate/conflict policy, paper slippage/fee, trades per day, open positions. Secrets and live switches are environment-only.
+Settings page overrides (stored in SQLite): trigger, stage 1, max price, trade amount, daily loss/target, stale age, duplicate/conflict policy, paper slippage/fee, trades per day, open positions. Secrets and live switches are environment-only.
 
 ## Live trading
 

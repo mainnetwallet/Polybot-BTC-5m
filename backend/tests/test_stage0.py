@@ -12,7 +12,7 @@ from app.database.session import session_scope
 from app.execution.base import FillPart, ExecutionReport, SellRequest
 from app.paper_trading.engine import PaperExecutionEngine
 from app.risk_manager.manager import RiskManager
-from app.strategy.engine import FinalWindowStrategy, datetime_to_epoch_ms
+from app.strategy.engine import Stage1Strategy, datetime_to_epoch_ms
 
 from .helpers import (
     books_for,
@@ -24,7 +24,7 @@ from .helpers import (
     stage_books,
 )
 
-STAGE0 = dict(stage0_enabled=True)  # window 200s -> 60s (the test final window), ask .60-.85, gap $80, take-profit +15 / +10 / +5 %
+STAGE0 = dict(stage0_enabled=True)  # window 200s -> 60s (the test stage 1), ask .60-.85, gap $80, take-profit +15 / +10 / +5 %
 
 
 LIMIT_85 = dict(stage0_max_ask=0.85)  # tests about the old .60-.85 band pin it; the default max ask is now .94
@@ -34,11 +34,11 @@ def evaluate(remaining: float, up: float, down: float, **config):
     market = make_market(remaining=remaining + 1000)
     now_ms = datetime_to_epoch_ms(market.window_end) - int(remaining * 1000)
     books = books_for(market, up, down)
-    return FinalWindowStrategy().evaluate(market, books, now_ms, make_config(**{**STAGE0, **config}))
+    return Stage1Strategy().evaluate(market, books, now_ms, make_config(**{**STAGE0, **config}))
 
 
 # ---------------------------------------------------------------- strategy
-def test_stage0_signals_between_200s_and_final_window():
+def test_stage0_signals_between_200s_and_stage1():
     result = evaluate(150, up=0.80, down=0.10)
     assert result.in_window is True
     # UP ask .80 is inside .60-.85; DOWN ask .10 is below the .60 minimum
@@ -58,8 +58,8 @@ def test_stage0_ask_outside_60_85_is_not_a_signal():
     assert result.signals[0].threshold == 0.85
 
 
-def test_stage0_window_is_200s_to_100s_independent_of_final_window():
-    assert evaluate(230, 0.9, 0.1).reason == "outside_final_window"
+def test_stage0_window_is_200s_to_100s_independent_of_stage1():
+    assert evaluate(230, 0.9, 0.1).reason == "outside_stage1"
     assert evaluate(230, 0.9, 0.1).signals == []
     start = evaluate(200, 0.8, 0.2)  # 200s left: stage 0 opens
     assert any(s.stage == 0 for s in start.signals)
@@ -67,10 +67,10 @@ def test_stage0_window_is_200s_to_100s_independent_of_final_window():
     assert any(s.stage == 0 for s in boundary.signals)
     ended = evaluate(100, 0.8, 0.2)  # 100s left: stage 0 is over
     assert all(s.stage != 0 for s in ended.signals)
-    gap = evaluate(80, 0.8, 0.2, final_window_seconds=60)  # between stage 0 end and the final window: nothing
+    gap = evaluate(80, 0.8, 0.2, stage1_seconds=60)  # between stage 0 end and the stage 1: nothing
     assert all(s.stage != 0 for s in gap.signals)
-    # moving the final window does not move the stage 0 end
-    wide = evaluate(90, 0.8, 0.2, final_window_seconds=120)
+    # moving the stage 1 does not move the stage 0 end
+    wide = evaluate(90, 0.8, 0.2, stage1_seconds=120)
     assert all(s.stage != 0 for s in wide.signals)
 
 
@@ -338,7 +338,7 @@ async def test_bot_buys_stage0_on_gap_side_only_then_sells_at_plus_5_percent():
     assert strategy["stage0_max_ask"] == 0.94
 
 
-async def test_bot_stage0_needs_gap_and_stops_in_final_window():
+async def test_bot_stage0_needs_gap_and_stops_in_stage1():
     market = make_market(remaining=150)
     bot = _running_bot(market, btc=(100_030.0, 100_000.0, ""))  # only $30 beyond: below the $50 gap
     bot.data._books = dict(books_for(market, up_ask=0.80, down_ask=0.10))
@@ -346,7 +346,7 @@ async def test_bot_stage0_needs_gap_and_stops_in_final_window():
     with session_scope() as session:
         assert session.execute(select(Order)).scalars().all() == []
 
-    late = make_market(remaining=55)  # final window: stage 0 is over
+    late = make_market(remaining=55)  # stage 1: stage 0 is over
     bot2 = _running_bot(late, btc=(100_300.0, 100_000.0, ""))
     bot2.data._books = dict(books_for(late, up_ask=0.90, down_ask=0.10))
     await _event(bot2, late)
@@ -379,7 +379,7 @@ async def test_stage0_retry_loop_stays_awake_right_after_the_buy():
 
 
 async def test_stage0_sell_only_sells_stage0_shares_not_stage1():
-    """Stage 0 bought UP, then stage 1 bought UP in the final window: the +5 % sell takes ONLY stage 0's shares."""
+    """Stage 0 bought UP, then stage 1 bought UP in the stage 1: the +5 % sell takes ONLY stage 0's shares."""
     stack = build_stack(make_config(**STAGE0, trade_amount_usdc=4.0, stage2_seconds=20, stage3_seconds=10))
     market = make_market(remaining=150)
     books = books_for(market, up_ask=0.80, down_ask=0.10)
@@ -387,7 +387,7 @@ async def test_stage0_sell_only_sells_stage0_shares_not_stage1():
     with session_scope() as session:
         s0_shares = session.execute(select(Order)).scalar_one().filled_size
 
-    # final window: stage 1 buys UP at 0.85 on top of the stage 0 holding
+    # stage 1: stage 1 buys UP at 0.85 on top of the stage 0 holding
     late = make_market(remaining=45)
     books1 = books_for(late, up_ask=0.85, down_ask=0.15)
     stage_books(stack, late, books1)
@@ -637,7 +637,7 @@ async def test_stage1_sell_does_not_break_the_stage_chain():
     assert len(buys) == 1
 
 
-async def test_bot_stage1_buys_in_final_window_then_sells_at_10_percent_profit():
+async def test_bot_stage1_buys_in_stage1_then_sells_at_10_percent_profit():
     market = make_market(remaining=55)
     bot = _running_bot(market, btc=(100_150.0, 100_000.0, ""))  # BTC $150 above the price to beat
     books = books_for(market, up_ask=0.85, down_ask=0.10)

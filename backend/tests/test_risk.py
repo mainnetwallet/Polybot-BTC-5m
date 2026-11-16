@@ -214,7 +214,7 @@ def test_stage1_can_buy_until_50_seconds_left_then_only_stage1_stays_off():
     assert risk.check(_side("UP"), _chain_ctx(50), config).reason == "stage1_missed"
     assert risk.check(_side("UP"), _chain_ctx(35), config).reason == "stage1_missed"
     # the cutoff is where stage 2 starts: with stage 2 starting at 70, stage 1 ends at 70
-    later = _chain_config().model_copy(update={"final_window_seconds": 90, "stage2_seconds": 70})
+    later = _chain_config().model_copy(update={"stage1_seconds": 90, "stage2_seconds": 70})
     assert risk.check(_side("UP"), _chain_ctx(71), later).approved is True
     assert risk.check(_side("UP"), _chain_ctx(70), later).reason == "stage1_missed"
     # stages 2 and 3 do not need stage 1: their own rules decide

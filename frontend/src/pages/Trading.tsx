@@ -142,7 +142,7 @@ export function Trading() {
           <EmptyState
             icon={<IconZap size={26} />}
             title="No executions yet"
-            hint="Start the bot and wait for an ask to reach the trigger inside the final window."
+            hint="Start the bot and wait for an ask to reach the trigger inside the stage 1."
           />
         )}
       </section>
