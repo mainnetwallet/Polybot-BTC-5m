@@ -138,9 +138,9 @@ export const TABS: TabSpec[] = [
   },
   {
     id: "risk",
-    label: "Risk",
-    title: "Risk & guardrails",
-    description: "Position sizing, order handling, daily limits and data-quality protection.",
+    label: "Amount & Limits",
+    title: "Amount & limits",
+    description: "Trade amount, max price, order handling, daily limits and data-quality protection.",
     groups: [
       { title: "Sizing", keys: ["trade_amount_usdc", "max_execution_price"] },
       { title: "Order handling", keys: ["duplicate_policy", "conflict_policy"] },
