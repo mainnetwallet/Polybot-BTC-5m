@@ -19,6 +19,8 @@ Entries are staged. Each stage may place ONE buy per market:
   gets there, any time before the market ends. Once either side's best ask reaches stage1_block_ask
   (default 0.98) inside the stage 1 window without a stage 1 buy, stage 1 does not buy in that market any more (even if the
   ask drops back and the rules are met again). Stages 0, 2 and 3 are unaffected.
+  Stage 2 and stage 3 work the same way with stage2_block_ask / stage3_block_ask (default 0.98), each inside its
+  own window and only for its own stage.
 * stage 2: stage3_seconds (default 30) < remaining <= stage2_seconds (default 50) and
   best_ask >= stage2_threshold (default 0.88). From stage3_seconds on stage 3 takes over.
 * stage 3: remaining <= stage3_seconds (default 30) and best_ask >= stage3_threshold
@@ -75,6 +77,11 @@ _STAGE0_BLOCKED_KEEP = 64  # remembered markets; older ones are long expired
 STAGE1_BLOCK_ASK = 0.98
 _STAGE1_BLOCKED_KEEP = 64
 
+# Same for stages 2 and 3 (defaults of stage2_block_ask / stage3_block_ask).
+STAGE2_BLOCK_ASK = 0.98
+STAGE3_BLOCK_ASK = 0.98
+_STAGE_BLOCKED_KEEP = 64
+
 
 class Stage1Strategy:
     def __init__(self) -> None:
@@ -82,6 +89,9 @@ class Stage1Strategy:
         self._stage0_blocked: dict[str, None] = {}
         # markets where an ask hit stage1_block_ask inside the stage 1 window (stage 1 buys stay off for them)
         self._stage1_blocked: dict[str, None] = {}
+        # same for stage 2 and stage 3
+        self._stage2_blocked: dict[str, None] = {}
+        self._stage3_blocked: dict[str, None] = {}
 
     def stage0_blocked(self, market_id: str) -> bool:
         return market_id in self._stage0_blocked
@@ -98,6 +108,17 @@ class Stage1Strategy:
         self._stage1_blocked[market_id] = None
         while len(self._stage1_blocked) > _STAGE1_BLOCKED_KEEP:
             self._stage1_blocked.pop(next(iter(self._stage1_blocked)))
+
+    def stage2_blocked(self, market_id: str) -> bool:
+        return market_id in self._stage2_blocked
+
+    def stage3_blocked(self, market_id: str) -> bool:
+        return market_id in self._stage3_blocked
+
+    def _block_stage(self, blocked: dict[str, None], market_id: str) -> None:
+        blocked[market_id] = None
+        while len(blocked) > _STAGE_BLOCKED_KEEP:
+            blocked.pop(next(iter(blocked)))
 
     def evaluate(
         self,
@@ -167,10 +188,25 @@ class Stage1Strategy:
         if in_stage1 and not self.stage1_blocked(market.market_id):
             if any(a is not None and a + 1e-9 >= config.stage1_block_ask for a in (up_ask, down_ask)):
                 self._block_stage1(market.market_id)  # an ask touched stage1_block_ask: no stage 1 buy in this market any more
+        for stage, blocked, block_ask in (
+            (2, self._stage2_blocked, config.stage2_block_ask),
+            (3, self._stage3_blocked, config.stage3_block_ask),
+        ):
+            in_stage = (
+                config.stage_enabled(stage)
+                and config.stage_end_seconds(stage) < remaining <= (config.stage2_seconds if stage == 2 else config.stage3_seconds)
+            )
+            if in_stage and market.market_id not in blocked:
+                if any(a is not None and a + 1e-9 >= block_ask for a in (up_ask, down_ask)):
+                    self._block_stage(blocked, market.market_id)  # an ask touched the block ask: this stage stays off here
         for stage, max_remaining, threshold in stage_plan(config):
             if remaining > max_remaining:
                 continue
             if stage == 1 and self.stage1_blocked(market.market_id):
+                continue
+            if stage == 2 and self.stage2_blocked(market.market_id):
+                continue
+            if stage == 3 and self.stage3_blocked(market.market_id):
                 continue
             if stage == 2 and remaining <= config.stage_end_seconds(2):
                 continue  # stage 2 ends where stage 3 begins
@@ -203,4 +239,4 @@ class Stage1Strategy:
         )
 
 
-__all__ = ["STAGE0_BLOCK_ASK", "STAGE1_BLOCK_ASK", "Stage1Strategy", "datetime_to_epoch_ms", "stage0_active", "stage_plan"]
+__all__ = ["STAGE0_BLOCK_ASK", "STAGE1_BLOCK_ASK", "STAGE2_BLOCK_ASK", "STAGE3_BLOCK_ASK", "Stage1Strategy", "datetime_to_epoch_ms", "stage0_active", "stage_plan"]

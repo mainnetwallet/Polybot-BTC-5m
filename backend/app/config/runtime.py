@@ -48,6 +48,8 @@ OVERRIDABLE_KEYS = (
     "stage0_early_max_ask",
     "stage0_block_ask",
     "stage1_block_ask",
+    "stage2_block_ask",
+    "stage3_block_ask",
     "stage0_min_price_gap_usd",
     "stage0_mid_from_ask",
     "stage0_high_from_ask",
@@ -95,6 +97,10 @@ class RuntimeSettings(BaseModel):
     stage2_threshold: float = Field(default=0.90, ge=0.01, le=0.999)
     stage3_seconds: int = Field(default=30, ge=1, le=300)
     stage3_threshold: float = Field(default=0.90, ge=0.01, le=0.999)
+    # Once either side's best ask reaches this inside the stage 2 (stage 3) window, that stage stops buying in
+    # that market for good (the ask dropping again does not lift it). A value above 0.99 turns the block off.
+    stage2_block_ask: float = Field(default=0.98, ge=0.01, le=0.999)
+    stage3_block_ask: float = Field(default=0.98, ge=0.01, le=0.999)
     max_execution_price: float = Field(ge=0.01, le=1.0)
     trade_amount_usdc: float = Field(gt=0.0, le=100000.0)
     max_daily_loss: float = Field(ge=0.0)
@@ -181,6 +187,10 @@ class RuntimeSettings(BaseModel):
             raise ValueError("conflict_policy must be up_first, down_first, highest_ask or block_both")
         if self.stage1_block_ask < self.stage1_threshold:
             raise ValueError("stage1_block_ask must be >= stage1_threshold, or stage 1 could never buy")
+        if self.stage2_block_ask < self.stage2_threshold:
+            raise ValueError("stage2_block_ask must be >= stage2_threshold, or stage 2 could never buy")
+        if self.stage3_block_ask < self.stage3_threshold:
+            raise ValueError("stage3_block_ask must be >= stage3_threshold, or stage 3 could never buy")
         if self.stage1_max_ask < self.stage1_threshold:
             raise ValueError("stage1_max_ask must be >= stage1_threshold")
         if self.max_execution_price < self.stage1_threshold:

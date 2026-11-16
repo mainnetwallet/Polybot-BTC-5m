@@ -40,6 +40,8 @@ export interface StrategyState {
   stage1_seconds: number;
   stage1_max_ask: number;
   stage1_block_ask: number;
+  stage2_block_ask: number;
+  stage3_block_ask: number;
   stage1_enabled: boolean;
   stage2_enabled: boolean;
   stage3_enabled: boolean;
@@ -253,6 +255,8 @@ export interface SettingsState {
   stage1_seconds: number;
   stage1_max_ask: number;
   stage1_block_ask: number;
+  stage2_block_ask: number;
+  stage3_block_ask: number;
   stage1_enabled: boolean;
   stage2_enabled: boolean;
   stage3_enabled: boolean;

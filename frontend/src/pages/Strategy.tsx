@@ -271,6 +271,8 @@ function PolicyPanel() {
     ["Stage 1 threshold", fmtCents(strategy?.stage1_threshold ?? null)],
     ["Stage 1", strategy ? `${strategy.stage1_seconds}s` : "—"],
     ["Stage 1 block ask", fmtCents(strategy?.stage1_block_ask ?? null)],
+    ["Stage 2 block ask", fmtCents(strategy?.stage2_block_ask ?? null)],
+    ["Stage 3 block ask", fmtCents(strategy?.stage3_block_ask ?? null)],
     [
       "Stages on (1 / 2 / 3)",
       strategy

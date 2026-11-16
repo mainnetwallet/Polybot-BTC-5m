@@ -84,6 +84,16 @@ const CROSS_RULES: CrossRule[] = [
     message: "The stage 1 block ask must not be lower than the stage 1 ask trigger, or stage 1 could never buy.",
   },
   {
+    keys: ["stage2_threshold", "stage2_block_ask"],
+    broken: (d) => n(d, "stage2_block_ask") < n(d, "stage2_threshold"),
+    message: "The stage 2 block ask must not be lower than the stage 2 ask trigger, or stage 2 could never buy.",
+  },
+  {
+    keys: ["stage3_threshold", "stage3_block_ask"],
+    broken: (d) => n(d, "stage3_block_ask") < n(d, "stage3_threshold"),
+    message: "The stage 3 block ask must not be lower than the stage 3 ask trigger, or stage 3 could never buy.",
+  },
+  {
     keys: ["stage1_max_ask", "stage1_threshold"],
     broken: (d) => n(d, "stage1_max_ask") < n(d, "stage1_threshold"),
     message: "Stage 1 max ask must be at least the stage 1 ask trigger.",

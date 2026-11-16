@@ -67,6 +67,7 @@ object SettingsSpec {
         SettingField("stage2_enabled", "Stage 2: on / off", "Off: no buys, no take-profit and no stop-loss for stage 2.", SettingKind.Toggle),
         SettingField("stage2_seconds", "Seconds left", "From this many seconds before expiry stage 2 may add one more buy.", num(1.0, 300.0, true, "s")),
         SettingField("stage2_threshold", "Ask trigger", "Stage 2 buys when a best ask is at or above this decimal.", price),
+        SettingField("stage2_block_ask", "Block market at ask", "If either side's best ask touches this decimal during the stage 2 window, stage 2 buys nothing more in that market (even if the ask falls back). Only that market and only stage 2; existing sells are not affected. Default 0.98; above that the block is off.", price),
         SettingField("stage2_min_price_gap_usd", "Min price gap", "Same price-to-beat rule for stage 2 buys. 0 = off.", num(0.0, 1_000_000.0, suffix = "USD")),
         SettingField("stage2_sell_enabled", "Take-profit sell", "On: stage 2 shares are sold when the best bid reaches the sell price.", SettingKind.Toggle),
         SettingField("stage2_sell_price", "Sell at", "Must be higher than the stage 2 ask trigger.", num(0.02, 0.999)),
@@ -75,6 +76,7 @@ object SettingsSpec {
         SettingField("stage3_enabled", "Stage 3: on / off", "Off: no buys and no stop-loss for stage 3. Stage 3 has no take-profit.", SettingKind.Toggle),
         SettingField("stage3_seconds", "Seconds left", "From this many seconds before expiry stage 3 may buy. Stage 1 stops buying at this mark.", num(1.0, 300.0, true, "s")),
         SettingField("stage3_threshold", "Ask trigger", "Stage 3 buys when a best ask is at or above this decimal.", price),
+        SettingField("stage3_block_ask", "Block market at ask", "If either side's best ask touches this decimal during the stage 3 window, stage 3 buys nothing more in that market (even if the ask falls back). Only that market and only stage 3; existing sells are not affected. Default 0.98; above that the block is off.", price),
         SettingField("stage3_min_price_gap_usd", "Min price gap", "Same price-to-beat rule for stage 3 buys. 0 = off.", num(0.0, 1_000_000.0, suffix = "USD")),
         SettingField("stage3_stop_loss_pct", "Stop-loss %", "Market sell once the best bid is this many percent below the average buy. 0 = off.", num(0.0, 99.0, suffix = "%")),
 
@@ -128,11 +130,11 @@ object SettingsSpec {
             SettingGroup("Exit", null, listOf("stage1_sell_enabled", "stage1_sell_max_buy", "stage1_take_profit_pct", "stage1_sell_price_high", "stage1_stop_loss_pct")),
         )),
         SettingSection("stage2", "Stage 2", listOf(
-            SettingGroup("Entry", null, listOf("stage2_enabled", "stage2_seconds", "stage2_threshold", "stage2_min_price_gap_usd")),
+            SettingGroup("Entry", null, listOf("stage2_enabled", "stage2_seconds", "stage2_threshold", "stage2_block_ask", "stage2_min_price_gap_usd")),
             SettingGroup("Exit", null, listOf("stage2_sell_enabled", "stage2_sell_price", "stage2_stop_loss_pct")),
         )),
         SettingSection("stage3", "Stage 3", listOf(
-            SettingGroup("Entry", null, listOf("stage3_enabled", "stage3_seconds", "stage3_threshold", "stage3_min_price_gap_usd")),
+            SettingGroup("Entry", null, listOf("stage3_enabled", "stage3_seconds", "stage3_threshold", "stage3_block_ask", "stage3_min_price_gap_usd")),
             SettingGroup("Exit", "Stage 3 has no take-profit.", listOf("stage3_stop_loss_pct")),
         )),
         SettingSection("risk", "Risk", listOf(
@@ -203,6 +205,12 @@ object SettingsLogic {
         Triple(listOf("stage2_sell_price", "stage2_threshold"),
             { d -> d.getValue("stage2_sell_price") <= d.getValue("stage2_threshold") },
             "Sell price must be higher than the stage 2 ask trigger."),
+        Triple(listOf("stage2_threshold", "stage2_block_ask"),
+            { d -> d.getValue("stage2_block_ask") < d.getValue("stage2_threshold") },
+            "The stage 2 block ask must not be lower than the stage 2 ask trigger, or stage 2 could never buy."),
+        Triple(listOf("stage3_threshold", "stage3_block_ask"),
+            { d -> d.getValue("stage3_block_ask") < d.getValue("stage3_threshold") },
+            "The stage 3 block ask must not be lower than the stage 3 ask trigger, or stage 3 could never buy."),
         Triple(listOf("stage1_threshold", "stage1_block_ask"),
             { d -> d.getValue("stage1_block_ask") < d.getValue("stage1_threshold") },
             "The stage 1 block ask must not be lower than the stage 1 ask trigger, or stage 1 could never buy."),

@@ -25,6 +25,8 @@
    "reason": "no_market",
    "stage1_threshold": 0.85,
    "stage1_block_ask": 0.98,
+   "stage2_block_ask": 0.98,
+   "stage3_block_ask": 0.98,
    "stage1_seconds": 90,
    "stage1_enabled": true,
    "stage2_enabled": true,
@@ -120,6 +122,8 @@
   "config": {
    "stage1_threshold": 0.85,
    "stage1_block_ask": 0.98,
+   "stage2_block_ask": 0.98,
+   "stage3_block_ask": 0.98,
    "stage1_seconds": 90,
    "stage1_enabled": true,
    "stage2_enabled": true,

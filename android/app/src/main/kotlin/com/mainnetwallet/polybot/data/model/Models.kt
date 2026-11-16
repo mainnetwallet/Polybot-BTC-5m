@@ -58,6 +58,8 @@ data class StrategyState(
     val reason: String = "",
     @SerialName("stage1_threshold") val stage1Threshold: Double = 0.0,
     @SerialName("stage1_block_ask") val stage1BlockAsk: Double = 0.98,
+    @SerialName("stage2_block_ask") val stage2BlockAsk: Double = 0.98,
+    @SerialName("stage3_block_ask") val stage3BlockAsk: Double = 0.98,
     @SerialName("stage1_seconds") val stage1Seconds: Double = 0.0,
     @SerialName("stage1_enabled") val stage1Enabled: Boolean = false,
     @SerialName("stage2_enabled") val stage2Enabled: Boolean = false,

@@ -1733,6 +1733,8 @@ class TradingBot:
                 "stage0_early_max_ask": config.stage0_early_max_ask,
                 "stage0_block_ask": config.stage0_block_ask,
                 "stage1_block_ask": config.stage1_block_ask,
+                "stage2_block_ask": config.stage2_block_ask,
+                "stage3_block_ask": config.stage3_block_ask,
                 "stage0_min_price_gap_usd": config.stage0_min_price_gap_usd,
                 "stage0_mid_from_ask": config.stage0_mid_from_ask,
                 "stage0_high_from_ask": config.stage0_high_from_ask,

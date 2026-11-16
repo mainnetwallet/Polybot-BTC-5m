@@ -520,3 +520,14 @@ def test_stage1_block_ask_setting_roundtrip():
         assert client.patch("/api/settings", json={"stage1_block_ask": 1.5}).status_code in {400, 422}
         # below the stage 1 ask trigger stage 1 could never buy
         assert client.patch("/api/settings", json={"stage1_block_ask": 0.5}).status_code in {400, 422}
+
+
+def test_stage2_stage3_block_ask_setting_roundtrip():
+    with TestClient(create_app()) as client:
+        data = client.get("/api/settings").json()
+        assert data["stage2_block_ask"] == 0.98 and data["stage3_block_ask"] == 0.98
+        ok = client.patch("/api/settings", json={"stage2_block_ask": 0.95, "stage3_block_ask": 0.96})
+        assert ok.status_code == 200
+        assert ok.json()["stage2_block_ask"] == 0.95 and ok.json()["stage3_block_ask"] == 0.96
+        assert client.patch("/api/settings", json={"stage2_block_ask": 1.5}).status_code in {400, 422}
+        assert client.patch("/api/settings", json={"stage3_block_ask": 0.5}).status_code in {400, 422}
