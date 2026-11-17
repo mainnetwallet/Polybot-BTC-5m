@@ -96,6 +96,45 @@ def _make_client_class():
     return LiveClobClient
 
 
+KEEPALIVE_EXPIRY_SECONDS = 300.0
+KEEPALIVE_PING_SECONDS = 2.0
+
+
+def configure_sdk_http_pool() -> bool:
+    """Replace the SDK's module-level ``httpx.Client`` with one that keeps connections alive.
+
+    The stock client uses httpx's default keep-alive expiry (5s). A stop-loss usually fires after
+    the connection sat idle for longer than that, so the sell paid a fresh DNS + TCP + TLS +
+    HTTP/2 handshake (several round trips to the CLOB) before the order was even sent. With a long
+    expiry plus the periodic ``keep_connection_warm`` ping the socket stays open and the sell
+    goes out on an already established connection. Returns True when the pool was replaced.
+    """
+    try:
+        import httpx
+        from py_clob_client_v2.http_helpers import helpers
+    except Exception:
+        return False
+    current = getattr(helpers, "_http_client", None)
+    if current is None or getattr(current, "_polybot_keepalive", False):
+        return False
+    fresh = httpx.Client(
+        http2=True,
+        timeout=httpx.Timeout(10.0, connect=5.0),
+        limits=httpx.Limits(
+            max_connections=16,
+            max_keepalive_connections=16,
+            keepalive_expiry=KEEPALIVE_EXPIRY_SECONDS,
+        ),
+    )
+    fresh._polybot_keepalive = True  # marker so a second build does not swap it again
+    helpers._http_client = fresh
+    try:
+        current.close()
+    except Exception:
+        pass
+    return True
+
+
 def _error_text(exc: Exception) -> str:
     detail = getattr(exc, "error_msg", None) or getattr(exc, "msg", None) or ""
     return str(detail)[:200]
@@ -190,6 +229,8 @@ class LiveExecutionEngine(ExecutionEngine):
         self._validate_gates()
         from py_clob_client_v2 import ApiCreds
 
+        configure_sdk_http_pool()
+
         client = _make_client_class()(
             host=self._settings.clob_base_url,
             chain_id=self._settings.polymarket_chain_id,
@@ -244,6 +285,31 @@ class LiveExecutionEngine(ExecutionEngine):
         if size <= 0 or price <= 0 or price >= 1:
             return 0.0
         return round(size * rate * ((price * (1.0 - price)) ** exponent), 5)
+
+    async def keep_connection_warm(self) -> None:
+        """Send a tiny GET so the CLOB connection never idles out before a stop-loss needs it.
+
+        Fire-and-forget on the sell pool (the same warm HTTP/2 connection, and never queued
+        behind database work); the caller is not held up and at most one ping is in flight.
+        Pings are at least ``KEEPALIVE_PING_SECONDS`` apart. Failures are ignored: the next
+        call simply reconnects, exactly as before this existed.
+        """
+        client = self._client
+        if client is None or not self._orders_allowed:
+            return
+        now = time.monotonic()
+        task = getattr(self, "_ping_task", None)
+        if (task is not None and not task.done()) or now - getattr(self, "_ping_at", 0.0) < KEEPALIVE_PING_SECONDS:
+            return
+        self._ping_at = now
+
+        async def _ping() -> None:
+            try:
+                await asyncio.get_running_loop().run_in_executor(self._sell_pool, client.get_server_time)
+            except Exception as exc:  # best effort only
+                logger.debug("live keep-alive ping failed (%s)", type(exc).__name__)
+
+        self._ping_task = asyncio.create_task(_ping(), name="clob-keepalive")
 
     async def prewarm(self, token_ids: list[str], condition_id: str | None = None) -> None:
         """Cache tick size / neg-risk / fee parameters so the first order has no lookups."""
