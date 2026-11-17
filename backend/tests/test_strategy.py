@@ -214,21 +214,21 @@ def test_stage1_block_does_not_touch_stage2_and_stage3():
     assert 3 in [s.stage for s in result.signals]
 
 
-def test_stage1_block_ask_is_a_setting_with_default_098():
+def test_stage1_block_ask_is_a_setting_with_default_099():
     from app.config.settings import Settings
 
-    assert Settings.model_fields["stage1_block_ask"].default == 0.98
-    assert make_config().stage1_block_ask == 0.98
+    assert Settings.model_fields["stage1_block_ask"].default == 0.99
+    assert make_config().stage1_block_ask == 0.99
     assert "stage1_block_ask" in make_config().model_dump()
 
 
-def test_stage1_ask_of_097_does_not_block_but_098_does():
+def test_stage1_ask_of_098_does_not_block_but_099_does():
     market = make_market(remaining=1000)
     strategy = Stage1Strategy()
     config = make_config()
-    assert [s.side for s in _stage1_run(strategy, market, config, 58, 0.97, 0.03)] == ["UP"]
+    assert [s.side for s in _stage1_run(strategy, market, config, 58, 0.98, 0.02)] == ["UP"]
     assert not strategy.stage1_blocked(market.market_id)
-    assert _stage1_run(strategy, market, config, 56, 0.98, 0.02) == []
+    assert _stage1_run(strategy, market, config, 56, 0.99, 0.01) == []
     assert strategy.stage1_blocked(market.market_id)
 
 
@@ -259,12 +259,12 @@ def _stage_run(strategy, market, config, stage, remaining, up, down):
     return [s for s in result.signals if s.stage == stage]
 
 
-def test_stage2_and_stage3_block_ask_are_settings_with_default_098():
+def test_stage2_and_stage3_block_ask_are_settings_with_default_099():
     from app.config.settings import Settings
 
     for n in (2, 3):
-        assert Settings.model_fields[f"stage{n}_block_ask"].default == 0.98
-        assert getattr(make_config(), f"stage{n}_block_ask") == 0.98
+        assert Settings.model_fields[f"stage{n}_block_ask"].default == 0.99
+        assert getattr(make_config(), f"stage{n}_block_ask") == 0.99
         assert f"stage{n}_block_ask" in make_config().model_dump()
 
 
@@ -274,20 +274,20 @@ def test_stage2_ask_touching_block_ask_blocks_stage2_for_the_rest_of_the_market(
     strategy = Stage1Strategy()
     # remaining 45 is inside the stage 2 window (50 > r > 30)
     assert _stage_run(strategy, market, config, 2, 48, 0.80, 0.20) == []
-    assert _stage_run(strategy, market, config, 2, 46, 0.98, 0.02) == []  # the touching tick does not buy
+    assert _stage_run(strategy, market, config, 2, 46, 0.99, 0.01) == []  # the touching tick does not buy
     assert strategy.stage2_blocked(market.market_id)
     assert _stage_run(strategy, market, config, 2, 44, 0.92, 0.08) == []  # rules met again: still blocked
     assert _stage_run(strategy, market, config, 2, 42, 0.08, 0.92) == []  # other side too
     assert not strategy.stage3_blocked(market.market_id)
 
 
-def test_stage2_ask_097_does_not_block_but_098_does():
+def test_stage2_ask_098_does_not_block_but_099_does():
     market = make_market(remaining=1000)
     strategy = Stage1Strategy()
     config = make_config()
-    assert [s.side for s in _stage_run(strategy, market, config, 2, 48, 0.97, 0.03)] == ["UP"]
+    assert [s.side for s in _stage_run(strategy, market, config, 2, 48, 0.98, 0.02)] == ["UP"]
     assert not strategy.stage2_blocked(market.market_id)
-    assert _stage_run(strategy, market, config, 2, 46, 0.98, 0.02) == []
+    assert _stage_run(strategy, market, config, 2, 46, 0.99, 0.01) == []
     assert strategy.stage2_blocked(market.market_id)
 
 

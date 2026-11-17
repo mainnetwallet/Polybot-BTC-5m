@@ -66,10 +66,10 @@ class Settings(BaseSettings):
         default=0.85, validation_alias=AliasChoices("STAGE1_THRESHOLD", "TRIGGER_THRESHOLD")
     )
     # An ask at or above this inside the stage 1 window blocks further stage 1 buys in that market.
-    stage1_block_ask: float = 0.98
+    stage1_block_ask: float = 0.99
     # An ask at or above this inside the stage 2 / stage 3 window blocks further buys of that stage in that market.
-    stage2_block_ask: float = 0.98
-    stage3_block_ask: float = 0.98
+    stage2_block_ask: float = 0.99
+    stage3_block_ask: float = 0.99
     # FINAL_WINDOW_SECONDS is the old env name and is still read.
     stage1_seconds: int = Field(
         default=90, validation_alias=AliasChoices("STAGE1_SECONDS", "FINAL_WINDOW_SECONDS")

@@ -17,9 +17,9 @@ Entries are staged. Each stage may place ONE buy per market:
 * stage 1: inside the stage 1, best_ask >= stage1_threshold (default 0.85).
   If the ask is not there yet the strategy keeps watching and fires the moment it
   gets there, any time before the market ends. Once either side's best ask reaches stage1_block_ask
-  (default 0.98) inside the stage 1 window without a stage 1 buy, stage 1 does not buy in that market any more (even if the
+  (default 0.99) inside the stage 1 window without a stage 1 buy, stage 1 does not buy in that market any more (even if the
   ask drops back and the rules are met again). Stages 0, 2 and 3 are unaffected.
-  Stage 2 and stage 3 work the same way with stage2_block_ask / stage3_block_ask (default 0.98), each inside its
+  Stage 2 and stage 3 work the same way with stage2_block_ask / stage3_block_ask (default 0.99), each inside its
   own window and only for its own stage.
 * stage 2: stage3_seconds (default 30) < remaining <= stage2_seconds (default 50) and
   best_ask >= stage2_threshold (default 0.88). From stage3_seconds on stage 3 takes over.
@@ -74,12 +74,12 @@ _STAGE0_BLOCKED_KEEP = 64  # remembered markets; older ones are long expired
 
 # Default of the stage1_block_ask setting: once either side's best ask reaches it inside the stage 1 window,
 # stage 1 stops buying in that market.
-STAGE1_BLOCK_ASK = 0.98
+STAGE1_BLOCK_ASK = 0.99
 _STAGE1_BLOCKED_KEEP = 64
 
 # Same for stages 2 and 3 (defaults of stage2_block_ask / stage3_block_ask).
-STAGE2_BLOCK_ASK = 0.98
-STAGE3_BLOCK_ASK = 0.98
+STAGE2_BLOCK_ASK = 0.99
+STAGE3_BLOCK_ASK = 0.99
 _STAGE_BLOCKED_KEEP = 64
 
 

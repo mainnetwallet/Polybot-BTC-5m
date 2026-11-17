@@ -88,7 +88,7 @@ class RuntimeSettings(BaseModel):
     # Once either side's best ask reaches this inside the stage 1 window without a stage 1 buy, stage 1 stops
     # buying in that market for good (the ask dropping again does not lift it). Asks never exceed 0.99, so a
     # value above 0.99 effectively turns the block off.
-    stage1_block_ask: float = Field(default=0.98, ge=0.01, le=0.999)
+    stage1_block_ask: float = Field(default=0.99, ge=0.01, le=0.999)
     # Master switch per entry stage (stage 0: stage0_enabled). Off = no buys, no take-profit, no stop-loss.
     stage1_enabled: bool = True
     stage2_enabled: bool = True
@@ -99,8 +99,8 @@ class RuntimeSettings(BaseModel):
     stage3_threshold: float = Field(default=0.90, ge=0.01, le=0.999)
     # Once either side's best ask reaches this inside the stage 2 (stage 3) window, that stage stops buying in
     # that market for good (the ask dropping again does not lift it). A value above 0.99 turns the block off.
-    stage2_block_ask: float = Field(default=0.98, ge=0.01, le=0.999)
-    stage3_block_ask: float = Field(default=0.98, ge=0.01, le=0.999)
+    stage2_block_ask: float = Field(default=0.99, ge=0.01, le=0.999)
+    stage3_block_ask: float = Field(default=0.99, ge=0.01, le=0.999)
     max_execution_price: float = Field(ge=0.01, le=1.0)
     trade_amount_usdc: float = Field(gt=0.0, le=100000.0)
     max_daily_loss: float = Field(ge=0.0)

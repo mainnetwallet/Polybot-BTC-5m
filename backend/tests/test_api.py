@@ -513,7 +513,7 @@ def test_stage0_block_ask_setting_roundtrip():
 
 def test_stage1_block_ask_setting_roundtrip():
     with TestClient(create_app()) as client:
-        assert client.get("/api/settings").json()["stage1_block_ask"] == 0.98
+        assert client.get("/api/settings").json()["stage1_block_ask"] == 0.99
         ok = client.patch("/api/settings", json={"stage1_block_ask": 0.95})
         assert ok.status_code == 200 and ok.json()["stage1_block_ask"] == 0.95
         assert client.get("/api/settings").json()["stage1_block_ask"] == 0.95
@@ -525,7 +525,7 @@ def test_stage1_block_ask_setting_roundtrip():
 def test_stage2_stage3_block_ask_setting_roundtrip():
     with TestClient(create_app()) as client:
         data = client.get("/api/settings").json()
-        assert data["stage2_block_ask"] == 0.98 and data["stage3_block_ask"] == 0.98
+        assert data["stage2_block_ask"] == 0.99 and data["stage3_block_ask"] == 0.99
         ok = client.patch("/api/settings", json={"stage2_block_ask": 0.95, "stage3_block_ask": 0.96})
         assert ok.status_code == 200
         assert ok.json()["stage2_block_ask"] == 0.95 and ok.json()["stage3_block_ask"] == 0.96
