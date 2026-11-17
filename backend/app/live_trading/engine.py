@@ -705,9 +705,25 @@ class LiveExecutionEngine(ExecutionEngine):
             )
         return {"balance": balance, "allowance": allowance}
 
-    async def fetch_onchain_positions(self) -> list[dict] | None:
-        """Best-effort read of Polymarket Data API positions for the funder wallet."""
+    def _wallet_address(self) -> str:
+        """The wallet that holds the tokens: the funder address, or for an EOA (signature type 0) without
+        one, the address of the private key itself. Empty when it cannot be determined."""
         funder = self._settings.polymarket_funder_address.strip()
+        if funder:
+            return funder
+        key = self._settings.polymarket_private_key.strip()
+        if self._settings.polymarket_signature_type != 0 or not key:
+            return ""
+        try:
+            from eth_account import Account
+
+            return str(Account.from_key(key).address)
+        except Exception:
+            return ""
+
+    async def fetch_onchain_positions(self) -> list[dict] | None:
+        """Best-effort read of Polymarket Data API positions for the wallet that holds the tokens."""
+        funder = self._wallet_address()
         if not funder:
             return None
         import httpx
@@ -836,3 +852,5 @@ class LiveExecutionEngine(ExecutionEngine):
 
     async def close(self) -> None:
         self._client = None
+        # do not wait for a sell still in flight (it would block the event loop); queued ones are dropped
+        self._sell_pool.shutdown(wait=False, cancel_futures=True)

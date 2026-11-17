@@ -74,9 +74,12 @@ def create_app() -> FastAPI:
             await bot.shutdown()
 
     app = FastAPI(
-        title="Polymarket Final-60s BTC Bot",
+        title="Polymarket BTC 5m Bot",
         version="1.0.0",
-        description="Stage 1 (last 80 seconds), marketable BUY when the ask is >= 0.80.",
+        description=(
+            "Staged marketable BUYs on Polymarket BTC up/down 5-minute markets: stage 0 early entry, "
+            "stage 1 (last 90 seconds, ask >= 0.85) and add-on stages 2 and 3, each with its own exits."
+        ),
         lifespan=lifespan,
     )
     app.add_middleware(

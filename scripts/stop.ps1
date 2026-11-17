@@ -124,17 +124,73 @@ function Wait-PortClosed([int]$Port) {
     return (-not (Test-PortOpen $Port))
 }
 
+function Read-DotEnv {
+    $result = @{}
+    $path = Join-Path $Root ".env"
+    if (-not (Test-Path $path)) {
+        return $result
+    }
+    foreach ($line in Get-Content -Path $path) {
+        if ($line.TrimStart().StartsWith("#")) {
+            continue
+        }
+        if ($line -match '^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$') {
+            $result[$Matches[1]] = $Matches[2].Trim('"').Trim("'")
+        }
+    }
+    return $result
+}
+
+# Asks the running backend to stop the bot. The control API needs credentials as soon as API_TOKEN or
+# ADMIN_PASSWORD is set in .env: send the API token when there is one, otherwise sign in with the admin
+# account. Returns $true when the backend confirmed the stop.
+function Stop-BotThroughApi {
+    $cfg = Read-DotEnv
+    $token = ([string]$cfg["API_TOKEN"]).Trim()
+    $password = [string]$cfg["ADMIN_PASSWORD"]
+    $headers = @{}
+    if ($token) {
+        $headers["X-API-Key"] = $token
+    }
+    try {
+        $session = $null
+        if (-not $token -and $password) {
+            $user = ([string]$cfg["ADMIN_USERNAME"]).Trim()
+            if (-not $user) { $user = "admin" }
+            $body = @{ username = $user; password = $password } | ConvertTo-Json -Compress
+            Invoke-RestMethod -Method Post -Uri "$ApiUrl/api/auth/login" -Body $body -ContentType "application/json" `
+                -SessionVariable session -TimeoutSec 5 | Out-Null
+        }
+        if ($session) {
+            Invoke-RestMethod -Method Post -Uri "$ApiUrl/api/bot/stop" -WebSession $session -TimeoutSec 5 | Out-Null
+        }
+        else {
+            Invoke-RestMethod -Method Post -Uri "$ApiUrl/api/bot/stop" -Headers $headers -TimeoutSec 5 | Out-Null
+        }
+        return $true
+    }
+    catch {
+        $status = 0
+        if ($_.Exception.Response) {
+            $status = [int]$_.Exception.Response.StatusCode
+        }
+        if ($status -eq 401 -or $status -eq 403) {
+            Write-Host "    The API rejected the credentials from .env (HTTP $status); the bot could not be stopped gracefully." -ForegroundColor Yellow
+        }
+        return $false
+    }
+}
+
 Write-Host ""
-Write-Host "FINAL60 - stopping local services" -ForegroundColor Green
+Write-Host "Polymarket BTC bot - stopping local services" -ForegroundColor Green
 Write-Host ""
 
 if (Test-PortOpen 8000) {
-    try {
-        Invoke-RestMethod -Method Post -Uri "$ApiUrl/api/bot/stop" -TimeoutSec 5 | Out-Null
+    if (Stop-BotThroughApi) {
         Write-Host "    Bot stopped through the API; state is persisted." -ForegroundColor DarkGray
     }
-    catch {
-        Write-Host "    API not reachable for a graceful bot stop; continuing with process shutdown." -ForegroundColor DarkGray
+    else {
+        Write-Host "    No graceful bot stop through the API; continuing with process shutdown." -ForegroundColor DarkGray
     }
     Start-Sleep -Milliseconds 800
 }

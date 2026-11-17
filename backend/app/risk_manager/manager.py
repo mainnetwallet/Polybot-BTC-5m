@@ -31,10 +31,8 @@ class RiskContext:
     btc_price: float | None = None
     price_to_beat: float | None = None
     price_gap_issue: str = ""
-    # Stage chain: did stage 1 already buy in this market, and how many seconds were left when it
-    # did (None = unknown, e.g. after a restart; then stage 2 stays blocked, fail closed).
+    # Did stage 1 already buy in this market? (stage 1 stops buying once stage 2 starts if it did not.)
     stage1_bought: bool = False
-    stage1_remaining: float | None = None
     # Sides whose open position in this market is nothing but a Stage 0 holding. Stage 0 manages and
     # sells its own shares, so they do not count against max_open_positions for stages 1-3.
     stage0_pure_sides: frozenset[str] = frozenset()

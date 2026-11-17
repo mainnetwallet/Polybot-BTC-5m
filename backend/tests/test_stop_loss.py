@@ -234,7 +234,7 @@ async def test_stop_loss_compares_the_best_bid_with_the_buy_price():
     "stage, remaining, buy_ask, ctx, above_stop_bid, stop_bid",
     [
         (1, 55, 0.85, {}, 0.73, 0.72),  # stop = 0.85 * 0.85 = 0.7225
-        (2, 40, 0.92, dict(stage1_bought=True, stage1_remaining=70.0), 0.88, 0.87),  # stop = 0.92 * 0.95 = 0.874
+        (2, 40, 0.92, dict(stage1_bought=True), 0.88, 0.87),  # stop = 0.92 * 0.95 = 0.874
         (3, 25, 0.92, {}, 0.88, 0.87),  # stop = 0.874
     ],
 )
@@ -347,7 +347,7 @@ async def test_stage_1_2_3_in_one_market_each_stops_out_alone():
     # stage 1 bought at 0.90 (stop 0.765), stage 2 at 0.95 (stop 0.9025), stage 3 at 0.92 (stop 0.874)
     for market, stage, ask, ctx in (
         (m1, 1, 0.90, {}),
-        (m2, 2, 0.95, dict(stage1_bought=True, stage1_remaining=55.0)),
+        (m2, 2, 0.95, dict(stage1_bought=True)),
         (m3, 3, 0.92, {}),
     ):
         books = books_for(market, up_ask=ask, down_ask=0.04)

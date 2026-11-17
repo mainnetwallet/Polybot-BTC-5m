@@ -244,10 +244,12 @@ class TradingBot:
             except Exception as exc:
                 logger.warning("shutdown stop failed: %s", exc)
         self._shutdown = True
-        if self._trade_task is not None:
-            self._trade_task.cancel()
+        for worker in (self._trade_task, self._exit_task):
+            if worker is None:
+                continue
+            worker.cancel()
             try:
-                await self._trade_task
+                await worker
             except asyncio.CancelledError:
                 pass
         for task in self._tasks:
@@ -533,7 +535,11 @@ class TradingBot:
         if self._tick_pending or not getattr(self.hub, "client_count", 0):
             return
         self._tick_pending = True
-        asyncio.get_running_loop().create_task(self._send_tick())
+        # keep a reference: the event loop only holds weak references to tasks, so a bare create_task
+        # could be garbage-collected before it finishes (shutdown also waits for these)
+        task = asyncio.get_running_loop().create_task(self._send_tick())
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
 
     async def _send_tick(self) -> None:
         self._tick_pending = False
@@ -646,7 +652,6 @@ class TradingBot:
             price_to_beat=price_to_beat,
             price_gap_issue=gap_issue,
             stage1_bought=stage1_bought,
-            stage1_remaining=self.orders.stage1_remaining(self._mode, market.market_id),
             stage0_pure_sides=stage0_pure_sides,
         )
 

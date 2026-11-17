@@ -152,7 +152,7 @@ class RuntimeSettings(BaseModel):
     stage2_sell_enabled: bool = False
     stage2_sell_price: float = Field(default=0.99, ge=0.02, le=0.999)
     # Stop-loss in percent below the average buy price (0 = off). Off when a RuntimeSettings is built
-    # directly; the app's Settings (.env) sets 50 / 15 / 9 / 5 for stages 0 / 1 / 2 / 3.
+    # directly; the app's Settings (.env) sets 70 / 18 / 10 / 5 for stages 0 / 1 / 2 / 3.
     stage0_stop_loss_pct: float = Field(default=0.0, ge=0.0, le=99.0)
     stage1_stop_loss_pct: float = Field(default=0.0, ge=0.0, le=99.0)
     stage2_stop_loss_pct: float = Field(default=0.0, ge=0.0, le=99.0)
@@ -215,6 +215,8 @@ class RuntimeSettings(BaseModel):
             raise ValueError("stage0_end_seconds must be less than stage0_start_seconds")
         if self.stage0_min_ask > self.stage0_max_ask:
             raise ValueError("stage0_min_ask must be <= stage0_max_ask")
+        if self.stage0_enabled and self.stage0_min_ask > self.max_execution_price:
+            raise ValueError("stage0_min_ask must be <= max_execution_price, or stage 0 could never buy")
         if self.stage0_mid_from_ask > self.stage0_high_from_ask:
             raise ValueError("stage0_mid_from_ask must be <= stage0_high_from_ask")
         if self.stage1_sell_price_high <= self.stage1_sell_max_buy:
@@ -282,8 +284,11 @@ class RuntimeSettings(BaseModel):
         """Highest ask stage 0 may buy at: stage0_max_ask for an expensive buy (ask >= stage0_high_buy_price),
         otherwise the earlier-buy limit stage0_early_max_ask."""
         if ask + 1e-9 >= self.stage0_high_buy_price:
-            return self.stage0_max_ask
-        return min(self.stage0_early_max_ask, self.stage0_max_ask)
+            limit = self.stage0_max_ask
+        else:
+            limit = min(self.stage0_early_max_ask, self.stage0_max_ask)
+        # max_execution_price is a hard cap for every stage, stage 0 included
+        return min(limit, self.max_execution_price)
 
     def stage0_high_buy_too_early(self, ask: float, remaining_seconds: float) -> bool:
         """True when `ask` is a high buy (>= stage0_high_buy_price) and its part of the window has not begun."""

@@ -52,8 +52,8 @@ class Settings(BaseSettings):
     rtds_ws_url: str = "wss://ws-live-data.polymarket.com"
     # Since 2026-08-14 Polymarket's 5-minute crypto markets settle on the Chainlink 60-second TWAP (both
     # the price to beat and the final price); the bot streams only that official series (no spot fallback).
-    # Polymarket website's own open-price endpoint: last-resort Price To Beat when Gamma has not published it
-    # and the RTDS tick at the window start was missed (e.g. the bot was started mid-window)
+    # Polymarket website's own open-price endpoint. Only scripts/check_btc_feed.py (a diagnostic) reads it;
+    # the bot itself does not call it.
     crypto_price_api_url: str = "https://polymarket.com/api/crypto/crypto-price"
     btc_price_enabled: bool = True  # dashboard-only official Polymarket BTC price / price-to-beat
     series_slug: str = "btc-up-or-down-5m"
@@ -170,7 +170,7 @@ class Settings(BaseSettings):
     stage3_last_seconds: int = 10
     stage3_last_seconds_stop_loss_pct: float = 2.0
     # Buys at stage0_high_buy_price (0.89) or more are only allowed once this percent of the stage 0 window
-    # (start -> end) has passed: 50 with the 200s -> 100s window = from 150s left. 0 = the whole window.
+    # (start -> end) has passed: 50 with the 160s -> 100s window = from 130s left. 0 = the whole window.
     stage0_high_buy_after_pct: float = 50.0
     duplicate_policy: str = "one_per_market"  # one_per_market | one_per_side | allow
     conflict_policy: str = "up_first"  # up_first | down_first | highest_ask | block_both
@@ -179,7 +179,6 @@ class Settings(BaseSettings):
     max_daily_loss: float = 5.0
     daily_profit_target: float = 10.0
     max_trades_per_day: int = 600
-    kill_switch: bool = False
 
     # --- paper ----------------------------------------------------------
     paper_starting_balance: float = 100.0
@@ -235,10 +234,6 @@ class Settings(BaseSettings):
             and not self.api_token.strip()
             and not self.admin_password
         )
-
-    @property
-    def auth_enabled(self) -> bool:
-        return bool(self.admin_password)
 
     @property
     def cors_origin_list(self) -> list[str]:

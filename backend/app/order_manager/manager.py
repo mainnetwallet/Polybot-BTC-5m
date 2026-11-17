@@ -127,7 +127,6 @@ class OrderManager:
         self._attempts: dict[str, int] = {}
         self._last_attempt_ms: dict[str, int] = {}
         # (mode, market) -> seconds remaining when stage 1 last got an accepted order (stage chain)
-        self._stage1_remaining: dict[tuple[str, str], float] = {}
         self._background_writes: set[asyncio.Task] = set()
         # (mode, market) -> stage 0 shares still held; absent = not loaded from the database yet
         self._stage0_holdings: dict[tuple[str, str], Stage0Holding | None] = {}
@@ -155,9 +154,6 @@ class OrderManager:
         """Forget what is cached as held so the next exit pass reloads it from the database."""
         for stage in EXIT_STAGES:
             self._holdings(stage).pop((mode, market_id), None)
-
-    def stage1_remaining(self, mode: str, market_id: str) -> float | None:
-        return self._stage1_remaining.get((mode, market_id))
 
     def _schedule_trigger(self, signal: Signal, decision: str, reason: str, mode: str) -> None:
         async def persist_then_publish() -> None:
@@ -309,11 +305,7 @@ class OrderManager:
                         "REJECTED", "CANCELED", "BLOCKED", "SKIPPED"
                     }:
                         # later stages in this same pass see that stage 1 just bought
-                        ctx = replace(
-                            ctx,
-                            stage1_bought=True,
-                            stage1_remaining=self._stage1_remaining.get((mode, market.market_id)),
-                        )
+                        ctx = replace(ctx, stage1_bought=True)
         return results
 
     async def _submit(
@@ -378,7 +370,6 @@ class OrderManager:
             # stage 0 never pays more than its own ask limit
             max_price=config.stage0_max_ask_for(signal.best_ask) if signal.stage == 0 else config.max_buy_price_for_stage(signal.stage),
             observed_at_ms=signal.observed_at_ms,
-            order_min_size=market.min_order_size,
             asset_version=market.asset_version,
         )
 
@@ -428,10 +419,6 @@ class OrderManager:
             # accepted/filled: the cooldown and attempt cap only apply to failed entries
             self._attempts.pop(key, None)
             self._last_attempt_ms.pop(key, None)
-            if signal.stage == 1:
-                if len(self._stage1_remaining) > 500:
-                    self._stage1_remaining.clear()
-                self._stage1_remaining[(mode, market.market_id)] = signal.remaining_seconds
         self._record_order_result(
             result,
             report,
@@ -612,13 +599,13 @@ class OrderManager:
                 remaining_s = market.remaining_seconds()
                 if not (config.stage0_enabled and config.stage0_end_seconds < remaining_s <= config.stage0_start_seconds):
                     continue  # stage 0 stops buying when its window is over
-                max_price = config.stage0_max_ask
             book = books.get(market.token_for(side))
             if book is None or book.best_ask is None or book.ask_size is None or book.ask_size <= 0:
                 continue
+            if stage == 0:
+                # stage 0 uses its tiered limit (never above max_execution_price)
+                max_price = config.stage0_max_ask_for(book.best_ask)
             if book.best_ask > max_price + 1e-9:
-                continue
-            if stage == 0 and book.best_ask > config.stage0_max_ask_for(book.best_ask) + 1e-9:
                 continue
             if stage == 0 and book.best_ask + 1e-9 < config.stage0_min_ask:
                 continue
@@ -638,8 +625,7 @@ class OrderManager:
                 notional=round(remaining, 8),
                 max_price=max_price,
                 observed_at_ms=now_ms,
-                order_min_size=market.min_order_size,
-                asset_version=market.asset_version,
+                    asset_version=market.asset_version,
             )
             try:
                 report = await self._executor_provider(mode).place_buy(request)
@@ -1138,8 +1124,7 @@ class OrderManager:
                 size=sell_size,
                 min_price=floor,
                 observed_at_ms=now_ms,
-                order_min_size=market.min_order_size,
-                asset_version=market.asset_version,
+                    asset_version=market.asset_version,
             )
             sent_ms = clock.now_ms()
             book_at_send = _bids_snapshot()  # the book right before the order leaves

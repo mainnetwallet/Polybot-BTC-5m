@@ -724,7 +724,7 @@ async def test_live_sells_run_in_parallel_without_a_shared_lock():
         return SellRequest(
             order_key=f"k{stage}", client_order_id=f"c{stage}", market_id="0xm", side="UP",
             token_id="UP", size=1.0, min_price=0.01, observed_at_ms=int(_time.time() * 1000),
-            order_min_size=1.0, asset_version=1,
+            asset_version=1,
         )
 
     reports = await asyncio.gather(*(engine.place_sell(req(s)) for s in range(3)))
