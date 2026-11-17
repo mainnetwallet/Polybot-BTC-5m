@@ -52,9 +52,6 @@ class Settings(BaseSettings):
     rtds_ws_url: str = "wss://ws-live-data.polymarket.com"
     # Since 2026-08-14 Polymarket's 5-minute crypto markets settle on the Chainlink 60-second TWAP (both
     # the price to beat and the final price); the bot streams only that official series (no spot fallback).
-    # Polymarket website's own open-price endpoint. Only scripts/check_btc_feed.py (a diagnostic) reads it;
-    # the bot itself does not call it.
-    crypto_price_api_url: str = "https://polymarket.com/api/crypto/crypto-price"
     btc_price_enabled: bool = True  # dashboard-only official Polymarket BTC price / price-to-beat
     series_slug: str = "btc-up-or-down-5m"
     event_slug_prefix: str = "btc-updown-5m"  # event slug = <prefix>-<window start unix>
