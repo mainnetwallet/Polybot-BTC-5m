@@ -560,3 +560,23 @@ def test_dashboard_origins_and_non_browser_clients_still_work():
 def test_cross_site_get_is_not_blocked():
     with TestClient(create_app()) as client:
         assert client.get("/api/state", headers={"Origin": "https://evil.example"}).status_code == 200
+
+
+def test_login_logout_and_websocket_refuse_cross_site_origins():
+    with TestClient(create_app()) as client:
+        evil = {"Origin": "https://evil.example"}
+        for path in ("/api/auth/login", "/api/auth/logout"):
+            blocked = client.post(path, headers=evil, json={"username": "admin", "password": "x"})
+            assert blocked.status_code == 403, path
+            assert blocked.json()["detail"] == "Cross-site request blocked"
+        # no Origin (Android app, scripts) and the dashboard's own origin still reach the endpoint
+        assert client.post("/api/auth/logout").status_code != 403
+        assert client.post("/api/auth/logout", headers={"Origin": "http://testserver"}).status_code != 403
+
+        with pytest.raises(Exception):
+            with client.websocket_connect("/api/ws", headers=evil):
+                pass
+        with client.websocket_connect("/api/ws") as ws:  # no Origin header: allowed
+            assert ws.receive_json()["type"] == "state"
+        with client.websocket_connect("/api/ws", headers={"Origin": "http://testserver"}) as ws:
+            assert ws.receive_json()["type"] == "state"
