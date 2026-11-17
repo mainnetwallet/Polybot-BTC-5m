@@ -325,3 +325,31 @@ def test_stage0_min_ask_above_max_execution_price_is_rejected():
 
     with pytest.raises(ValueError, match="stage0_min_ask"):
         make_config(max_execution_price=0.90, stage0_enabled=True, stage0_min_ask=0.92, stage0_max_ask=0.96)
+
+
+def test_stage2_is_inside_the_window_when_stage1_is_off_and_stage1_seconds_is_small():
+    config = make_config(
+        stage0_enabled=False,
+        stage1_enabled=False,
+        stage1_seconds=40,
+        stage2_seconds=50,
+        stage3_seconds=30,
+        stage2_min_price_gap_usd=0,
+        min_price_gap_usd=0,
+    )
+    stage2 = Signal(
+        market_id="0xmarket",
+        side="UP",
+        token_id="up-token",
+        best_ask=0.95,
+        ask_size=100.0,
+        remaining_seconds=45.0,
+        threshold=0.88,
+        observed_at_ms=1,
+        book_age_ms=50,
+        stage=2,
+    )
+    assert RiskManager().check(stage2, make_ctx(remaining=45), config).approved is True
+    too_early = RiskManager().check(stage2, make_ctx(remaining=55), config)
+    assert too_early.approved is False
+    assert too_early.reason == "outside_stage1"

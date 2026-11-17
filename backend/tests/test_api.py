@@ -531,3 +531,32 @@ def test_stage2_stage3_block_ask_setting_roundtrip():
         assert ok.json()["stage2_block_ask"] == 0.95 and ok.json()["stage3_block_ask"] == 0.96
         assert client.patch("/api/settings", json={"stage2_block_ask": 1.5}).status_code in {400, 422}
         assert client.patch("/api/settings", json={"stage3_block_ask": 0.5}).status_code in {400, 422}
+
+
+# --- cross-site guard ---------------------------------------------------------------------------
+# With no ADMIN_PASSWORD / API_TOKEN, any website could fire a "simple" cross-site POST at the local
+# API. POST /api/bot/stop has no body, so a browser sends it without a CORS preflight.
+
+
+def test_cross_site_post_is_blocked():
+    with TestClient(create_app()) as client:
+        for origin in ("https://evil.example", "http://127.0.0.1:5174", "null"):
+            blocked = client.post("/api/bot/stop", headers={"Origin": origin})
+            assert blocked.status_code == 403, origin
+            assert blocked.json()["detail"] == "Cross-site request blocked"
+
+
+def test_dashboard_origins_and_non_browser_clients_still_work():
+    with TestClient(create_app()) as client:
+        # the Vite dev dashboard (CORS_ORIGINS default)
+        assert client.post("/api/bot/stop", headers={"Origin": "http://127.0.0.1:5173"}).status_code == 200
+        # dashboard served by the backend itself (same origin, also through a tunnel hostname)
+        same_origin = client.post("/api/bot/stop", headers={"Origin": "http://testserver"})
+        assert same_origin.status_code == 200
+        # scripts and the Android app send no Origin header
+        assert client.post("/api/bot/stop").status_code == 200
+
+
+def test_cross_site_get_is_not_blocked():
+    with TestClient(create_app()) as client:
+        assert client.get("/api/state", headers={"Origin": "https://evil.example"}).status_code == 200

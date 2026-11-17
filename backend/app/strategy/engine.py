@@ -147,7 +147,7 @@ class Stage1Strategy:
                 False, remaining, up_ask, down_ask, up_armed, down_armed, reason="market_expired"
             )
         in_stage0 = stage0_active(config, remaining)
-        if remaining > config.stage1_seconds and not in_stage0:
+        if remaining > config.entry_window_seconds() and not in_stage0:
             return StrategyEvaluation(
                 False, remaining, up_ask, down_ask, up_armed, down_armed, reason="outside_stage1"
             )

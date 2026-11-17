@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hmac
 from typing import Literal
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import ValidationError
@@ -56,9 +57,33 @@ def build_router(
                 return
         raise HTTPException(status_code=401, detail="Authentication required")
 
+    allowed_origins = {origin.rstrip("/").lower() for origin in settings.cors_origin_list}
+
+    def reject_cross_site(request: Request) -> None:
+        """Block state-changing requests that a browser sends on behalf of another website.
+
+        A page on any site can fire a "simple" cross-site POST at http://127.0.0.1:8000 without a CORS
+        preflight (for example ``POST /api/bot/stop``, which has no body), and with no login or API token
+        configured nothing else would stop it. Browsers always attach ``Origin`` to such requests, so a
+        request is refused when its Origin is neither this server itself nor one of CORS_ORIGINS.
+        Requests without an Origin header (scripts, the Android app, curl) are not browser-driven and pass.
+        """
+        if request.method in {"GET", "HEAD", "OPTIONS"}:
+            return
+        origin = request.headers.get("origin")
+        if origin is None:
+            return
+        normalized = origin.strip().rstrip("/").lower()
+        if normalized in allowed_origins:
+            return
+        host = request.headers.get("host", "").strip().lower()
+        if host and urlparse(normalized).netloc == host:
+            return  # same origin (dashboard served by this backend, also through a tunnel)
+        raise HTTPException(status_code=403, detail="Cross-site request blocked")
+
     # /health stays open so uptime monitors keep working; everything else needs the token.
     public = APIRouter(prefix="/api")
-    router = APIRouter(prefix="/api", dependencies=[Depends(require_token)])
+    router = APIRouter(prefix="/api", dependencies=[Depends(reject_cross_site), Depends(require_token)])
 
     def _mode(value: str | None) -> str:
         if value is None:
