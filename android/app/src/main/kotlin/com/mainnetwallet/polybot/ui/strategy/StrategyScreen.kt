@@ -238,6 +238,7 @@ private fun stageSpecs(snap: StrategyView, remaining: Double?): List<StageSpec> 
                 "Ask band" to "${Fmt.cents(s.stage0MinAsk)} to ${Fmt.cents(s.stage0EarlyMaxAsk)}",
                 "Expensive max ask" to Fmt.cents(s.stage0MaxAsk),
                 "Min price gap" to usdGap(s.stage0MinPriceGapUsd),
+                "Min price gap (expensive)" to usdGap(s.stage0HighMinPriceGapUsd),
                 "Expensive buy from" to "${Fmt.cents(s.stage0HighBuyPrice)} after ${pct(s.stage0HighBuyAfterPct)} of window",
                 "Tier borders" to "${Fmt.cents(s.stage0MidFromAsk)} / ${Fmt.cents(s.stage0HighFromAsk)}",
             ),

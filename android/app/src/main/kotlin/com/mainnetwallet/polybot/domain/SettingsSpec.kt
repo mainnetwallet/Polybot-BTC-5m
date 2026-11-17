@@ -47,6 +47,7 @@ object SettingsSpec {
         SettingField("stage0_block_ask", "Block market at ask", "If either side's best ask touches this decimal during the stage 0 window, stage 0 buys nothing more in that market (even if the ask falls back). Only that market; stages 1 to 3 and existing sells are not affected. Default 0.98; above that the block is off.", price),
         SettingField("stage0_high_buy_after_pct", "Expensive buys start after", "PERCENT of the stage 0 window (not seconds) that must pass before buys at the expensive-buy price or more. 0 = whole window, 100 = never.", num(0.0, 100.0, suffix = "%")),
         SettingField("stage0_min_price_gap_usd", "Min price gap", "BTC must already be this many USD past the price to beat. 0 = filter off.", num(0.0, 1_000_000.0, suffix = "USD")),
+        SettingField("stage0_high_min_price_gap_usd", "Min price gap (expensive buys)", "Same, for the expensive buys (ask at or above the expensive-buy price). 0 = filter off.", num(0.0, 1_000_000.0, suffix = "USD")),
         SettingField("stage0_mid_from_ask", "Mid tier from (buy price)", "Shares bought below this price use the low take-profit %.", price),
         SettingField("stage0_high_from_ask", "High tier from (buy price)", "Shares bought at or above this price use the high take-profit %.", price),
         SettingField("stage0_take_profit_pct_low", "Take-profit % (low tier)", "Percent above the buy price. 0 = held to settlement.", num(0.0, 500.0, suffix = "%")),
@@ -120,7 +121,7 @@ object SettingsSpec {
         SettingSection("stage0", "Stage 0", listOf(
             SettingGroup("Activation", null, listOf("stage0_enabled", "stage0_start_seconds", "stage0_end_seconds")),
             SettingGroup("Entry band", "Ask range and BTC gap in which stage 0 may buy.",
-                listOf("stage0_min_ask", "stage0_early_max_ask", "stage0_high_buy_price", "stage0_max_ask", "stage0_block_ask", "stage0_high_buy_after_pct", "stage0_min_price_gap_usd")),
+                listOf("stage0_min_ask", "stage0_early_max_ask", "stage0_high_buy_price", "stage0_max_ask", "stage0_block_ask", "stage0_high_buy_after_pct", "stage0_min_price_gap_usd", "stage0_high_min_price_gap_usd")),
             SettingGroup("Take-profit tiers", "The buy price decides the tier. 0 % means hold to settlement.",
                 listOf("stage0_mid_from_ask", "stage0_high_from_ask", "stage0_take_profit_pct_low", "stage0_take_profit_pct_mid", "stage0_take_profit_pct_high")),
             SettingGroup("Stop-loss", null, listOf("stage0_stop_loss_pct", "stage0_high_buy_stop_loss_pct")),

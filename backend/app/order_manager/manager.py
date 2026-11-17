@@ -685,11 +685,13 @@ class OrderManager:
             threshold = {2: config.stage2_threshold, 3: config.stage3_threshold}.get(stage, config.stage1_threshold)
             if book.best_ask is None or book.best_ask + 1e-9 < threshold:
                 return False
-        min_gap = {
-            0: config.stage0_min_price_gap_usd,
-            2: config.stage2_min_price_gap_usd,
-            3: config.stage3_min_price_gap_usd,
-        }.get(stage, config.min_price_gap_usd)
+        if stage == 0:
+            min_gap = config.stage0_min_gap_for(book.best_ask)
+        else:
+            min_gap = {
+                2: config.stage2_min_price_gap_usd,
+                3: config.stage3_min_price_gap_usd,
+            }.get(stage, config.min_price_gap_usd)
         if min_gap > 0 and ctx is None:
             return False
         if ctx is not None:

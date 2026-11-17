@@ -76,6 +76,7 @@ data class StrategyState(
     @SerialName("stage0_early_max_ask") val stage0EarlyMaxAsk: Double = 0.0,
     @SerialName("stage0_block_ask") val stage0BlockAsk: Double = 0.98,
     @SerialName("stage0_min_price_gap_usd") val stage0MinPriceGapUsd: Double = 0.0,
+    @SerialName("stage0_high_min_price_gap_usd") val stage0HighMinPriceGapUsd: Double = 0.0,
     @SerialName("stage0_mid_from_ask") val stage0MidFromAsk: Double = 0.0,
     @SerialName("stage0_high_from_ask") val stage0HighFromAsk: Double = 0.0,
     @SerialName("stage0_take_profit_pct_low") val stage0TakeProfitPctLow: Double = 0.0,

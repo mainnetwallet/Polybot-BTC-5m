@@ -605,3 +605,29 @@ def test_daily_limits_count_realized_pnl_only_unless_switched_on():
             assert bot._risk_context(market, bot.runtime.get(), now_ms).daily_pnl == -9.0
         finally:
             bot.settings.daily_limit_include_unrealized = previous
+
+
+def test_prefilter_uses_60_gap_for_expensive_stage0_buys_and_70_for_cheap_ones():
+    from app.strategy.types import Signal, StrategyEvaluation
+
+    def signal(ask):
+        return Signal(
+            market_id="m1", side="UP", token_id="t", best_ask=ask, ask_size=100.0, remaining_seconds=120.0,
+            threshold=0.96, observed_at_ms=0, book_age_ms=1.0, stage=0,
+        )
+
+    def kept(ask, gap):
+        evaluation = StrategyEvaluation(True, 120.0, ask, 0.1, False, False, [signal(ask)], "trigger")
+        result = bot._prefilter_stage0(evaluation, (100_000.0 + gap, 100_000.0, ""), config)
+        return [s.best_ask for s in result.signals]
+
+    with TestClient(create_app()) as client:
+        bot = client.app.state.bot
+        config = bot.runtime.get().model_copy(
+            update={"stage0_min_price_gap_usd": 70.0, "stage0_high_min_price_gap_usd": 60.0, "stage0_high_buy_price": 0.89}
+        )
+        assert kept(0.90, 65.0) == [0.90]  # expensive buy: 65 >= 60
+        assert kept(0.90, 55.0) == []
+        assert kept(0.80, 65.0) == []  # cheaper buy still needs 70
+        assert kept(0.80, 75.0) == [0.80]
+

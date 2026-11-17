@@ -511,7 +511,6 @@ class TradingBot:
         """
         if not any(signal.stage == 0 for signal in evaluation.signals):
             return evaluation
-        min_gap = config.stage0_min_price_gap_usd
         btc_price, price_to_beat, _issue = gap_inputs
         done = self.orders.stage0_bought(self._mode, evaluation_market_id(evaluation))
         keep = []
@@ -521,6 +520,7 @@ class TradingBot:
                 continue
             if done:
                 continue
+            min_gap = config.stage0_min_gap_for(signal.best_ask)  # cheaper buys 70, expensive (0.89+) buys 60
             if min_gap > 0:
                 if btc_price is None or price_to_beat is None:
                     continue  # no BTC data: fail closed
@@ -1748,6 +1748,7 @@ class TradingBot:
                 "stage2_block_ask": config.stage2_block_ask,
                 "stage3_block_ask": config.stage3_block_ask,
                 "stage0_min_price_gap_usd": config.stage0_min_price_gap_usd,
+                "stage0_high_min_price_gap_usd": config.stage0_high_min_price_gap_usd,
                 "stage0_mid_from_ask": config.stage0_mid_from_ask,
                 "stage0_high_from_ask": config.stage0_high_from_ask,
                 "stage0_take_profit_pct_low": config.stage0_take_profit_pct_low,

@@ -62,11 +62,13 @@ class RiskManager:
     def _check_price_gap(signal: Signal, ctx: RiskContext, config: RuntimeSettings) -> RiskDecision | None:
         """Buy only when BTC is already >= min_price_gap_usd beyond the price to beat, in the
         direction being bought (UP above it, DOWN below it). Fails closed without price data."""
-        min_gap = {
-            0: config.stage0_min_price_gap_usd,
-            2: config.stage2_min_price_gap_usd,
-            3: config.stage3_min_price_gap_usd,
-        }.get(signal.stage, config.min_price_gap_usd)
+        if signal.stage == 0:
+            min_gap = config.stage0_min_gap_for(signal.best_ask)  # expensive buys have their own, lower gap
+        else:
+            min_gap = {
+                2: config.stage2_min_price_gap_usd,
+                3: config.stage3_min_price_gap_usd,
+            }.get(signal.stage, config.min_price_gap_usd)
         if min_gap <= 0:
             return None
         if ctx.btc_price is None or ctx.price_to_beat is None:

@@ -51,6 +51,7 @@ OVERRIDABLE_KEYS = (
     "stage2_block_ask",
     "stage3_block_ask",
     "stage0_min_price_gap_usd",
+    "stage0_high_min_price_gap_usd",
     "stage0_mid_from_ask",
     "stage0_high_from_ask",
     "stage0_take_profit_pct_low",
@@ -133,6 +134,8 @@ class RuntimeSettings(BaseModel):
     # 0.99 effectively turns the block off.
     stage0_block_ask: float = Field(default=0.98, ge=0.01, le=0.999)
     stage0_min_price_gap_usd: float = Field(default=70.0, ge=0.0, le=1_000_000.0)
+    # BTC gap for the expensive stage 0 buys (ask >= stage0_high_buy_price); the line above is for the cheaper ones.
+    stage0_high_min_price_gap_usd: float = Field(default=60.0, ge=0.0, le=1_000_000.0)
     # Stage 0 take-profit in percent above the average buy price, by what stage 0 paid per share:
     #   cost <  stage0_mid_from_ask   -> stage0_take_profit_pct_low  (default 0.60-0.70 buy -> +15 %)
     #   cost <  stage0_high_from_ask  -> stage0_take_profit_pct_mid  (default 0.70-0.80 buy -> +10 %)
@@ -300,6 +303,13 @@ class RuntimeSettings(BaseModel):
             limit = min(self.stage0_early_max_ask, self.stage0_max_ask)
         # max_execution_price is a hard cap for every stage, stage 0 included
         return min(limit, self.max_execution_price)
+
+    def stage0_min_gap_for(self, ask: float) -> float:
+        """BTC price gap (USD) a stage 0 buy at `ask` needs: stage0_high_min_price_gap_usd for an expensive buy
+        (ask >= stage0_high_buy_price), stage0_min_price_gap_usd for a cheaper one. 0 = no gap needed."""
+        if ask + 1e-9 >= self.stage0_high_buy_price:
+            return self.stage0_high_min_price_gap_usd
+        return self.stage0_min_price_gap_usd
 
     def stage0_high_buy_too_early(self, ask: float, remaining_seconds: float) -> bool:
         """True when `ask` is a high buy (>= stage0_high_buy_price) and its part of the window has not begun."""

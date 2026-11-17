@@ -84,6 +84,7 @@ class SettingsPatch(BaseModel):
     stage2_block_ask: float | None = Field(default=None, ge=0.01, le=0.999)
     stage3_block_ask: float | None = Field(default=None, ge=0.01, le=0.999)
     stage0_min_price_gap_usd: float | None = Field(default=None, ge=0, le=1_000_000)
+    stage0_high_min_price_gap_usd: float | None = Field(default=None, ge=0, le=1_000_000)
     stage0_mid_from_ask: float | None = Field(default=None, ge=0.01, le=0.999)
     stage0_high_from_ask: float | None = Field(default=None, ge=0.01, le=0.999)
     stage0_take_profit_pct_low: float | None = Field(default=None, ge=0, le=500)

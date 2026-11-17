@@ -9,7 +9,7 @@ Entries are staged. Each stage may place ONE buy per market:
   (independent of the stage 1), stage0_min_ask <= best_ask <= the stage 0 limit: stage0_early_max_ask for a cheaper buy,
   stage0_max_ask for an expensive one (asks between the two do not buy). Asks of stage0_high_buy_price or more
   only buy once stage0_high_buy_after_pct of the window has passed. The risk manager also
-  demands the BTC price gap (stage0_min_price_gap_usd) and the order manager sells the shares again once the
+  demands the BTC price gap (stage0_min_price_gap_usd, or stage0_high_min_price_gap_usd for asks of stage0_high_buy_price or more) and the order manager sells the shares again once the
   best bid is the tier's take-profit percentage above the buy price (by buy price, capped at 0.99).
   Values: see Settings / .env. Once either side's best ask reaches stage0_block_ask (default 0.98) inside the stage 0 window, stage 0 does not
   buy again in that market (even if the ask drops back).

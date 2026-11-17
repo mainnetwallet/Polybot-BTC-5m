@@ -982,3 +982,37 @@ async def test_stage0_retries_a_missed_fok_for_the_whole_window_not_just_15_trie
     manager._stage0_max_attempts = tries
     await _stage0_buy(stack, market, books)
     assert calls["n"] == tries  # the stage 0 cap itself still holds
+
+
+def test_expensive_stage0_buys_use_their_own_lower_btc_gap():
+    """Asks of stage0_high_buy_price (0.89) or more need $60 of BTC gap; the cheaper buys keep needing $70."""
+    config = make_config(
+        **STAGE0, stage0_high_buy_price=0.89, stage0_min_price_gap_usd=70.0, stage0_high_min_price_gap_usd=60.0
+    )
+    assert config.stage0_min_gap_for(0.80) == 70.0
+    assert config.stage0_min_gap_for(0.85) == 70.0
+    assert config.stage0_min_gap_for(0.89) == 60.0
+    assert config.stage0_min_gap_for(0.96) == 60.0
+
+    def ctx(gap, remaining):
+        return make_ctx(remaining=remaining, btc_price=100_000.0 + gap, price_to_beat=100_000.0)
+
+    expensive = _signal(remaining=120, up=0.90, down=0.10)  # 0.89+ only buys from 130s left
+    assert RiskManager().check(expensive, ctx(65.0, 120), config).approved  # 65 >= 60
+    assert RiskManager().check(expensive, ctx(60.0, 120), config).approved  # exactly 60
+    assert RiskManager().check(expensive, ctx(55.0, 120), config).reason == "price_gap_too_small"
+
+    cheap = _signal(remaining=150, up=0.80, down=0.10)
+    assert RiskManager().check(cheap, ctx(75.0, 150), config).approved
+    assert RiskManager().check(cheap, ctx(65.0, 150), config).reason == "price_gap_too_small"  # 65 < 70
+
+
+def test_expensive_stage0_gap_zero_means_no_gap_needed_but_cheap_buys_still_do():
+    config = make_config(
+        **STAGE0, stage0_high_buy_price=0.89, stage0_min_price_gap_usd=70.0, stage0_high_min_price_gap_usd=0.0
+    )
+    expensive = _signal(remaining=120, up=0.90, down=0.10)
+    no_btc = make_ctx(remaining=120)
+    assert RiskManager().check(expensive, no_btc, config).approved
+    assert RiskManager().check(_signal(), make_ctx(remaining=150), config).reason == "price_gap_unavailable"
+

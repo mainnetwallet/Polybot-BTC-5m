@@ -150,6 +150,15 @@ export const FIELDS: FieldSpec[] = [
     suffix: "USD",
   },
   {
+    key: "stage0_high_min_price_gap_usd",
+    label: "Stage 0: min price gap (expensive buys)",
+    hint: "Same rule as above, but for the expensive buys (ask at or above the expensive-buy price, default 0.89-0.96). The cheaper buys keep the gap above. 0 = no gap needed. No BTC data = no buy.",
+    kind: "number",
+    step: "1",
+    min: "0",
+    suffix: "USD",
+  },
+  {
     key: "stage0_mid_from_ask",
     label: "Stage 0: mid tier from (buy price)",
     hint: "Shares bought below this price use the low take-profit %; at or above it, the mid % (default 0.80).",
