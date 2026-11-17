@@ -1759,6 +1759,7 @@ class TradingBot:
                 "stage0_take_profit_pct_low": config.stage0_take_profit_pct_low,
                 "stage0_take_profit_pct_mid": config.stage0_take_profit_pct_mid,
                 "stage0_take_profit_pct_high": config.stage0_take_profit_pct_high,
+                "stage0_sell_cap_price": config.stage0_sell_cap_price,
                 "stage1_sell_enabled": config.stage1_sell_enabled,
                 "stage1_sell_max_buy": config.stage1_sell_max_buy,
                 "stage1_take_profit_pct": config.stage1_take_profit_pct,

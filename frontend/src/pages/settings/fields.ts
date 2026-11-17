@@ -199,12 +199,21 @@ export const FIELDS: FieldSpec[] = [
   {
     key: "stage0_take_profit_pct_high",
     label: "Stage 0: take-profit % (high tier)",
-    hint: "Percent above the buy price for shares bought at the high border or above (default 5, i.e. 0.85 or more). The sell price is capped at 0.99. 0 = held to settlement.",
+    hint: "Percent above the buy price for shares bought at the high border or above (default 5, i.e. 0.85 or more). The sell price is capped at the max sell price below. 0 = held to settlement.",
     kind: "number",
     step: "1",
     min: "0",
     max: "500",
     suffix: "%",
+  },
+  {
+    key: "stage0_sell_cap_price",
+    label: "Stage 0: max sell price (bid)",
+    hint: "A stage 0 position is sold at the latest once the best bid reaches this decimal (default 0.98): sell price = min(buy price + take-profit %, this). Dear buys whose take-profit would be above it sell here. Keep it above the stage 0 max ask.",
+    kind: "number",
+    step: "0.01",
+    min: "0.02",
+    max: "0.999",
   },
   {
     key: "stage1_sell_enabled",

@@ -63,6 +63,7 @@ export interface StrategyState {
   stage0_take_profit_pct_low: number;
   stage0_take_profit_pct_mid: number;
   stage0_take_profit_pct_high: number;
+  stage0_sell_cap_price: number;
   stage1_sell_enabled: boolean;
   stage1_sell_max_buy: number;
   stage1_take_profit_pct: number;
@@ -293,6 +294,7 @@ export interface SettingsState {
   stage0_take_profit_pct_low: number;
   stage0_take_profit_pct_mid: number;
   stage0_take_profit_pct_high: number;
+  stage0_sell_cap_price: number;
   stage1_sell_enabled: boolean;
   stage1_sell_max_buy: number;
   stage1_take_profit_pct: number;

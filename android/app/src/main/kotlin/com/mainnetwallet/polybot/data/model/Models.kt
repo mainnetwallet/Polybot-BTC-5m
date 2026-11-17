@@ -82,6 +82,7 @@ data class StrategyState(
     @SerialName("stage0_take_profit_pct_low") val stage0TakeProfitPctLow: Double = 0.0,
     @SerialName("stage0_take_profit_pct_mid") val stage0TakeProfitPctMid: Double = 0.0,
     @SerialName("stage0_take_profit_pct_high") val stage0TakeProfitPctHigh: Double = 0.0,
+    @SerialName("stage0_sell_cap_price") val stage0SellCapPrice: Double = 0.98,
     @SerialName("stage1_sell_enabled") val stage1SellEnabled: Boolean = false,
     @SerialName("stage1_sell_max_buy") val stage1SellMaxBuy: Double = 0.0,
     @SerialName("stage1_take_profit_pct") val stage1TakeProfitPct: Double = 0.0,

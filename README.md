@@ -80,7 +80,7 @@ All values are defaults and can be changed in Settings or `.env`. Up to 3 buys p
 
 | Stage | Entry | Take-profit | Stop-loss |
 | --- | --- | --- | --- |
-| **0** early buy | `160`-`100`s left, ask `0.70`-`0.96` (cheaper buys up to `0.85`; `0.89`+ only after 50% of the window), BTC gap >= `$70` beyond the price to beat (`$60` for the `0.89`+ buys). One buy per market | Best bid `+10%` / `+7%` / `+5%` over avg cost (buy below `0.80` / `0.80`-`0.85` / `0.85`+); `0` = hold | `70%` below avg cost (`20%` if bought at `0.89`+) |
+| **0** early buy | `160`-`100`s left, ask `0.70`-`0.96` (cheaper buys up to `0.85`; `0.89`+ only after 50% of the window), BTC gap >= `$70` beyond the price to beat (`$60` for the `0.89`+ buys). One buy per market | Best bid `+10%` / `+7%` / `+5%` over avg cost (buy below `0.80` / `0.80`-`0.85` / `0.85`+), at most bid `0.98` (`STAGE0_SELL_CAP_PRICE`, editable in Settings); `0` = hold | `70%` below avg cost (`20%` if bought at `0.89`+) |
 | **1** stage 1 | `90`-`50`s left (until stage 2 starts), best ask >= `0.85`, gap >= `$35` (waits and buys as soon as it gets there inside that window) | Bought up to `0.88`: `+8%`; dearer: bid `0.98` | `18%` |
 | **2** add-on | `<= 50`s left, ask `0.88`-`0.97`, spread <= `0.05`, gap >= `$30` | Bid `0.98` | `10%` |
 | **3** add-on | `<= 30`s left, ask `0.90`-`0.98`, spread <= `0.05`, bid above the current stop by `0.01`, gap >= `$25` | held to settlement | `5%` |

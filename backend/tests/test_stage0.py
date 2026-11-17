@@ -6,6 +6,7 @@ import time
 
 from sqlalchemy import select
 
+from app.config.runtime import RuntimeSettings
 from app.config.settings import Settings
 from app.database.models import Order, Position
 from app.database.session import session_scope
@@ -335,6 +336,7 @@ async def test_bot_buys_stage0_on_gap_side_only_then_sells_at_plus_5_percent():
     strategy = snap["strategy"]
     assert (strategy["stage0_take_profit_pct_low"], strategy["stage0_take_profit_pct_mid"], strategy["stage0_take_profit_pct_high"]) == (15.0, 10.0, 5.0)
     assert strategy["stage0_max_ask"] == 0.94
+    assert strategy["stage0_sell_cap_price"] == 0.98
 
 
 async def test_bot_stage0_needs_gap_and_stops_in_stage1():
@@ -693,6 +695,12 @@ def test_stage0_take_profit_tiers_15_10_5_by_buy_price():
     # dear buys: +5 % would be above 0.98 from 0.934 on, so they sell at 0.98 (not 0.99)
     assert make_config(stage0_take_profit_pct_high=5.0).stage0_sell_price_for(0.95) == 0.98
     assert make_config(stage0_take_profit_pct_high=5.0).stage0_sell_price_for(0.96) == 0.98
+    # the cap is a setting (editable in the UI): a different value moves where dear buys are sold
+    assert make_config(stage0_sell_cap_price=0.97).stage0_sell_price_for(0.96) == 0.97
+    assert make_config(stage0_sell_cap_price=0.99).stage0_sell_price_for(0.96) == 0.99
+    assert make_config(stage0_sell_cap_price=0.97).stage0_sell_price_for(0.70) == pytest.approx(0.77)  # below the cap: tier price
+    assert RuntimeSettings.model_fields["stage0_sell_cap_price"].default == 0.98
+    assert Settings.model_fields["stage0_sell_cap_price"].default == 0.98
 
 
 def test_stage0_defaults_are_max_ask_89_and_tiers_10_7_5():

@@ -62,6 +62,7 @@ OVERRIDABLE_KEYS = (
     "stage0_take_profit_pct_low",
     "stage0_take_profit_pct_mid",
     "stage0_take_profit_pct_high",
+    "stage0_sell_cap_price",
     "stage1_sell_enabled",
     "stage1_sell_max_buy",
     "stage1_take_profit_pct",
@@ -84,10 +85,6 @@ OVERRIDABLE_KEYS = (
 
 # highest bid a stage 1 percent take-profit waits for (a share pays at most 1.00)
 STAGE0_MAX_TAKE_PROFIT_PRICE = 0.99
-
-# highest bid a stage 0 take-profit waits for: a stage 0 position is sold once the best bid reaches 0.98,
-# however dear it was bought (0.98 is reached more reliably than 0.99, which can have too little depth)
-STAGE0_SELL_CAP_PRICE = 0.98
 
 
 class RuntimeSettings(BaseModel):
@@ -164,6 +161,9 @@ class RuntimeSettings(BaseModel):
     stage0_take_profit_pct_low: float = Field(default=15.0, ge=0.0, le=500.0)
     stage0_take_profit_pct_mid: float = Field(default=10.0, ge=0.0, le=500.0)
     stage0_take_profit_pct_high: float = Field(default=5.0, ge=0.0, le=500.0)
+    # Highest bid the stage 0 take-profit waits for: dear buys (cost * (1 + pct) above this) are sold once
+    # the best bid reaches it. Default 0.98 (0.99 can have too little depth to fill a FOK sell).
+    stage0_sell_cap_price: float = Field(default=0.98, ge=0.02, le=0.999)
     stage1_sell_enabled: bool = False
     stage1_sell_max_buy: float = Field(default=0.86, ge=0.01, le=0.999)
     # Stage 1 take-profit in percent above the average buy price for shares that cost up to
@@ -428,14 +428,14 @@ class RuntimeSettings(BaseModel):
     def stage0_sell_price_for(self, cost_per_share: float | None) -> float | None:
         """Take-profit sell price for shares stage 0 bought at `cost_per_share`; None = no take-profit.
 
-        cost * (1 + tier percentage / 100), capped at STAGE0_SELL_CAP_PRICE (0.98): a stage 0 position is
-        sold at the latest once the best bid reaches 0.98. A tier percentage of 0, or an unknown cost,
-        means the shares are held to settlement.
+        cost * (1 + tier percentage / 100), capped at stage0_sell_cap_price (default 0.98): a stage 0
+        position is sold at the latest once the best bid reaches the cap. A tier percentage of 0, or an
+        unknown cost, means the shares are held to settlement.
         """
         pct = self.stage0_take_profit_pct_for(cost_per_share)
         if pct <= 0 or cost_per_share is None:
             return None
-        return min(cost_per_share * (1.0 + pct / 100.0), STAGE0_SELL_CAP_PRICE)
+        return min(cost_per_share * (1.0 + pct / 100.0), self.stage0_sell_cap_price)
 
     def to_public_dict(self) -> dict[str, Any]:
         data = self.model_dump()

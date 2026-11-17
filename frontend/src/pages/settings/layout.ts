@@ -57,6 +57,7 @@ export const TABS: TabSpec[] = [
           "stage0_take_profit_pct_low",
           "stage0_take_profit_pct_mid",
           "stage0_take_profit_pct_high",
+          "stage0_sell_cap_price",
         ],
       },
       {

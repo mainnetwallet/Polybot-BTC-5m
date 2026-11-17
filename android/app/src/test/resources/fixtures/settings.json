@@ -39,6 +39,7 @@
  "stage0_take_profit_pct_low": 15.0,
  "stage0_take_profit_pct_mid": 10.0,
  "stage0_take_profit_pct_high": 5.0,
+ "stage0_sell_cap_price": 0.98,
  "stage1_sell_enabled": true,
  "stage1_sell_max_buy": 0.86,
  "stage1_take_profit_pct": 8.0,

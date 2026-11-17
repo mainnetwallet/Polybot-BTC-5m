@@ -146,7 +146,8 @@ class Settings(BaseSettings):
     # (70) keeps applying to the cheaper buys. 0 = no gap needed for the expensive buys.
     stage0_high_min_price_gap_usd: float = 60.0
     # Take-profit for stage 0: sell once the best bid is this many percent ABOVE the average price paid per
-    # share (cost * (1 + pct / 100), capped at 0.99). The percentage depends on what stage 0 paid per share:
+    # share (cost * (1 + pct / 100), capped at stage0_sell_cap_price). The percentage depends on what stage 0
+    # paid per share:
     #   cost <  stage0_mid_from_ask   -> stage0_take_profit_pct_low  (default 0.70-0.80 buy -> +10 %)
     #   cost <  stage0_high_from_ask  -> stage0_take_profit_pct_mid  (default 0.80-0.85 buy -> +7 %)
     #   otherwise                     -> stage0_take_profit_pct_high (default 0.85+ buy -> +5 %)
@@ -156,6 +157,9 @@ class Settings(BaseSettings):
     stage0_take_profit_pct_low: float = 10.0
     stage0_take_profit_pct_mid: float = 7.0
     stage0_take_profit_pct_high: float = 5.0
+    # Highest bid the stage 0 take-profit waits for: a stage 0 position is sold once the best bid reaches
+    # min(cost * (1 + pct / 100), stage0_sell_cap_price). Keep it above stage0_max_ask.
+    stage0_sell_cap_price: float = 0.98
     # Stage 1 take-profit: stage 1 shares are sold again as soon as the best bid reaches a price that
     # depends on what they cost per share:
     #   cost <= stage1_sell_max_buy (0.88) -> cost * (1 + stage1_take_profit_pct / 100), i.e. +8 %
