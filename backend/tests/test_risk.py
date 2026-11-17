@@ -374,11 +374,12 @@ def _s2(ask: float, bid: float | None = 0.93, side: str = "UP") -> Signal:
     )
 
 
-def test_stage2_does_not_buy_at_097_or_above():
+def test_stage2_buys_at_097_but_not_above():
     config = make_config(stage2_min_price_gap_usd=0)
     risk = RiskManager()
-    assert risk.check(_s2(0.96, bid=0.95), make_ctx(remaining=40), config).approved is True
-    for ask in (0.97, 0.98):
+    for ask in (0.96, 0.97):
+        assert risk.check(_s2(ask, bid=ask - 0.01), make_ctx(remaining=40), config).approved is True
+    for ask in (0.98, 0.99):
         decision = risk.check(_s2(ask, bid=ask - 0.01), make_ctx(remaining=40), config)
         assert decision.approved is False
         assert decision.reason == "stage2_max_ask_exceeded"
@@ -386,7 +387,7 @@ def test_stage2_does_not_buy_at_097_or_above():
 
 def test_stage2_max_ask_also_caps_the_order_price():
     config = make_config(max_execution_price=0.99)
-    assert config.max_buy_price_for_stage(2) == 0.96
+    assert config.max_buy_price_for_stage(2) == 0.97
     assert make_config(max_execution_price=0.90, stage2_threshold=0.88).max_buy_price_for_stage(2) == 0.90
 
 
@@ -413,7 +414,7 @@ def test_stage2_spread_guard_can_be_switched_off():
 def test_stage2_spread_stays_inside_the_stop_loss_distance():
     # a spread at the limit must never put the bid at or below the 10 % stop-loss level right after the buy
     config = make_config(stage2_max_spread=0.05, stage2_stop_loss_pct=10.0)
-    for ask in (0.88, 0.92, 0.96):
+    for ask in (0.88, 0.92, 0.97):
         worst_bid = ask - config.stage2_max_spread
         assert worst_bid > config.stop_loss_price_for(2, ask)
 
@@ -425,7 +426,7 @@ def test_stage2_sell_price_must_stay_above_the_max_buy_price():
         make_config(stage2_sell_enabled=True, stage2_sell_price=0.96, stage2_max_ask=0.96)
     with pytest.raises(ValueError):
         make_config(stage2_sell_enabled=True, stage2_sell_price=0.97, stage2_max_ask=0.97)
-    assert make_config(stage2_sell_enabled=True, stage2_sell_price=0.98, stage2_max_ask=0.96).stage2_max_ask == 0.96
+    assert make_config(stage2_sell_enabled=True, stage2_sell_price=0.98, stage2_max_ask=0.97).stage2_max_ask == 0.97
     with pytest.raises(ValueError):
         make_config(stage2_max_ask=0.80, stage2_threshold=0.88)
 

@@ -88,8 +88,8 @@ class RuntimeSettings(BaseModel):
     stage1_seconds: int = Field(ge=1, le=300)
     # Stage 1 does not buy when the best ask is above this (default 0.97). Never pays more than this either.
     stage1_max_ask: float = Field(default=0.97, ge=0.01, le=1.0)
-    # Stage 2 does not buy when the best ask is above this (default 0.96, so an ask of 0.97+ never buys).
-    stage2_max_ask: float = Field(default=0.96, ge=0.01, le=1.0)
+    # Stage 2 does not buy when the best ask is above this (default 0.97: it buys at 0.97, never at 0.98+).
+    stage2_max_ask: float = Field(default=0.97, ge=0.01, le=1.0)
     # Stage 2 does not buy when best ask - best bid is wider than this; 0 = off (a missing bid then also blocks).
     stage2_max_spread: float = Field(default=0.0, ge=0.0, le=1.0)
     # Once either side's best ask reaches this inside the stage 1 window without a stage 1 buy, stage 1 stops
