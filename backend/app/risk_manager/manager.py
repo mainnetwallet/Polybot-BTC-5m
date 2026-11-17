@@ -152,6 +152,12 @@ class RiskManager:
                     "stage1_max_ask_exceeded",
                     f"ask {signal.best_ask:.3f} above the stage 1 limit {config.stage1_max_ask:.3f}",
                 )
+            if signal.stage == 2 and signal.best_ask > config.stage2_max_ask + 1e-9:
+                return RiskDecision(
+                    False,
+                    "stage2_max_ask_exceeded",
+                    f"ask {signal.best_ask:.3f} above the stage 2 limit {config.stage2_max_ask:.3f}",
+                )
             if signal.best_ask > config.max_execution_price + 1e-9:
                 return RiskDecision(
                     False,
@@ -160,6 +166,18 @@ class RiskManager:
                 )
         if signal.ask_size is None or signal.ask_size <= 0:
             return RiskDecision(False, "no_liquidity", "no ask size available at best price")
+        if signal.stage == 2 and config.stage2_max_spread > 0:
+            # The stop-loss reads the bid but the buy pays the ask: a wide spread stops the shares out at once.
+            if signal.best_bid is None:
+                return RiskDecision(False, "stage2_no_bid", "no bid in the book; the stop-loss could not exit")
+            spread = signal.best_ask - signal.best_bid
+            if spread > config.stage2_max_spread + 1e-9:
+                return RiskDecision(
+                    False,
+                    "stage2_spread_too_wide",
+                    f"spread {spread:.3f} (ask {signal.best_ask:.3f}, bid {signal.best_bid:.3f}) "
+                    f"above the stage 2 limit {config.stage2_max_spread:.3f}",
+                )
         chain = self._check_stage_chain(signal, ctx, config)
         if chain is not None:
             return chain
@@ -187,6 +205,14 @@ class RiskManager:
         open_positions = ctx.open_positions
         if signal.stage != 0 and ctx.stage0_pure_sides:
             # a pure Stage 0 holding belongs to its own take-profit system
+            if any(side != signal.side for side in ctx.stage0_pure_sides):
+                # a Stage 0 holding on the other side: never hold UP and DOWN of one market at the same time
+                return RiskDecision(
+                    False,
+                    "opposite_side_held",
+                    f"stage 0 holds {'/'.join(sorted(ctx.stage0_pure_sides))}; stage {signal.stage} "
+                    f"does not buy {signal.side} against it",
+                )
             exposed_sides = exposed_sides - ctx.stage0_pure_sides
             open_positions -= len(ctx.stage0_pure_sides & ctx.exposed_sides)
         add_on = signal.stage > 1 and signal.side in exposed_sides

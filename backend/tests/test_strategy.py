@@ -383,3 +383,10 @@ def test_entry_window_is_stage1_seconds_while_stage1_is_on():
 def test_entry_window_follows_the_earliest_enabled_stage():
     assert make_config(**_NO_STAGE1).entry_window_seconds() == 50.0
     assert make_config(**{**_NO_STAGE1, "stage2_enabled": False}).entry_window_seconds() == 30.0
+
+
+def test_signals_carry_the_best_bid_of_their_book():
+    result = evaluate(40, up=0.92, down=0.08, stage2_seconds=50, stage3_seconds=30, stage1_seconds=90)
+    stage2 = [s for s in result.signals if s.stage == 2]
+    assert stage2, "a stage 2 signal is expected at 40s left with ask 0.92"
+    assert all(s.best_bid == 0.5 for s in stage2)  # helper books carry a 0.5 bid

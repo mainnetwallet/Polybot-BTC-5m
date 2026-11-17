@@ -88,6 +88,12 @@ class Settings(BaseSettings):
     max_execution_price: float = 0.98
     # Stage 1 never buys when the best ask is above this (0.97 = 97 cents). Stages 2/3 only use max_execution_price.
     stage1_max_ask: float = 0.97
+    # Stage 2 never buys when the best ask is above this (0.96: an ask of 0.97 or more does not buy). Keeps the
+    # fixed 0.98 take-profit above the buy price, so a take-profit can never be a loss after fees.
+    stage2_max_ask: float = 0.96
+    # Stage 2 does not buy when best ask - best bid is wider than this (0 = off). The stop-loss looks at the bid,
+    # the buy pays the ask: a wide spread would stop the position out right after the buy.
+    stage2_max_spread: float = 0.05
     trade_amount_usdc: float = 50.0
     # Book age only resets on a websocket book event, so a stable price on a quiet book looks
     # "old" without being wrong, so too low a limit blocks stage 2/3 (armed by the clock) on a quiet

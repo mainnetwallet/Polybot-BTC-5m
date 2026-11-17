@@ -180,6 +180,7 @@ class Stage1Strategy:
                         observed_at_ms=now_ms,
                         book_age_ms=book.age_ms(now_ms),
                         stage=0,
+                        best_bid=book.best_bid,
                     )
                 )
         in_stage1 = (
@@ -231,6 +232,7 @@ class Stage1Strategy:
                         observed_at_ms=now_ms,
                         book_age_ms=book.age_ms(now_ms),
                         stage=stage,
+                        best_bid=book.best_bid,
                     )
                 )
 

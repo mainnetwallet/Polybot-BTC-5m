@@ -15,6 +15,7 @@ class Signal:
     observed_at_ms: int
     book_age_ms: float
     stage: int = 1  # 0 = early entry with take-profit sell, 1 = first entry (trigger), 2/3 = add-ons
+    best_bid: float | None = None  # best bid of the same book (spread guard); None = unknown
 
 
 @dataclass

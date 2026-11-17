@@ -353,3 +353,94 @@ def test_stage2_is_inside_the_window_when_stage1_is_off_and_stage1_seconds_is_sm
     too_early = RiskManager().check(stage2, make_ctx(remaining=55), config)
     assert too_early.approved is False
     assert too_early.reason == "outside_stage1"
+
+
+# ---------------------------------------------------------------------------
+# Stage 2: max ask, spread guard, opposite side, take-profit vs buy price
+# ---------------------------------------------------------------------------
+def _s2(ask: float, bid: float | None = 0.93, side: str = "UP") -> Signal:
+    return Signal(
+        market_id="0xmarket",
+        side=side,
+        token_id="up-token" if side == "UP" else "down-token",
+        best_ask=ask,
+        ask_size=100.0,
+        remaining_seconds=40.0,
+        threshold=0.88,
+        observed_at_ms=1,
+        book_age_ms=50,
+        stage=2,
+        best_bid=bid,
+    )
+
+
+def test_stage2_does_not_buy_at_097_or_above():
+    config = make_config(stage2_min_price_gap_usd=0)
+    risk = RiskManager()
+    assert risk.check(_s2(0.96, bid=0.95), make_ctx(remaining=40), config).approved is True
+    for ask in (0.97, 0.98):
+        decision = risk.check(_s2(ask, bid=ask - 0.01), make_ctx(remaining=40), config)
+        assert decision.approved is False
+        assert decision.reason == "stage2_max_ask_exceeded"
+
+
+def test_stage2_max_ask_also_caps_the_order_price():
+    config = make_config(max_execution_price=0.99)
+    assert config.max_buy_price_for_stage(2) == 0.96
+    assert make_config(max_execution_price=0.90, stage2_threshold=0.88).max_buy_price_for_stage(2) == 0.90
+
+
+def test_stage2_blocks_a_wide_spread():
+    config = make_config(stage2_max_spread=0.05, stage2_min_price_gap_usd=0)
+    risk = RiskManager()
+    assert risk.check(_s2(0.92, bid=0.87), make_ctx(remaining=40), config).approved is True  # 0.05 exactly
+    wide = risk.check(_s2(0.92, bid=0.80), make_ctx(remaining=40), config)
+    assert wide.approved is False
+    assert wide.reason == "stage2_spread_too_wide"
+
+
+def test_stage2_blocks_when_there_is_no_bid_and_spread_guard_is_on():
+    config = make_config(stage2_max_spread=0.05, stage2_min_price_gap_usd=0)
+    decision = RiskManager().check(_s2(0.92, bid=None), make_ctx(remaining=40), config)
+    assert decision.reason == "stage2_no_bid"
+
+
+def test_stage2_spread_guard_can_be_switched_off():
+    config = make_config(stage2_max_spread=0.0, stage2_min_price_gap_usd=0)
+    assert RiskManager().check(_s2(0.92, bid=0.40), make_ctx(remaining=40), config).approved is True
+
+
+def test_stage2_spread_stays_inside_the_stop_loss_distance():
+    # a spread at the limit must never put the bid at or below the 10 % stop-loss level right after the buy
+    config = make_config(stage2_max_spread=0.05, stage2_stop_loss_pct=10.0)
+    for ask in (0.88, 0.92, 0.96):
+        worst_bid = ask - config.stage2_max_spread
+        assert worst_bid > config.stop_loss_price_for(2, ask)
+
+
+def test_stage2_sell_price_must_stay_above_the_max_buy_price():
+    import pytest
+
+    with pytest.raises(ValueError):
+        make_config(stage2_sell_enabled=True, stage2_sell_price=0.96, stage2_max_ask=0.96)
+    with pytest.raises(ValueError):
+        make_config(stage2_sell_enabled=True, stage2_sell_price=0.97, stage2_max_ask=0.97)
+    assert make_config(stage2_sell_enabled=True, stage2_sell_price=0.98, stage2_max_ask=0.96).stage2_max_ask == 0.96
+    with pytest.raises(ValueError):
+        make_config(stage2_max_ask=0.80, stage2_threshold=0.88)
+
+
+def test_later_stages_do_not_buy_against_a_stage0_holding_on_the_other_side():
+    config = make_config(stage2_min_price_gap_usd=0, max_open_positions=1)
+    ctx = make_ctx(
+        remaining=40,
+        open_positions=1,
+        exposed_sides=frozenset({"DOWN"}),
+        stage0_pure_sides=frozenset({"DOWN"}),
+    )
+    risk = RiskManager()
+    blocked = risk.check(_s2(0.92, bid=0.91, side="UP"), ctx, config)
+    assert blocked.approved is False
+    assert blocked.reason == "opposite_side_held"
+    # same side as the Stage 0 holding is still allowed
+    assert risk.check(_s2(0.92, bid=0.91, side="DOWN"), ctx, config).approved is True

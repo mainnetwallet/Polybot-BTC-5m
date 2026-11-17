@@ -18,6 +18,8 @@ from app.config.settings import Settings
 OVERRIDABLE_KEYS = (
     "stage1_threshold",
     "stage1_max_ask",
+    "stage2_max_ask",
+    "stage2_max_spread",
     "stage1_seconds",
     "stage1_enabled",
     "stage2_enabled",
@@ -86,6 +88,10 @@ class RuntimeSettings(BaseModel):
     stage1_seconds: int = Field(ge=1, le=300)
     # Stage 1 does not buy when the best ask is above this (default 0.97). Never pays more than this either.
     stage1_max_ask: float = Field(default=0.97, ge=0.01, le=1.0)
+    # Stage 2 does not buy when the best ask is above this (default 0.96, so an ask of 0.97+ never buys).
+    stage2_max_ask: float = Field(default=0.96, ge=0.01, le=1.0)
+    # Stage 2 does not buy when best ask - best bid is wider than this; 0 = off (a missing bid then also blocks).
+    stage2_max_spread: float = Field(default=0.0, ge=0.0, le=1.0)
     # Once either side's best ask reaches this inside the stage 1 window without a stage 1 buy, stage 1 stops
     # buying in that market for good (the ask dropping again does not lift it). Asks never exceed 0.99, so a
     # value above 0.99 effectively turns the block off.
@@ -196,6 +202,8 @@ class RuntimeSettings(BaseModel):
             raise ValueError("stage3_block_ask must be >= stage3_threshold, or stage 3 could never buy")
         if self.stage1_max_ask < self.stage1_threshold:
             raise ValueError("stage1_max_ask must be >= stage1_threshold")
+        if self.stage2_max_ask < self.stage2_threshold:
+            raise ValueError("stage2_max_ask must be >= stage2_threshold, or stage 2 could never buy")
         if self.max_execution_price < self.stage1_threshold:
             raise ValueError("max_execution_price must be >= stage1_threshold")
         if self.max_execution_price < max(self.stage2_threshold, self.stage3_threshold):
@@ -226,6 +234,11 @@ class RuntimeSettings(BaseModel):
             raise ValueError("stage1_sell_price_high must be greater than stage1_sell_max_buy")
         if self.stage2_sell_price <= self.stage2_threshold:
             raise ValueError("stage2_sell_price must be greater than stage2_threshold")
+        if self.stage2_sell_enabled and self.stage2_sell_price < self.stage2_max_ask + 0.01 - 1e-9:
+            raise ValueError(
+                "stage2_sell_price must be at least 0.01 above stage2_max_ask, "
+                "or a stage 2 take-profit could sell at or below its buy price"
+            )
         return self
 
     def stage_end_seconds(self, stage: int) -> float:
@@ -292,6 +305,8 @@ class RuntimeSettings(BaseModel):
         """Highest ask a buy of `stage` may pay (stage 0 has its own tiered limit, see stage0_max_ask_for)."""
         if stage == 1:
             return min(self.stage1_max_ask, self.max_execution_price)
+        if stage == 2:
+            return min(self.stage2_max_ask, self.max_execution_price)
         return self.max_execution_price
 
     def stage0_max_ask_for(self, ask: float) -> float:
