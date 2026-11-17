@@ -892,9 +892,24 @@ class LiveExecutionEngine(ExecutionEngine):
         self._validate_gates()
         if not self._settings.live_auto_redeem:
             raise LiveTradingUnavailable("LIVE_AUTO_REDEEM is false")
-        redeemable = await self.redeemable_condition_ids()
-        if redeemable is not None and condition_id.lower() not in redeemable:
-            return {"status": "not_redeemable_yet"}
+        positions = await self.fetch_onchain_positions()
+        if positions is not None:
+            wanted = condition_id.lower()
+            held = False
+            redeemable = False
+            for item in positions:
+                cid = str(item.get("conditionId") or item.get("condition_id") or "").lower()
+                if cid != wanted or _num(item.get("current_size") or item.get("size")) <= 0:
+                    continue
+                held = True
+                if item.get("redeemable"):
+                    redeemable = True
+            if not held:
+                # The wallet no longer holds any token of this market: it was already
+                # redeemed (by this bot, the relayer or a manual claim). Not "not yet".
+                return {"status": "already_redeemed"}
+            if not redeemable:
+                return {"status": "not_redeemable_yet"}
         try:
             from polymarket import AsyncSecureClient, RelayerApiKey
         except ImportError as exc:

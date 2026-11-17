@@ -335,6 +335,31 @@ async def test_live_win_is_redeemed_then_balance_refreshed():
         bot.settings.live_auto_redeem = False
 
 
+@pytest.mark.asyncio
+async def test_already_redeemed_market_leaves_the_redeem_queue():
+    market = _finished_market(slug="btc-updown-5m-already", market_id="0xalready")
+    bot, _ = _bot_with_paper_position(market)
+    bot.settings.live_auto_redeem = True
+
+    class FakeLive:
+        async def redeem_market(self, condition_id):
+            return {"status": "already_redeemed"}
+
+        async def get_balance(self):
+            return 20.0
+
+    bot.live_engine = FakeLive()
+    try:
+        bot._queue_live_redeem(market.market_id)
+        assert (await bot.snapshot())["account"]["pending_redeems"] == 1
+        await bot._process_redeem_queue()
+        assert bot._redeem_queue == {}
+        assert (await bot.snapshot())["account"]["pending_redeems"] == 0
+        assert bot._live_balance == 20.0
+    finally:
+        bot.settings.live_auto_redeem = False
+
+
 def test_live_win_without_auto_redeem_only_warns():
     market = _finished_market(slug="btc-updown-5m-noredeem", market_id="0xnoredeem")
     bot, _ = _bot_with_paper_position(market)

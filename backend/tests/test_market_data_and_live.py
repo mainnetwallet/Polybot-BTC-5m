@@ -473,6 +473,27 @@ def test_redeemable_condition_ids_reads_v2_position_fields():
     assert asyncio.run(engine.redeemable_condition_ids()) == {"0xabc"}
 
 
+def _redeem_engine(positions):
+    engine = LiveExecutionEngine(Settings(live_auto_redeem=True))
+    engine._validate_gates = lambda: None
+
+    async def fake_positions():
+        return positions
+
+    engine.fetch_onchain_positions = fake_positions
+    return engine
+
+
+def test_redeem_market_reports_already_redeemed_when_wallet_holds_no_tokens():
+    engine = _redeem_engine([{"condition_id": "0xother", "redeemable": True, "current_size": "3"}])
+    assert asyncio.run(engine.redeem_market("0xABC")) == {"status": "already_redeemed"}
+
+
+def test_redeem_market_reports_not_redeemable_yet_while_tokens_are_held():
+    engine = _redeem_engine([{"condition_id": "0xabc", "redeemable": False, "current_size": "3"}])
+    assert asyncio.run(engine.redeem_market("0xabc")) == {"status": "not_redeemable_yet"}
+
+
 @pytest.mark.parametrize("signature_type", [1, 2, 3])
 def test_live_proxy_wallet_requires_funder_address(signature_type):
     engine = LiveExecutionEngine(
