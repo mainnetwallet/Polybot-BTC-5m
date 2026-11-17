@@ -175,7 +175,7 @@ cd frontend && npm run build
 
 ## Limitations
 
-- Live execution was never exercised with real funds; `POLYMARKET_GEO_VERIFIED` stays `false` by default.
+- Live execution was never exercised with real funds; `POLYMARKET_GEO_VERIFIED` is `true` in `.env.example` (set it to `false` if you are not sure Polymarket is allowed where you live); the code default is `false`.
 - Paper fees are approximate; on-chain reconciliation is best-effort (CLOB responses only).
 - Gamma can keep a market `closed:false` for a while after expiry, so a paper position may stay open across a restart.
 - Only one market family (`SERIES_SLUG`, default `btc-up-or-down-5m`).
