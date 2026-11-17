@@ -95,9 +95,9 @@ class RuntimeSettings(BaseModel):
     stage2_max_ask: float = Field(default=0.97, ge=0.01, le=1.0)
     # Stage 2 does not buy when best ask - best bid is wider than this; 0 = off (a missing bid then also blocks).
     stage2_max_spread: float = Field(default=0.0, ge=0.0, le=1.0)
-    # Stage 3: same guards. Max ask 0.97 (buys at 0.97, never at 0.98+); spread guard and the stop-loss headroom
+    # Stage 3: same guards. Max ask 0.98 (buys up to and including 0.98); spread guard and the stop-loss headroom
     # (best bid must sit this far above the stop level that applies right now) are off (0) unless set.
-    stage3_max_ask: float = Field(default=0.97, ge=0.01, le=1.0)
+    stage3_max_ask: float = Field(default=0.98, ge=0.01, le=1.0)
     stage3_max_spread: float = Field(default=0.0, ge=0.0, le=1.0)
     stage3_min_stop_headroom: float = Field(default=0.0, ge=0.0, le=1.0)
     # Once either side's best ask reaches this inside the stage 1 window without a stage 1 buy, stage 1 stops

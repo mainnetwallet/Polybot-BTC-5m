@@ -478,14 +478,16 @@ def _s3_config(**overrides):
     return make_config(**values)
 
 
-def test_stage3_buys_at_097_but_not_above():
+def test_stage3_buys_up_to_098_but_not_above():
     config = make_config()
     risk = RiskManager()
-    assert risk.check(_s3(0.97, 0.96), make_ctx(remaining=25), config).approved is True
-    blocked = risk.check(_s3(0.98, 0.97), make_ctx(remaining=25), config)
+    for ask in (0.97, 0.98):
+        assert risk.check(_s3(ask, ask - 0.01), make_ctx(remaining=25), config).approved is True
+    blocked = risk.check(_s3(0.99, 0.98), make_ctx(remaining=25), config)
     assert blocked.approved is False
     assert blocked.reason == "stage3_max_ask_exceeded"
-    assert config.max_buy_price_for_stage(3) == 0.97
+    assert config.max_buy_price_for_stage(3) == 0.98
+    assert make_config(max_execution_price=0.95, stage3_threshold=0.90).max_buy_price_for_stage(3) == 0.95
 
 
 def test_stage3_blocks_a_wide_spread_and_a_missing_bid():
@@ -532,4 +534,4 @@ def test_stage3_max_ask_must_not_be_below_the_threshold_and_defaults_load():
     with pytest.raises(ValueError):
         make_config(stage3_max_ask=0.85, stage3_threshold=0.90)
     config = SettingsService(Settings()).get()
-    assert (config.stage3_max_ask, config.stage3_max_spread, config.stage3_min_stop_headroom) == (0.97, 0.05, 0.01)
+    assert (config.stage3_max_ask, config.stage3_max_spread, config.stage3_min_stop_headroom) == (0.98, 0.05, 0.01)

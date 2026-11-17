@@ -94,9 +94,9 @@ class Settings(BaseSettings):
     # Stage 2 does not buy when best ask - best bid is wider than this (0 = off). The stop-loss looks at the bid,
     # the buy pays the ask: a wide spread would stop the position out right after the buy.
     stage2_max_spread: float = 0.05
-    # Stage 3 never buys when the best ask is above this (0.97: it buys at 0.97, not at 0.98). Stage 3 is held to
-    # settlement, so an ask of 0.98 only pays about 2 cents for a 5 % stop-loss risk.
-    stage3_max_ask: float = 0.97
+    # Stage 3 never buys when the best ask is above this (0.98: it buys up to and including 0.98, MAX_EXECUTION_PRICE
+    # is the hard cap on top of it).
+    stage3_max_ask: float = 0.98
     # Stage 3 does not buy when best ask - best bid is wider than this (0 = off).
     stage3_max_spread: float = 0.05
     # Stage 3 does not buy unless the best bid is at least this far ABOVE the stop-loss level that applies right now
