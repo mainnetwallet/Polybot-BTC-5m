@@ -405,3 +405,31 @@ def test_stage3_stop_loss_steps_down_5_3_2_by_seconds_left():
     no_mid = make_config(**STOPS, stage3_mid_stop_loss_pct=0.0, stage3_last_seconds=10, stage3_last_seconds_stop_loss_pct=2.0)
     assert no_mid.stop_loss_pct_for(3, 0.95, 15) == 5.0
     assert no_mid.stop_loss_pct_for(3, 0.95, 8) == 2.0
+
+
+async def test_stop_loss_is_never_given_up_after_the_fast_attempts_run_out_but_take_profit_is():
+    from app.order_manager.manager import MAX_SELL_ATTEMPTS, STOP_LOSS_SLOW_GAP_MS
+
+    stack = build_stack(make_config(**STAGE0, **STOPS, trade_amount_usdc=4.0))
+    market = make_market(remaining=150)
+    books = books_for(market, up_ask=0.80, down_ask=0.10)
+    await _stage0_buy(stack, market, books)
+    manager = stack["manager"]
+    key = ("paper", market.market_id, 0)
+
+    # take-profit: out of attempts -> blocked (it can wait for settlement)
+    manager._sell_attempts[key + ("take_profit",)] = MAX_SELL_ATTEMPTS
+    books[market.up_token_id].bids = {0.90: 100.0}  # above the +10 % take-profit price
+    results = await manager.handle_exits(market, books, "paper", stack["config"])
+    assert [(r.status, r.reason) for r in results] == [("BLOCKED", "max_sell_attempts")]
+
+    # stop-loss: out of fast attempts -> only slowed down to one try per STOP_LOSS_SLOW_GAP_MS
+    books[market.up_token_id].bids = {0.30: 100.0}  # far below the stop
+    manager._sell_attempts[key + ("stop_loss",)] = MAX_SELL_ATTEMPTS
+    import time as _time
+
+    manager._last_sell_ms[key + ("stop_loss",)] = int(_time.time() * 1000)  # a try just happened
+    assert await manager.handle_exits(market, books, "paper", stack["config"]) == []  # waits for the slow gap
+    manager._last_sell_ms[key + ("stop_loss",)] = int(_time.time() * 1000) - STOP_LOSS_SLOW_GAP_MS - 10
+    results = await manager.handle_exits(market, books, "paper", stack["config"])
+    assert [(r.status, r.reason) for r in results] == [("FILLED", "stage0_stop_loss")]

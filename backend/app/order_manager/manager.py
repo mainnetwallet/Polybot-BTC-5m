@@ -42,8 +42,12 @@ _STAGE_SUFFIX = re.compile(r":s(\d+)$")
 _SELL_STAGE = re.compile(r":s(\d+):sell:")
 # Stage 0 take-profit SELL orders carry this marker in their order key.
 _SELL_MARK = ":sell:"
-# With the short exit retry gap this still covers the whole stage 1.
+# Fast sell attempts per exit (stage, kind) and market: 450 x 50 ms is ~22 s of back-to-back tries.
+# A take-profit that used them up stops (it can wait for settlement). A stop-loss never gives up:
+# it only slows down to one try per STOP_LOSS_SLOW_GAP_MS, because an unsold losing position must
+# not be left unprotected for the rest of the market.
 MAX_SELL_ATTEMPTS = 450
+STOP_LOSS_SLOW_GAP_MS = 1000
 SELL_DUST = 0.01
 # Entry stages whose shares are watched for an exit: stages 0-2 have a take-profit sell, and every
 # stage (0-3) has a stop-loss sell (stage 3 has no take-profit, it is held to settlement otherwise).
@@ -140,6 +144,9 @@ class OrderManager:
         self._last_sell_ms: dict[tuple[str, str, int, str], int] = {}
         # (mode, market) pairs where stage 0 already got an accepted buy (it buys once per market)
         self._stage0_bought: set[tuple[str, str]] = set()
+        # (mode, market) pairs with a partly filled paper BUY that may still be topped up. The bot builds
+        # a risk context for them even when no new signal fires, so the top-up can be checked.
+        self._partial_pending: set[tuple[str, str]] = set()
 
     def _holdings(self, stage: int) -> dict[tuple[str, str], Stage0Holding | None]:
         if stage == 1:
@@ -275,7 +282,7 @@ class OrderManager:
                 ]
 
             if mode == "paper":
-                await self._retry_partial_orders(market, books, mode, config)
+                await self._retry_partial_orders(market, books, mode, config, ctx)
 
             if not evaluation.signals or ctx is None:
                 return []
@@ -407,6 +414,8 @@ class OrderManager:
             )
 
         result = await asyncio.to_thread(self._finalize_order, order_id, report, signal, mode)
+        if mode == "paper" and result.status == "PARTIALLY_FILLED":
+            self._partial_pending.add((mode, market.market_id))
         if signal.stage in (1, 2, 3):
             self._holdings(signal.stage).pop((mode, market.market_id), None)  # reload what is held
         if signal.stage == 0:
@@ -580,11 +589,18 @@ class OrderManager:
 
     # ------------------------------------------------------------------
     async def _retry_partial_orders(
-        self, market: MarketInfo, books: dict[str, OrderBook], mode: str, config
+        self,
+        market: MarketInfo,
+        books: dict[str, OrderBook],
+        mode: str,
+        config,
+        ctx: RiskContext | None = None,
     ) -> None:
         if market.remaining_seconds() <= 0:
             return
         pending = await asyncio.to_thread(self._partial_order_candidates, market.market_id, mode)
+        if not pending:
+            self._partial_pending.discard((mode, market.market_id))
 
         for order_id, side, filled_size, avg_fill_price, requested_notional, order_key in pending:
             now_ms = clock.now_ms()
@@ -611,6 +627,8 @@ class OrderManager:
                 continue
             if stage == 0 and config.stage0_high_buy_too_early(book.best_ask, market.remaining_seconds()):
                 continue
+            if not self._topup_allowed(stage, side, book, market, config, ctx):
+                continue  # a top-up is a buy: it needs the same entry rules as the original signal
             spent = filled_size * avg_fill_price
             remaining = requested_notional - spent
             if remaining <= 0.01:
@@ -644,6 +662,56 @@ class OrderManager:
                 payload={"order_id": order_id, "side": side, "status": report.status},
                 mode=mode,
             )
+
+    def _topup_allowed(
+        self, stage: int, side: str, book: OrderBook, market: MarketInfo, config, ctx: RiskContext | None
+    ) -> bool:
+        """Entry rules a partial-fill top-up (paper mode) must still meet, for stages 0-3.
+
+        The top-up is another buy, so it needs what the first buy needed:
+        * stages 1-3: still inside the stage's own time window and the ask at or above its threshold
+          (stage 0 has its own window / ask-range checks in the caller);
+        * the BTC price gap still in this side's direction. It fails closed: no risk context, no top-up;
+        * with a risk context: no kill switch and no daily loss / profit limit reached.
+        """
+        remaining_s = market.remaining_seconds()
+        threshold = 0.0
+        if stage in (1, 2, 3):
+            start_s = {1: config.stage1_seconds, 2: config.stage2_seconds, 3: config.stage3_seconds}[stage]
+            if not (config.stage_end_seconds(stage) < remaining_s <= start_s):
+                return False
+            threshold = {2: config.stage2_threshold, 3: config.stage3_threshold}.get(stage, config.stage1_threshold)
+            if book.best_ask is None or book.best_ask + 1e-9 < threshold:
+                return False
+        min_gap = {
+            0: config.stage0_min_price_gap_usd,
+            2: config.stage2_min_price_gap_usd,
+            3: config.stage3_min_price_gap_usd,
+        }.get(stage, config.min_price_gap_usd)
+        if min_gap > 0 and ctx is None:
+            return False
+        if ctx is not None:
+            if ctx.kill_switch:
+                return False
+            if config.max_daily_loss > 0 and ctx.daily_pnl <= -config.max_daily_loss + 1e-9:
+                return False
+            if config.daily_profit_target > 0 and ctx.daily_pnl >= config.daily_profit_target - 1e-9:
+                return False
+        if min_gap <= 0:
+            return True
+        probe = Signal(
+            market_id=market.market_id,
+            side=side,
+            token_id=market.token_for(side),
+            best_ask=book.best_ask,
+            ask_size=book.ask_size,
+            remaining_seconds=remaining_s,
+            threshold=threshold,
+            observed_at_ms=clock.now_ms(),
+            book_age_ms=book.age_ms(),
+            stage=stage,
+        )
+        return self._risk._check_price_gap(probe, ctx, config) is None
 
     @staticmethod
     def _partial_order_candidates(market_id: str, mode: str) -> list[tuple[int, str, float, float, float, str]]:
@@ -837,7 +905,12 @@ class OrderManager:
                 mode="live",
             )
 
+    def has_partial_pending(self, mode: str, market_id: str) -> bool:
+        """True while a partly filled paper BUY of this market may still be topped up."""
+        return (mode, market_id) in self._partial_pending
+
     def reset_trigger_cache(self) -> None:
+        self._partial_pending.clear()
         self._trigger_seen.clear()
         self._trigger_market = None
         self._retry_after.clear()
@@ -1069,10 +1142,13 @@ class OrderManager:
                     return []  # neither exit is due (or both are switched off): held to settlement
                 sell_key = (mode, market.market_id, stage, kind)
                 attempts = self._sell_attempts.get(sell_key, 0)
+                retry_gap_ms = self._exit_retry_gap_ms
                 if attempts >= MAX_SELL_ATTEMPTS:
-                    return [OrderResult(None, holding.side, "BLOCKED", "max_sell_attempts")]
+                    if kind != "stop_loss":
+                        return [OrderResult(None, holding.side, "BLOCKED", "max_sell_attempts")]
+                    retry_gap_ms = max(retry_gap_ms, STOP_LOSS_SLOW_GAP_MS)
                 now_ms = clock.now_ms()
-                if now_ms - self._last_sell_ms.get(sell_key, 0) < self._exit_retry_gap_ms:
+                if now_ms - self._last_sell_ms.get(sell_key, 0) < retry_gap_ms:
                     return []
                 self._sell_attempts[sell_key] = attempts + 1
                 self._last_sell_ms[sell_key] = now_ms

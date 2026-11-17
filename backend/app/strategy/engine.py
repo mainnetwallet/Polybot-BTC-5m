@@ -14,9 +14,10 @@ Entries are staged. Each stage may place ONE buy per market:
   Values: see Settings / .env. Once either side's best ask reaches stage0_block_ask (default 0.98) inside the stage 0 window, stage 0 does not
   buy again in that market (even if the ask drops back).
 
-* stage 1: inside the stage 1, best_ask >= stage1_threshold (default 0.85).
+* stage 1: inside the stage 1 window (stage1_seconds left, default 90, until stage 2 starts at
+  stage2_seconds, default 50), best_ask >= stage1_threshold (default 0.85).
   If the ask is not there yet the strategy keeps watching and fires the moment it
-  gets there, any time before the market ends. Once either side's best ask reaches stage1_block_ask
+  gets there, as long as the stage 1 window is still open (RiskManager._check_stage_chain: "stage1_missed"). Once either side's best ask reaches stage1_block_ask
   (default 0.99) inside the stage 1 window without a stage 1 buy, stage 1 does not buy in that market any more (even if the
   ask drops back and the rules are met again). Stages 0, 2 and 3 are unaffected.
   Stage 2 and stage 3 work the same way with stage2_block_ask / stage3_block_ask (default 0.99), each inside its

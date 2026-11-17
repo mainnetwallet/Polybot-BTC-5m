@@ -638,3 +638,84 @@ async def test_timeline_gap_lost_then_regained_buys_stage2_when_it_returns():
         (36, 0.93, 28),   # 42s: gap regained -> stage 2 buys at once
     ])
     assert _keys() == ["s1", "s2"]
+
+
+async def _partial_stage1(cfg, ctx_first):
+    stack = build_stack(cfg)
+    market = make_market(remaining=70)
+    books = books_for(market, up_ask=0.86, down_ask=0.10, up_size=3.0)
+    await _submit(stack, market, books, ctx=ctx_first)
+    first = _orders()[0]
+    assert first.status == "PARTIALLY_FILLED"
+    stack["manager"]._retry_after.clear()
+    return stack, market, first.filled_size
+
+
+async def _later_event(stack, later, books, ctx):
+    stage_books(stack, later, books)
+    evaluation = _evaluate(stack, later, books)
+    await stack["manager"].handle_event(later, evaluation, books, "paper", ctx)
+
+
+async def test_partial_topup_blocked_when_ask_fell_below_threshold_and_gap_lost():
+    cfg = make_config(min_price_gap_usd=35.0, stage1_seconds=90)
+    ctx = make_ctx(remaining=70, btc_price=100050, price_to_beat=100000, balance=10)
+    stack, market, before = await _partial_stage1(cfg, ctx)
+
+    later = make_market(remaining=60, market_id=market.market_id)
+    books = books_for(later, up_ask=0.40, down_ask=0.60)
+    await _later_event(stack, later, books, make_ctx(remaining=60, btc_price=99900, price_to_beat=100000))
+
+    assert _orders()[0].filled_size == before
+
+
+async def test_partial_topup_blocked_after_stage1_window_ended():
+    cfg = make_config(stage1_seconds=90, stage2_seconds=50, stage3_seconds=30)
+    stack, market, before = await _partial_stage1(cfg, None)
+
+    later = make_market(remaining=40, market_id=market.market_id)  # stage 2 window, stage 1 is over
+    books = books_for(later, up_ask=0.86, down_ask=0.10)
+    await _later_event(stack, later, books, None)
+
+    assert _orders()[0].filled_size == before
+
+
+async def test_partial_topup_blocked_without_btc_data_when_gap_rule_is_on():
+    cfg = make_config(min_price_gap_usd=35.0, stage1_seconds=90)
+    ctx = make_ctx(remaining=70, btc_price=100050, price_to_beat=100000, balance=10)
+    stack, market, before = await _partial_stage1(cfg, ctx)
+
+    later = make_market(remaining=60, market_id=market.market_id)
+    books = books_for(later, up_ask=0.86, down_ask=0.10)
+    await _later_event(stack, later, books, None)  # no risk context = no BTC data: fail closed
+
+    assert _orders()[0].filled_size == before
+
+
+async def test_partial_topup_still_completes_when_all_rules_hold():
+    cfg = make_config(min_price_gap_usd=35.0, stage1_seconds=90)
+    ctx = make_ctx(remaining=70, btc_price=100050, price_to_beat=100000, balance=10)
+    stack, market, before = await _partial_stage1(cfg, ctx)
+
+    later = make_market(remaining=60, market_id=market.market_id)
+    books = books_for(later, up_ask=0.86, down_ask=0.10)
+    await _later_event(stack, later, books, make_ctx(remaining=60, btc_price=100050, price_to_beat=100000, balance=10))
+
+    final = _orders()[0]
+    assert final.filled_size > before and final.status == "FILLED"
+
+
+async def test_partial_pending_flag_follows_the_partly_filled_buy():
+    cfg = make_config(min_price_gap_usd=35.0, stage1_seconds=90)
+    ctx = make_ctx(remaining=70, btc_price=100050, price_to_beat=100000, balance=10)
+    stack, market, _ = await _partial_stage1(cfg, ctx)
+    manager = stack["manager"]
+    assert manager.has_partial_pending("paper", market.market_id)  # the bot builds a risk context for it
+
+    later = make_market(remaining=60, market_id=market.market_id)
+    books = books_for(later, up_ask=0.86, down_ask=0.10)
+    await _later_event(stack, later, books, make_ctx(remaining=60, btc_price=100050, price_to_beat=100000, balance=10))
+    assert _orders()[0].status == "FILLED"
+    manager._retry_after.clear()
+    await _later_event(stack, later, books, make_ctx(remaining=60, btc_price=100050, price_to_beat=100000, balance=10))
+    assert not manager.has_partial_pending("paper", market.market_id)  # nothing left to top up
