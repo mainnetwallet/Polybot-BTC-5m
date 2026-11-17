@@ -158,6 +158,12 @@ class RiskManager:
                     "stage2_max_ask_exceeded",
                     f"ask {signal.best_ask:.3f} above the stage 2 limit {config.stage2_max_ask:.3f}",
                 )
+            if signal.stage == 3 and signal.best_ask > config.stage3_max_ask + 1e-9:
+                return RiskDecision(
+                    False,
+                    "stage3_max_ask_exceeded",
+                    f"ask {signal.best_ask:.3f} above the stage 3 limit {config.stage3_max_ask:.3f}",
+                )
             if signal.best_ask > config.max_execution_price + 1e-9:
                 return RiskDecision(
                     False,
@@ -166,18 +172,37 @@ class RiskManager:
                 )
         if signal.ask_size is None or signal.ask_size <= 0:
             return RiskDecision(False, "no_liquidity", "no ask size available at best price")
-        if signal.stage == 2 and config.stage2_max_spread > 0:
-            # The stop-loss reads the bid but the buy pays the ask: a wide spread stops the shares out at once.
-            if signal.best_bid is None:
-                return RiskDecision(False, "stage2_no_bid", "no bid in the book; the stop-loss could not exit")
-            spread = signal.best_ask - signal.best_bid
-            if spread > config.stage2_max_spread + 1e-9:
-                return RiskDecision(
-                    False,
-                    "stage2_spread_too_wide",
-                    f"spread {spread:.3f} (ask {signal.best_ask:.3f}, bid {signal.best_bid:.3f}) "
-                    f"above the stage 2 limit {config.stage2_max_spread:.3f}",
-                )
+        if signal.stage in (2, 3):
+            max_spread = config.stage2_max_spread if signal.stage == 2 else config.stage3_max_spread
+            if max_spread > 0:
+                # The stop-loss reads the bid but the buy pays the ask: a wide spread stops the shares out at once.
+                if signal.best_bid is None:
+                    return RiskDecision(
+                        False, f"stage{signal.stage}_no_bid", "no bid in the book; the stop-loss could not exit"
+                    )
+                spread = signal.best_ask - signal.best_bid
+                if spread > max_spread + 1e-9:
+                    return RiskDecision(
+                        False,
+                        f"stage{signal.stage}_spread_too_wide",
+                        f"spread {spread:.3f} (ask {signal.best_ask:.3f}, bid {signal.best_bid:.3f}) "
+                        f"above the stage {signal.stage} limit {max_spread:.3f}",
+                    )
+        if signal.stage == 3 and config.stage3_min_stop_headroom > 0:
+            # The stage 3 stop tightens as the market ends (5 % -> 3 % -> 2 %). Do not buy when the bid is already
+            # at (or within the headroom of) the stop level that applies right now: it would be sold at once.
+            stop_price = config.stop_loss_price_for(3, signal.best_ask, ctx.remaining_seconds)
+            if stop_price is not None:
+                if signal.best_bid is None:
+                    return RiskDecision(False, "stage3_no_bid", "no bid in the book; the stop-loss could not exit")
+                headroom = signal.best_bid - stop_price
+                if headroom + 1e-9 < config.stage3_min_stop_headroom:
+                    return RiskDecision(
+                        False,
+                        "stage3_stop_too_close",
+                        f"bid {signal.best_bid:.3f} is only {headroom:.3f} above the stop-loss level "
+                        f"{stop_price:.3f}; needs {config.stage3_min_stop_headroom:.3f}",
+                    )
         chain = self._check_stage_chain(signal, ctx, config)
         if chain is not None:
             return chain

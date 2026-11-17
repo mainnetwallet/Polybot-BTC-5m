@@ -94,6 +94,14 @@ class Settings(BaseSettings):
     # Stage 2 does not buy when best ask - best bid is wider than this (0 = off). The stop-loss looks at the bid,
     # the buy pays the ask: a wide spread would stop the position out right after the buy.
     stage2_max_spread: float = 0.05
+    # Stage 3 never buys when the best ask is above this (0.97: it buys at 0.97, not at 0.98). Stage 3 is held to
+    # settlement, so an ask of 0.98 only pays about 2 cents for a 5 % stop-loss risk.
+    stage3_max_ask: float = 0.97
+    # Stage 3 does not buy when best ask - best bid is wider than this (0 = off).
+    stage3_max_spread: float = 0.05
+    # Stage 3 does not buy unless the best bid is at least this far ABOVE the stop-loss level that applies right now
+    # (the stop tightens to 3 % / 2 % in the last seconds). 0 = off. Stops a buy from being stopped out at once.
+    stage3_min_stop_headroom: float = 0.01
     trade_amount_usdc: float = 50.0
     # Book age only resets on a websocket book event, so a stable price on a quiet book looks
     # "old" without being wrong, so too low a limit blocks stage 2/3 (armed by the clock) on a quiet

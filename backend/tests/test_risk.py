@@ -445,3 +445,91 @@ def test_later_stages_do_not_buy_against_a_stage0_holding_on_the_other_side():
     assert blocked.reason == "opposite_side_held"
     # same side as the Stage 0 holding is still allowed
     assert risk.check(_s2(0.92, bid=0.91, side="DOWN"), ctx, config).approved is True
+
+
+# ---------------------------------------------------------------------------
+# Stage 3: max ask, spread guard, stop-loss headroom
+# ---------------------------------------------------------------------------
+def _s3(ask: float, bid: float | None, remaining: float = 25.0) -> Signal:
+    return Signal(
+        market_id="0xmarket",
+        side="UP",
+        token_id="up-token",
+        best_ask=ask,
+        ask_size=100.0,
+        remaining_seconds=remaining,
+        threshold=0.90,
+        observed_at_ms=1,
+        book_age_ms=50,
+        stage=3,
+        best_bid=bid,
+    )
+
+
+def _s3_config(**overrides):
+    values = dict(
+        stage3_stop_loss_pct=5.0,
+        stage3_mid_seconds=20,
+        stage3_mid_stop_loss_pct=3.0,
+        stage3_last_seconds=10,
+        stage3_last_seconds_stop_loss_pct=2.0,
+    )
+    values.update(overrides)
+    return make_config(**values)
+
+
+def test_stage3_buys_at_097_but_not_above():
+    config = make_config()
+    risk = RiskManager()
+    assert risk.check(_s3(0.97, 0.96), make_ctx(remaining=25), config).approved is True
+    blocked = risk.check(_s3(0.98, 0.97), make_ctx(remaining=25), config)
+    assert blocked.approved is False
+    assert blocked.reason == "stage3_max_ask_exceeded"
+    assert config.max_buy_price_for_stage(3) == 0.97
+
+
+def test_stage3_blocks_a_wide_spread_and_a_missing_bid():
+    config = _s3_config(stage3_max_spread=0.04)
+    risk = RiskManager()
+    assert risk.check(_s3(0.93, 0.89), make_ctx(remaining=25), config).approved is True  # 0.04 exactly
+    wide = risk.check(_s3(0.93, 0.85), make_ctx(remaining=25), config)
+    assert wide.reason == "stage3_spread_too_wide"
+    assert risk.check(_s3(0.93, None), make_ctx(remaining=25), config).reason == "stage3_no_bid"
+
+
+def test_stage3_blocks_a_buy_that_the_current_stop_loss_would_sell_at_once():
+    config = _s3_config(stage3_min_stop_headroom=0.01)
+    risk = RiskManager()
+    # last 10 s: 2 % stop. ask 0.95 -> stop 0.931
+    assert risk.check(_s3(0.95, 0.945, remaining=8), make_ctx(remaining=8), config).approved is True
+    at_stop = risk.check(_s3(0.95, 0.93, remaining=8), make_ctx(remaining=8), config)
+    assert at_stop.approved is False
+    assert at_stop.reason == "stage3_stop_too_close"
+    close = risk.check(_s3(0.95, 0.936, remaining=8), make_ctx(remaining=8), config)
+    assert close.reason == "stage3_stop_too_close"  # only 0.005 of headroom
+    # 20-30 s: 5 % stop. ask 0.92 -> stop 0.874
+    assert risk.check(_s3(0.92, 0.90, remaining=25), make_ctx(remaining=25), config).approved is True
+    assert risk.check(_s3(0.92, 0.878, remaining=25), make_ctx(remaining=25), config).reason == "stage3_stop_too_close"
+    assert risk.check(_s3(0.92, None, remaining=25), make_ctx(remaining=25), config).reason == "stage3_no_bid"
+
+
+def test_stage3_headroom_guard_can_be_switched_off_and_needs_a_stop_loss():
+    risk = RiskManager()
+    off = _s3_config(stage3_min_stop_headroom=0.0)
+    assert risk.check(_s3(0.95, 0.93, remaining=8), make_ctx(remaining=8), off).approved is True
+    no_stop = _s3_config(
+        stage3_min_stop_headroom=0.01, stage3_stop_loss_pct=0.0,
+        stage3_mid_stop_loss_pct=0.0, stage3_last_seconds_stop_loss_pct=0.0,
+    )
+    assert risk.check(_s3(0.95, 0.93, remaining=8), make_ctx(remaining=8), no_stop).approved is True
+
+
+def test_stage3_max_ask_must_not_be_below_the_threshold_and_defaults_load():
+    import pytest
+    from app.config.runtime import SettingsService
+    from app.config.settings import Settings
+
+    with pytest.raises(ValueError):
+        make_config(stage3_max_ask=0.85, stage3_threshold=0.90)
+    config = SettingsService(Settings()).get()
+    assert (config.stage3_max_ask, config.stage3_max_spread, config.stage3_min_stop_headroom) == (0.97, 0.05, 0.01)

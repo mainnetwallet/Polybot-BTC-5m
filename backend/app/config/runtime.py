@@ -20,6 +20,9 @@ OVERRIDABLE_KEYS = (
     "stage1_max_ask",
     "stage2_max_ask",
     "stage2_max_spread",
+    "stage3_max_ask",
+    "stage3_max_spread",
+    "stage3_min_stop_headroom",
     "stage1_seconds",
     "stage1_enabled",
     "stage2_enabled",
@@ -92,6 +95,11 @@ class RuntimeSettings(BaseModel):
     stage2_max_ask: float = Field(default=0.97, ge=0.01, le=1.0)
     # Stage 2 does not buy when best ask - best bid is wider than this; 0 = off (a missing bid then also blocks).
     stage2_max_spread: float = Field(default=0.0, ge=0.0, le=1.0)
+    # Stage 3: same guards. Max ask 0.97 (buys at 0.97, never at 0.98+); spread guard and the stop-loss headroom
+    # (best bid must sit this far above the stop level that applies right now) are off (0) unless set.
+    stage3_max_ask: float = Field(default=0.97, ge=0.01, le=1.0)
+    stage3_max_spread: float = Field(default=0.0, ge=0.0, le=1.0)
+    stage3_min_stop_headroom: float = Field(default=0.0, ge=0.0, le=1.0)
     # Once either side's best ask reaches this inside the stage 1 window without a stage 1 buy, stage 1 stops
     # buying in that market for good (the ask dropping again does not lift it). Asks never exceed 0.99, so a
     # value above 0.99 effectively turns the block off.
@@ -204,6 +212,8 @@ class RuntimeSettings(BaseModel):
             raise ValueError("stage1_max_ask must be >= stage1_threshold")
         if self.stage2_max_ask < self.stage2_threshold:
             raise ValueError("stage2_max_ask must be >= stage2_threshold, or stage 2 could never buy")
+        if self.stage3_max_ask < self.stage3_threshold:
+            raise ValueError("stage3_max_ask must be >= stage3_threshold, or stage 3 could never buy")
         if self.max_execution_price < self.stage1_threshold:
             raise ValueError("max_execution_price must be >= stage1_threshold")
         if self.max_execution_price < max(self.stage2_threshold, self.stage3_threshold):
@@ -307,6 +317,8 @@ class RuntimeSettings(BaseModel):
             return min(self.stage1_max_ask, self.max_execution_price)
         if stage == 2:
             return min(self.stage2_max_ask, self.max_execution_price)
+        if stage == 3:
+            return min(self.stage3_max_ask, self.max_execution_price)
         return self.max_execution_price
 
     def stage0_max_ask_for(self, ask: float) -> float:
