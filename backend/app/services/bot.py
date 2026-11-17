@@ -1385,12 +1385,14 @@ class TradingBot:
             except Exception as exc:
                 result = {"status": "error", "error": f"redemption failed ({type(exc).__name__})"}
             status = result.get("status")
-            if status == "redeemed":
+            if status in ("redeemed", "already_redeemed"):
                 self._redeem_queue.pop(market_id, None)
                 self.logs.log(
                     "INFO",
                     "settlement",
-                    "winning tokens redeemed into pUSD",
+                    "winning tokens redeemed into pUSD"
+                    if status == "redeemed"
+                    else "winning tokens were already redeemed (none left in the wallet)",
                     payload={"market_id": market_id, **result},
                     mode="live",
                 )
