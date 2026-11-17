@@ -689,7 +689,10 @@ def test_stage0_take_profit_tiers_15_10_5_by_buy_price():
     assert config.stage0_sell_price_for(0.85) == pytest.approx(0.8925)
     assert config.stage0_sell_price_for(None) is None  # unknown cost: no reference price, held to settlement
     assert make_config(stage0_take_profit_pct_mid=0.0).stage0_sell_price_for(0.75) is None  # a tier set to 0: off
-    assert make_config(stage0_take_profit_pct_high=50.0).stage0_sell_price_for(0.85) == 0.99  # capped at 0.99
+    assert make_config(stage0_take_profit_pct_high=50.0).stage0_sell_price_for(0.85) == 0.98  # capped at 0.98
+    # dear buys: +5 % would be above 0.98 from 0.934 on, so they sell at 0.98 (not 0.99)
+    assert make_config(stage0_take_profit_pct_high=5.0).stage0_sell_price_for(0.95) == 0.98
+    assert make_config(stage0_take_profit_pct_high=5.0).stage0_sell_price_for(0.96) == 0.98
 
 
 def test_stage0_defaults_are_max_ask_89_and_tiers_10_7_5():

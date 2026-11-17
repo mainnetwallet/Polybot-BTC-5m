@@ -52,7 +52,7 @@ object SettingsSpec {
         SettingField("stage0_high_from_ask", "High tier from (buy price)", "Shares bought at or above this price use the high take-profit %.", price),
         SettingField("stage0_take_profit_pct_low", "Take-profit % (low tier)", "Percent above the buy price. 0 = held to settlement.", num(0.0, 500.0, suffix = "%")),
         SettingField("stage0_take_profit_pct_mid", "Take-profit % (mid tier)", "Percent above the buy price. 0 = held to settlement.", num(0.0, 500.0, suffix = "%")),
-        SettingField("stage0_take_profit_pct_high", "Take-profit % (high tier)", "Percent above the buy price, sell price capped at 0.99. 0 = held to settlement.", num(0.0, 500.0, suffix = "%")),
+        SettingField("stage0_take_profit_pct_high", "Take-profit % (high tier)", "Percent above the buy price, sell price capped at 0.98. 0 = held to settlement.", num(0.0, 500.0, suffix = "%")),
         SettingField("stage0_stop_loss_pct", "Stop-loss %", "Market sell once the best bid is this many percent below the average buy. 0 = off.", num(0.0, 99.0, suffix = "%")),
         SettingField("stage0_high_buy_price", "Expensive buy from (min ask)", "Expensive buy range = this price up to the expensive max ask (default 0.89 to 0.96). Also sets later entry and the expensive-buy stop-loss.", price),
         SettingField("stage0_high_buy_stop_loss_pct", "Expensive buy stop-loss %", "Stop-loss for expensive stage 0 buys. 0 = off, the normal stage 0 stop-loss applies.", num(0.0, 99.0, suffix = "%")),

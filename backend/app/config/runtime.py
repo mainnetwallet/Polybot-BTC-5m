@@ -82,8 +82,12 @@ OVERRIDABLE_KEYS = (
 )
 
 
-# highest bid a stage 0 percent take-profit waits for (a share pays at most 1.00)
+# highest bid a stage 1 percent take-profit waits for (a share pays at most 1.00)
 STAGE0_MAX_TAKE_PROFIT_PRICE = 0.99
+
+# highest bid a stage 0 take-profit waits for: a stage 0 position is sold once the best bid reaches 0.98,
+# however dear it was bought (0.98 is reached more reliably than 0.99, which can have too little depth)
+STAGE0_SELL_CAP_PRICE = 0.98
 
 
 class RuntimeSettings(BaseModel):
@@ -424,13 +428,14 @@ class RuntimeSettings(BaseModel):
     def stage0_sell_price_for(self, cost_per_share: float | None) -> float | None:
         """Take-profit sell price for shares stage 0 bought at `cost_per_share`; None = no take-profit.
 
-        cost * (1 + tier percentage / 100), capped at STAGE0_MAX_TAKE_PROFIT_PRICE (a share cannot be
-        sold above 1.00). A tier percentage of 0, or an unknown cost, means the shares are held to settlement.
+        cost * (1 + tier percentage / 100), capped at STAGE0_SELL_CAP_PRICE (0.98): a stage 0 position is
+        sold at the latest once the best bid reaches 0.98. A tier percentage of 0, or an unknown cost,
+        means the shares are held to settlement.
         """
         pct = self.stage0_take_profit_pct_for(cost_per_share)
         if pct <= 0 or cost_per_share is None:
             return None
-        return min(cost_per_share * (1.0 + pct / 100.0), STAGE0_MAX_TAKE_PROFIT_PRICE)
+        return min(cost_per_share * (1.0 + pct / 100.0), STAGE0_SELL_CAP_PRICE)
 
     def to_public_dict(self) -> dict[str, Any]:
         data = self.model_dump()
