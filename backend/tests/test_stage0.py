@@ -955,3 +955,30 @@ def test_stage0_block_ask_setting_changes_when_the_market_is_blocked():
     relaxed = make_config(**STAGE0, stage0_block_ask=0.98)
     fresh.evaluate(market, books_for(market, 0.96, 0.04), end_ms - 140_000, relaxed)
     assert not fresh.stage0_blocked(market.market_id)
+
+
+async def test_stage0_retries_a_missed_fok_for_the_whole_window_not_just_15_tries():
+    """Regression: 15 attempts (~4 s) used to end stage 0 for the market while its window still had ~55 s left."""
+    from app.execution.base import ExecutionReport
+
+    stack = build_stack(make_config(**STAGE0, trade_amount_usdc=4.0))
+    manager = stack["manager"]
+    market = make_market(remaining=150)
+    books = books_for(market, up_ask=0.80, down_ask=0.20)
+    calls = {"n": 0}
+
+    class AlwaysCancel:
+        async def place_buy(self, request):
+            calls["n"] += 1
+            return ExecutionReport(status="CANCELED", error="FOK order was not filled")
+
+    manager._executor_provider = lambda _mode: AlwaysCancel()
+    manager._retry_gap_ms = 0
+    tries = manager._max_attempts + 10
+    assert tries < manager._stage0_max_attempts
+    for _ in range(tries):
+        await _stage0_buy(stack, market, books)
+    assert calls["n"] == tries  # not capped at the 15 of stages 1-3
+    manager._stage0_max_attempts = tries
+    await _stage0_buy(stack, market, books)
+    assert calls["n"] == tries  # the stage 0 cap itself still holds

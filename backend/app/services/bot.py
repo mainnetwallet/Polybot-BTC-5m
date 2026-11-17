@@ -595,7 +595,9 @@ class TradingBot:
         marks = self._marks()
         with session_scope() as session:
             unrealized = self.portfolio.unrealized_pnl(session, self._mode, marks, market.market_id)
-            pnl = self.portfolio.pnl_summary(session, self._mode, unrealized)["daily_pnl"]
+            summary = self.portfolio.pnl_summary(session, self._mode, unrealized)
+            # daily loss / profit limits: realized pnl only unless DAILY_LIMIT_INCLUDE_UNREALIZED=true
+            pnl = summary["daily_pnl"] if self.settings.daily_limit_include_unrealized else summary["realized_pnl"]
             trades_today = self.portfolio.trades_today(session, self._mode)
             # max_open_positions is a per-market cap: a position from an earlier 5-minute
             # window that is still waiting to settle must not block the current market.
@@ -1687,12 +1689,13 @@ class TradingBot:
                 "status": "active" if market.remaining_seconds() > 0 else "expired",
             }
 
+        limit_pnl = pnl["daily_pnl"] if self.settings.daily_limit_include_unrealized else pnl["realized_pnl"]
         risk_halt = None
         if self._risk_halt_reason:
             risk_halt = self._risk_halt_reason
-        elif pnl["daily_pnl"] <= -config.max_daily_loss and config.max_daily_loss > 0:
+        elif limit_pnl <= -config.max_daily_loss and config.max_daily_loss > 0:
             risk_halt = "daily_loss_limit"
-        elif config.daily_profit_target > 0 and pnl["daily_pnl"] >= config.daily_profit_target:
+        elif config.daily_profit_target > 0 and limit_pnl >= config.daily_profit_target:
             risk_halt = "daily_profit_target"
 
         return {

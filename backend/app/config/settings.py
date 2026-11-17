@@ -98,6 +98,9 @@ class Settings(BaseSettings):
     # 15 attempts x 250 ms keeps a retry window of a few seconds.
     entry_max_attempts: int = 15
     entry_retry_gap_ms: int = 250
+    # Stage 0 has a ~60 s window (160 s -> 100 s left), so 15 attempts (~4 s) would end it long before the
+    # window does when a live FOK keeps missing on a thin book. 240 x 250 ms covers the whole window.
+    stage0_entry_max_attempts: int = 240
     # Gap between two sell attempts of the same exit (take-profit / stop-loss) when the previous
     # FOK sell did not fill. Kept short: an exit must not wait a full second for the next try.
     exit_retry_gap_ms: int = 50
@@ -175,6 +178,9 @@ class Settings(BaseSettings):
     # --- risk -----------------------------------------------------------
     max_daily_loss: float = 5.0
     daily_profit_target: float = 10.0
+    # False (default): MAX_DAILY_LOSS / DAILY_PROFIT_TARGET look at REALIZED pnl only (closed positions), so the
+    # spread + entry fee shown right after a buy cannot halt the other stages. True = realized + unrealized.
+    daily_limit_include_unrealized: bool = False
     max_trades_per_day: int = 600
 
     # --- paper ----------------------------------------------------------

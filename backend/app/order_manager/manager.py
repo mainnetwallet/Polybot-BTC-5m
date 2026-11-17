@@ -126,6 +126,7 @@ class OrderManager:
         self._trigger_market: str | None = None
         self._retry_after: dict[int, float] = {}
         self._max_attempts = settings.entry_max_attempts
+        self._stage0_max_attempts = max(settings.stage0_entry_max_attempts, settings.entry_max_attempts)
         self._retry_gap_ms = settings.entry_retry_gap_ms
         self._exit_retry_gap_ms = settings.exit_retry_gap_ms
         self._attempts: dict[str, int] = {}
@@ -337,7 +338,8 @@ class OrderManager:
         # Retry guard: a failed/cancelled entry is retried, but not in a tight loop and
         # not forever (every attempt is a real exchange order in live mode).
         attempts = self._attempts.get(key, 0)
-        if attempts >= self._max_attempts:
+        max_attempts = self._stage0_max_attempts if signal.stage == 0 else self._max_attempts
+        if attempts >= max_attempts:
             self._log_trigger_once(
                 signal, "blocked_max_attempts", f"{attempts} attempts used for this entry", mode
             )

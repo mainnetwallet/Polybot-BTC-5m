@@ -580,3 +580,28 @@ def test_login_logout_and_websocket_refuse_cross_site_origins():
             assert ws.receive_json()["type"] == "state"
         with client.websocket_connect("/api/ws", headers={"Origin": "http://testserver"}) as ws:
             assert ws.receive_json()["type"] == "state"
+
+
+def test_daily_limits_count_realized_pnl_only_unless_switched_on():
+    """Regression: a floating loss (spread + entry fee right after a buy) must not trip the daily limits."""
+    from app.database.models import Position
+
+    with TestClient(create_app()) as client:
+        bot = client.app.state.bot
+        with session_scope() as session:
+            session.add(
+                Position(
+                    mode=bot._mode, market_id="old-market", side="UP", size=50.0, cost_basis=40.0,
+                    avg_price=0.8, status="open", unrealized_pnl=-9.0,
+                )
+            )
+        market = make_market()
+        now_ms = int(time.time() * 1000)
+        previous = bot.settings.daily_limit_include_unrealized
+        try:
+            bot.settings.daily_limit_include_unrealized = False
+            assert bot._risk_context(market, bot.runtime.get(), now_ms).daily_pnl == 0.0
+            bot.settings.daily_limit_include_unrealized = True
+            assert bot._risk_context(market, bot.runtime.get(), now_ms).daily_pnl == -9.0
+        finally:
+            bot.settings.daily_limit_include_unrealized = previous
