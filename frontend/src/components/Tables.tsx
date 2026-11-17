@@ -131,7 +131,8 @@ export function PositionsTable({
               <td className={cx("mono text-right", pnlClass(position.unrealized_pnl))}>
                 {position.awaiting_settlement ? (
                   <span title="Window ended. Waiting for Polymarket to publish the winner; balance updates on settlement.">
-                    settling…
+                    {fmtSignedUsd(position.unrealized_pnl)}
+                    <span className="ml-1.5 text-[10px] font-normal text-amber">settling…</span>
                   </span>
                 ) : (
                   fmtSignedUsd(position.unrealized_pnl)

@@ -329,7 +329,14 @@ class Portfolio:
         for position in positions:
             mark = marks.get((position.market_id, position.side))
             if mark is None:
-                continue
+                # No bid left on this side at expiry. When the opposite side is clearly
+                # winning (bid >= 0.5) the empty side is worthless, so value it at 0 instead
+                # of leaving the stored $0.00 (which hid a loss while "settling").
+                opposite = "DOWN" if position.side == "UP" else "UP"
+                other = marks.get((position.market_id, opposite))
+                if other is None or other < 0.5:
+                    continue
+                mark = 0.0
             position.unrealized_pnl = round(
                 position.size * mark - position.cost_basis - position.fees, 10
             )

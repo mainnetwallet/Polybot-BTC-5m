@@ -207,6 +207,31 @@ def test_snapshot_unrealized_keeps_pnl_for_settling_position():
         assert positions["market-other"].unrealized_pnl == 0.0
 
 
+def test_snapshot_unrealized_values_side_without_bids_at_zero_when_other_side_wins():
+    stack = build_stack()
+    portfolio = stack["portfolio"]
+    with session_scope() as session:
+        _fill(portfolio, session, "paper", "market-lost")  # 5 sh @ 0.80, fee 0.05
+
+        # UP has no bid left, DOWN is at 0.99 -> UP is worthless: 0 - 4.0 - 0.05
+        portfolio.snapshot_unrealized(
+            session, "paper", "market-lost", {("market-lost", "DOWN"): 0.99}
+        )
+        assert portfolio.unrealized_pnl(session, "paper", {}) == -4.05
+
+
+def test_snapshot_unrealized_skips_side_without_bids_when_other_side_is_unclear():
+    stack = build_stack()
+    portfolio = stack["portfolio"]
+    with session_scope() as session:
+        _fill(portfolio, session, "paper", "market-unclear")
+
+        portfolio.snapshot_unrealized(
+            session, "paper", "market-unclear", {("market-unclear", "DOWN"): 0.40}
+        )
+        assert portfolio.unrealized_pnl(session, "paper", {}) == 0.0
+
+
 def test_trades_today_ignores_canceled_orders_without_fills():
     stack = build_stack()
     portfolio = stack["portfolio"]
