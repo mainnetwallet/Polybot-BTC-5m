@@ -198,6 +198,9 @@ class LiveExecutionEngine(ExecutionEngine):
         # They run on their own thread pool so database writes / price persists on the default
         # pool can never queue a stop-loss behind them.
         self._sell_pool = ThreadPoolExecutor(max_workers=8, thread_name_prefix="live-sell")
+        # Buys get their own pool too: on the shared default pool a buy could queue behind database
+        # writes / log persists. Buys are serialised by ``_order_lock`` anyway, so two workers is plenty.
+        self._buy_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="live-buy")
         self._orders_allowed = False
         self._balance_hint = balance_hint
         # token_id -> (fee rate, exponent) as published by the CLOB market info (``fd``).
@@ -492,7 +495,9 @@ class LiveExecutionEngine(ExecutionEngine):
             )
 
         try:
-            report = await asyncio.to_thread(self._place_sync, client, request)
+            report = await asyncio.get_running_loop().run_in_executor(
+                self._buy_pool, self._place_sync, client, request
+            )
         except Exception as exc:
             logger.error("live order failed (%s)", type(exc).__name__)
             return ExecutionReport(
@@ -920,3 +925,4 @@ class LiveExecutionEngine(ExecutionEngine):
         self._client = None
         # do not wait for a sell still in flight (it would block the event loop); queued ones are dropped
         self._sell_pool.shutdown(wait=False, cancel_futures=True)
+        self._buy_pool.shutdown(wait=False, cancel_futures=True)
