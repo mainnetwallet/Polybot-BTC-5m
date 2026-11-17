@@ -345,7 +345,7 @@ async def test_stage2_and_stage3_add_one_order_each():
     market = make_market(remaining=45)
     books = books_for(market, up_ask=0.93, down_ask=0.07)
     ctx = make_ctx(
-        remaining=45, open_positions=1, exposed_sides=frozenset({"UP"}), stage1_bought=True, stage1_remaining=55
+        remaining=45, open_positions=1, exposed_sides=frozenset({"UP"}), stage1_bought=True
     )
     await _submit(stack, market, books, ctx)
     assert len(_orders()) == 2
@@ -358,7 +358,7 @@ async def test_stage2_and_stage3_add_one_order_each():
     market = make_market(remaining=25)
     books = books_for(market, up_ask=0.93, down_ask=0.07)
     ctx = make_ctx(
-        remaining=25, open_positions=1, exposed_sides=frozenset({"UP"}), stage1_bought=True, stage1_remaining=55
+        remaining=25, open_positions=1, exposed_sides=frozenset({"UP"}), stage1_bought=True
     )
     await _submit(stack, market, books, ctx)
     await _submit(stack, market, books, ctx)
@@ -507,10 +507,8 @@ async def test_chain_full_sequence_three_buys_in_one_market():
     # 58s left: stage 1 buys
     results = await step(0, 0.85)
     assert [r.status for r in results] == ["FILLED"]
-    s1 = manager.stage1_remaining("paper", market.market_id)
-    assert s1 == pytest.approx(58, abs=2)
 
-    held = dict(open_positions=1, exposed_sides=frozenset({"UP"}), stage1_bought=True, stage1_remaining=s1)
+    held = dict(open_positions=1, exposed_sides=frozenset({"UP"}), stage1_bought=True)
     # 45s left: stage 1 bought before the 50s mark -> stage 2 buys (stage 1 itself is a duplicate)
     results = await step(13, 0.93, **held)
     assert sorted(r.status for r in results) == ["BLOCKED", "FILLED"]
@@ -571,7 +569,6 @@ async def _timeline(stack, market, config, steps):
             btc_price=100_000.0 + move,
             price_to_beat=100_000.0,
             stage1_bought=bool(stage1),
-            stage1_remaining=manager.stage1_remaining("paper", market.market_id),
         )
         await manager.handle_event(market, evaluation, books, "paper", ctx)
 

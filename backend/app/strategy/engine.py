@@ -1,7 +1,7 @@
 """STAGE1_STAGED_MARKET_BUY.
 
 First part of the market: no trading.
-Stage 1, last N seconds (default 80): monitor UP and DOWN best asks.
+Stage 1, last N seconds (default 90): monitor UP and DOWN best asks.
 
 Entries are staged. Each stage may place ONE buy per market:
 
@@ -14,7 +14,7 @@ Entries are staged. Each stage may place ONE buy per market:
   Values: see Settings / .env. Once either side's best ask reaches stage0_block_ask (default 0.98) inside the stage 0 window, stage 0 does not
   buy again in that market (even if the ask drops back).
 
-* stage 1: inside the stage 1, best_ask >= stage1_threshold (default 0.80).
+* stage 1: inside the stage 1, best_ask >= stage1_threshold (default 0.85).
   If the ask is not there yet the strategy keeps watching and fires the moment it
   gets there, any time before the market ends. Once either side's best ask reaches stage1_block_ask
   (default 0.98) inside the stage 1 window without a stage 1 buy, stage 1 does not buy in that market any more (even if the

@@ -94,14 +94,14 @@ def staged(stage: int, side: str = "UP") -> Signal:
 
 def test_add_on_stage_may_add_to_existing_position_even_at_position_cap():
     config = make_config(max_open_positions=1)
-    ctx = make_ctx(open_positions=1, exposed_sides=frozenset({"UP"}), stage1_bought=True, stage1_remaining=60)
+    ctx = make_ctx(open_positions=1, exposed_sides=frozenset({"UP"}), stage1_bought=True)
     assert RiskManager().check(staged(2), ctx, config).approved is True
     assert RiskManager().check(staged(3), ctx, config).approved is True
 
 
 def test_stage1_and_opposite_side_still_respect_position_cap():
     config = make_config(max_open_positions=1)
-    ctx = make_ctx(open_positions=1, exposed_sides=frozenset({"UP"}), stage1_bought=True, stage1_remaining=60)
+    ctx = make_ctx(open_positions=1, exposed_sides=frozenset({"UP"}), stage1_bought=True)
     assert RiskManager().check(staged(1), ctx, config).reason == "max_open_positions"
     assert RiskManager().check(staged(2, side="DOWN"), ctx, config).reason == "max_open_positions"
 
@@ -152,11 +152,11 @@ def test_gap_rule_applies_to_add_on_stages_too():
     exposed = frozenset({"UP"})
     weak = make_ctx(
         open_positions=1, exposed_sides=exposed, btc_price=100_010.0, price_to_beat=100_000.0,
-        stage1_bought=True, stage1_remaining=60,
+        stage1_bought=True,
     )
     strong = make_ctx(
         open_positions=1, exposed_sides=exposed, btc_price=100_030.0, price_to_beat=100_000.0,
-        stage1_bought=True, stage1_remaining=60,
+        stage1_bought=True,
     )
     for stage in (2, 3):
         assert RiskManager().check(_side("UP", stage=stage, ask=0.93), weak, config).reason == "price_gap_too_small"
@@ -173,7 +173,7 @@ def test_each_stage_has_its_own_gap_20_25_30():
             open_positions=0 if stage == 1 else 1,
             exposed_sides=frozenset() if stage == 1 else exposed,
             btc_price=100_000.0 + move, price_to_beat=100_000.0,
-            stage1_bought=stage != 1, stage1_remaining=None if stage == 1 else 60,
+            stage1_bought=stage != 1,
         )
 
     def verdict(stage: int, move: float) -> str:
@@ -210,13 +210,12 @@ def _chain_config(**overrides):
     return make_config(max_open_positions=1, **overrides)
 
 
-def _chain_ctx(remaining, bought=False, s1_remaining=None):
+def _chain_ctx(remaining, bought=False):
     return make_ctx(
         remaining=remaining,
         open_positions=1 if bought else 0,
         exposed_sides=frozenset({"UP"}) if bought else frozenset(),
         stage1_bought=bought,
-        stage1_remaining=s1_remaining,
     )
 
 
@@ -239,18 +238,15 @@ def test_stage2_does_not_need_stage1():
     risk, config = RiskManager(), _chain_config()
     s2 = _side("UP", stage=2, ask=0.93)
     assert risk.check(s2, _chain_ctx(45), config).approved is True  # stage 1 never bought
-    assert risk.check(s2, _chain_ctx(45, bought=True, s1_remaining=62), config).approved is True
-    assert risk.check(s2, _chain_ctx(35, bought=True, s1_remaining=40), config).approved is True
-    assert risk.check(s2, _chain_ctx(45, bought=True, s1_remaining=None), config).approved is True
+    assert risk.check(s2, _chain_ctx(45, bought=True), config).approved is True
+    assert risk.check(s2, _chain_ctx(35, bought=True), config).approved is True
 
 
 def test_stage3_is_independent_of_stage1_and_stage2():
     risk, config = RiskManager(), _chain_config()
     s3 = _side("UP", stage=3, ask=0.93)
     assert risk.check(s3, _chain_ctx(25), config).approved is True  # stage 1 never bought
-    assert risk.check(s3, _chain_ctx(25, bought=True, s1_remaining=70), config).approved is True
-    assert risk.check(s3, _chain_ctx(25, bought=True, s1_remaining=40), config).approved is True  # stage 2 skipped
-    assert risk.check(s3, _chain_ctx(25, bought=True, s1_remaining=None), config).approved is True
+    assert risk.check(s3, _chain_ctx(25, bought=True), config).approved is True
 
 
 def _stage_signal(stage: int, ask: float) -> Signal:
@@ -288,3 +284,44 @@ def test_stage1_still_uses_stage1_threshold():
     config = make_config(stage1_threshold=0.80, stage2_threshold=0.75)
     decision = RiskManager().check(_stage_signal(1, 0.77), make_ctx(remaining=25.0), config)
     assert decision.reason == "below_threshold"
+
+
+# ---------------------------------------------------------------------------
+# max_execution_price is a hard cap for stage 0 too
+# ---------------------------------------------------------------------------
+def _stage0_signal(ask: float) -> Signal:
+    return Signal(
+        market_id="0xmarket",
+        side="UP",
+        token_id="up-token",
+        best_ask=ask,
+        ask_size=100.0,
+        remaining_seconds=130.0,
+        threshold=0.96,
+        observed_at_ms=1,
+        book_age_ms=50,
+        stage=0,
+    )
+
+
+def test_stage0_limit_never_exceeds_max_execution_price():
+    config = make_config(max_execution_price=0.90, stage0_max_ask=0.96, stage0_early_max_ask=0.95)
+    assert config.stage0_max_ask_for(0.95) == 0.90  # expensive buy: stage0_max_ask is clamped
+    assert config.stage0_max_ask_for(0.80) == 0.90  # cheap buy: stage0_early_max_ask is clamped too
+    uncapped = make_config(max_execution_price=0.99, stage0_max_ask=0.96)
+    assert uncapped.stage0_max_ask_for(0.95) == 0.96  # a cap above the stage 0 limit changes nothing
+
+
+def test_risk_blocks_stage0_buy_above_max_execution_price():
+    config = make_config(max_execution_price=0.90, stage0_enabled=True, stage0_max_ask=0.96, stage0_high_buy_after_pct=0.0)
+    ctx = make_ctx(remaining=130, btc_price=100_200.0, price_to_beat=100_000.0)
+    blocked = RiskManager().check(_stage0_signal(0.95), ctx, config)
+    assert blocked.approved is False and blocked.reason == "stage0_ask_too_high"
+    assert RiskManager().check(_stage0_signal(0.90), ctx, config).approved is True
+
+
+def test_stage0_min_ask_above_max_execution_price_is_rejected():
+    import pytest
+
+    with pytest.raises(ValueError, match="stage0_min_ask"):
+        make_config(max_execution_price=0.90, stage0_enabled=True, stage0_min_ask=0.92, stage0_max_ask=0.96)

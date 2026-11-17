@@ -22,7 +22,6 @@ class OrderRequest:
     notional: float
     max_price: float
     observed_at_ms: int
-    order_min_size: float = 0.0
     asset_version: int = 1
 
 
@@ -38,7 +37,6 @@ class SellRequest:
     size: float
     min_price: float
     observed_at_ms: int
-    order_min_size: float = 0.0
     asset_version: int = 1
 
 

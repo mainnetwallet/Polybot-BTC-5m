@@ -13,7 +13,7 @@ function Fail([string]$Message) {
 }
 
 Write-Host ""
-Write-Host "FINAL60 - Polymarket BTC 5m bot" -ForegroundColor Green
+Write-Host "Polymarket BTC 5m bot" -ForegroundColor Green
 Write-Host "Local setup (backend + dashboard)" -ForegroundColor DarkGray
 Write-Host ""
 

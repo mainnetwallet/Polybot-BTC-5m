@@ -258,7 +258,6 @@ async def test_stage0_sell_is_never_rebought_and_does_not_count_as_stage1():
     manager = stack["manager"]
     candidates = manager._partial_order_candidates(market.market_id, "paper")
     assert all("sell" not in key for *_rest, key in candidates)
-    assert manager.stage1_remaining("paper", market.market_id) is None
     # remaining shares are still held and can be sold on the next try
     holding = manager.load_stage0_holding("paper", market.market_id)
     assert holding is not None and holding.size > 0
@@ -567,7 +566,7 @@ async def test_stage2_sells_at_99(buy_ask):
     stack = build_stack(make_config(**STAGE0, **STAGE2_SELL, trade_amount_usdc=4.0))
     market = make_market(remaining=40)
     books = books_for(market, up_ask=buy_ask, down_ask=0.05)
-    results = await _stage_buy(stack, market, books, 2, stage1_bought=True, stage1_remaining=70.0)
+    results = await _stage_buy(stack, market, books, 2, stage1_bought=True)
     assert [r.status for r in results] == ["FILLED"]
 
     books[market.up_token_id].bids = {0.98: 100.0}
@@ -587,7 +586,7 @@ async def test_stage2_take_profit_can_be_switched_off():
     stack = build_stack(make_config(**STAGE0, stage2_sell_enabled=False, trade_amount_usdc=4.0))
     market = make_market(remaining=40)
     books = books_for(market, up_ask=0.92, down_ask=0.05)
-    await _stage_buy(stack, market, books, 2, stage1_bought=True, stage1_remaining=70.0)
+    await _stage_buy(stack, market, books, 2, stage1_bought=True)
     books[market.up_token_id].bids = {0.99: 100.0}
     assert await stack["manager"].handle_exits(market, books, "paper", stack["config"]) == []
 
@@ -603,7 +602,7 @@ async def test_stages_sell_only_their_own_shares_on_the_same_side():
     await _stage1_buy(stack, late, late_books)  # stage 1 @ .85 -> sells .95
     last = make_market(remaining=40)
     last_books = books_for(last, up_ask=0.92, down_ask=0.05)
-    await _stage_buy(stack, last, last_books, 2, stage1_bought=True, stage1_remaining=55.0)  # stage 2 -> sells .99
+    await _stage_buy(stack, last, last_books, 2, stage1_bought=True)  # stage 2 -> sells .99
     manager = stack["manager"]
 
     def bid(price):
@@ -630,7 +629,6 @@ async def test_stage1_sell_does_not_break_the_stage_chain():
     books[market.up_token_id].bids = {0.95: 100.0}
     await stack["manager"].handle_exits(market, books, "paper", stack["config"])
     # the stage 1 BUY still counts as the stage 1 entry; its SELL row is not a second entry
-    assert stack["manager"].stage1_remaining("paper", market.market_id) is not None
     with session_scope() as session:
         orders = session.execute(select(Order)).scalars().all()
     buys = [o for o in orders if stack["manager"]._key_action(o.order_key) == "BUY"]

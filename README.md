@@ -69,6 +69,7 @@ notepad .env
 - Dashboard `http://127.0.0.1:5173`, API `http://127.0.0.1:8000`, docs `/docs`.
 - `start.bat` runs setup itself if `.venv`, `frontend\node_modules` or `.env` is missing, and **restarts** a running copy (`-NoRestart` keeps it, `-NoBrowser` skips the browser, `-Detach` returns the prompt).
 - The bot always starts **STOPPED**; start it from the dashboard. Orders, positions and settings persist in `data\polymarket_bot.db`.
+- `stop.bat` stops the bot through the API using `API_TOKEN` (or the admin login) from `.env`, then ends the processes.
 - Update: `.\stop.bat`, `git pull`, `.\setup.bat`, `.\start.bat`.
 - Clean reinstall: `.\stop.bat; Remove-Item -Recurse -Force .venv, frontend\node_modules; .\setup.bat` (keeps `.env` and the database).
 - Private repo: sign in via Git Credential Manager; never put a token in the clone URL.
@@ -106,7 +107,7 @@ Most used keys:
 | `STAGE0_*`, `STAGE1_*`, `STAGE2_*`, `STAGE3_*` | see table above | Timing, ask range, take-profit, stop-loss per stage |
 | `MIN_PRICE_GAP_USD` / `STAGE2_...` / `STAGE3_...` | `35` / `30` / `25` | BTC (Chainlink TWAP60) must be this far beyond the price to beat; `0` = off; missing BTC data blocks the buy |
 | `TRADE_AMOUNT_USDC` | `50` | Notional per trade |
-| `MAX_EXECUTION_PRICE` | `0.98` | Hard price cap |
+| `MAX_EXECUTION_PRICE` | `0.98` | Hard price cap for every stage, stage 0 included (stage 0 also needs `STAGE0_MIN_ASK` at or below it) |
 | `STAGE1_MAX_ASK` | `0.97` | Stage 1 does not buy when the best ask is above this |
 | `STAGE0..3_BLOCK_ASK` | `0.98` | Once either side's best ask reaches this inside that stage's window, the stage stops buying in that market (even if the ask falls back). Per market and per stage; resets on restart |
 | `STALE_DATA_MAX_AGE_MS` | `2000` | Max book age for a buy (exits skip the check) |
@@ -130,6 +131,8 @@ Off by default, never enabled automatically. All of these are required:
 `POLYMARKET_SIGNATURE_TYPE`: `0` EOA, `1` email/Magic proxy, `2` browser (MetaMask) proxy, `3` smart-contract wallet. For types 1-3 the funder is the **proxy wallet address from your Polymarket profile**, not your MetaMask address. Unsure which type? Run `.venv\Scripts\python.exe scripts\check_wallet.py` (read-only, shows the pUSD balance per type).
 
 Winning tokens become pUSD only after redemption: claim on polymarket.com, or set `LIVE_AUTO_REDEEM=true` and `pip install -r backend/requirements-redeem.txt` (optional Relayer key for gasless redeem). Keys are read from the environment only and never sent to the browser. The kill switch blocks new orders and stops the bot; it cannot undo fills.
+
+**Stopping the bot does not protect open positions.** While the bot is stopped (or the kill switch is on) take-profit and stop-loss do not run and manual *Sell* is refused. Before you press Stop, sell or accept the open live positions; they otherwise settle at market end.
 
 Paper mode uses live market data, simulates fills against the ask ladder and keeps its balance and stats separate from live. Settlement: a position shows *settling...* until the winner is known (CLOB, Gamma, wallet `redeemable`); a WARNING in Logs appears after 3 minutes.
 
@@ -172,7 +175,7 @@ cd frontend && npm run build
 
 ## Limitations
 
-- Live execution was never exercised with real funds; `POLYMARKET_GEO_VERIFIED` stays `false` by default.
+- Live execution was never exercised with real funds; `POLYMARKET_GEO_VERIFIED` is `true` in `.env.example` (set it to `false` if you are not sure Polymarket is allowed where you live); the code default is `false`.
 - Paper fees are approximate; on-chain reconciliation is best-effort (CLOB responses only).
 - Gamma can keep a market `closed:false` for a while after expiry, so a paper position may stay open across a restart.
 - Only one market family (`SERIES_SLUG`, default `btc-up-or-down-5m`).

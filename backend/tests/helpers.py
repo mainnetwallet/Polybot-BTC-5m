@@ -120,7 +120,6 @@ def make_ctx(
     price_to_beat: float | None = None,
     price_gap_issue: str = "",
     stage1_bought: bool = False,
-    stage1_remaining: float | None = None,
     stage0_pure_sides: frozenset[str] = frozenset(),
 ) -> RiskContext:
     return RiskContext(
@@ -138,7 +137,6 @@ def make_ctx(
         price_to_beat=price_to_beat,
         price_gap_issue=price_gap_issue,
         stage1_bought=stage1_bought,
-        stage1_remaining=stage1_remaining,
         stage0_pure_sides=stage0_pure_sides,
     )
 

@@ -260,7 +260,9 @@ function Start-QuickTunnel {
         Write-Host "    HOST must stay 127.0.0.1 (cloudflared connects locally)." -ForegroundColor DarkGray
     }
     if ([string]$cfg["ADMIN_PASSWORD"] -ceq "ChangeMe-123") {
-        Write-Host "    WARNING: ADMIN_PASSWORD is still the example default. Change it in .env." -ForegroundColor Yellow
+        Write-Host "    Tunnel NOT started: ADMIN_PASSWORD is still the old example password (ChangeMe-123), which is public." -ForegroundColor Red
+        Write-Host "    Set your own long password in .env (or leave it empty and rely on API_TOKEN) and run start.bat again." -ForegroundColor Yellow
+        return $null
     }
 
     if (-not (Get-Command cloudflared -ErrorAction SilentlyContinue)) {
@@ -339,7 +341,7 @@ function Start-QuickTunnel {
 }
 
 Write-Host ""
-Write-Host "FINAL60 - Polymarket BTC 5m bot" -ForegroundColor Green
+Write-Host "Polymarket BTC 5m bot" -ForegroundColor Green
 Write-Host "Starting backend and dashboard" -ForegroundColor DarkGray
 Write-Host ""
 
@@ -480,7 +482,7 @@ catch {
 }
 
 Write-Host ""
-Write-Host "FINAL60 is running." -ForegroundColor Green
+Write-Host "Polymarket BTC 5m bot is running." -ForegroundColor Green
 Write-Host "    Dashboard: $UiUrl" -ForegroundColor Gray
 Write-Host "    API docs:  $ApiUrl/docs" -ForegroundColor Gray
 Write-Host "    Mode:      $($mode.ToUpper())" -ForegroundColor Gray
@@ -550,7 +552,7 @@ finally {
 
 if ($stopRequested) {
     Write-Host ""
-    Write-Step "Stopping FINAL60"
+    Write-Step "Stopping Polymarket BTC 5m bot"
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "stop.ps1")
 }
 
