@@ -81,13 +81,15 @@ All values are defaults and can be changed in Settings or `.env`. Up to 3 buys p
 | Stage | Entry | Take-profit | Stop-loss |
 | --- | --- | --- | --- |
 | **0** early buy | `160`-`100`s left, ask `0.70`-`0.96` (cheaper buys up to `0.85`; `0.89`+ only after 50% of the window), BTC gap >= `$70` beyond the price to beat. One buy per market | Best bid `+10%` / `+7%` / `+5%` over avg cost (buy below `0.80` / `0.80`-`0.85` / `0.85`+); `0` = hold | `70%` below avg cost (`20%` if bought at `0.89`+) |
-| **1** stage 1 | Last `90`s, best ask >= `0.85`, gap >= `$35` (waits and buys as soon as it gets there) | Bought up to `0.88`: `+8%`; dearer: bid `0.98` | `18%` |
+| **1** stage 1 | `90`-`50`s left (until stage 2 starts), best ask >= `0.85`, gap >= `$35` (waits and buys as soon as it gets there inside that window) | Bought up to `0.88`: `+8%`; dearer: bid `0.98` | `18%` |
 | **2** add-on | `<= 50`s left, ask >= `0.88`, gap >= `$30` | Bid `0.98` | `10%` |
 | **3** add-on | `<= 30`s left, ask >= `0.90`, gap >= `$25` | held to settlement | `5%` |
 
 - Orders are marketable BUY (FOK) at the current ask. `0.85` / `0.88` / `0.90` are triggers, never limit prices; `MAX_EXECUTION_PRICE` caps the price paid.
 - Take-profit sells are marketable and never below their sell price. Stop-loss sells at market with no floor. `0` turns a stop-loss off.
 - A blocked or failed entry is retried on the next book event and every 0.5s while the book is quiet.
+- A partly filled paper buy is topped up only while its entry rules still hold (own time window, ask threshold, BTC gap, no kill switch / daily limit). Live FOK orders fill completely or not at all.
+- A failed take-profit sell is retried every 50ms for ~450 attempts, then left to settlement. A failed stop-loss sell is never given up: after 450 fast attempts it keeps retrying once per second.
 - Execution is WebSocket/event-driven, no sleeps in the trigger path.
 
 ## Dashboard

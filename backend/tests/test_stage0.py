@@ -789,7 +789,8 @@ async def test_partial_retry_waits_for_the_second_half_before_buying_a_90_plus_a
     manager._retry_after.clear()
     expensive = books_for(market, up_ask=0.92, down_ask=0.08)
     stage_books(stack, market, expensive)
-    await manager._retry_partial_orders(market, expensive, "paper", stack["config"])
+    gap_ctx = make_ctx(remaining=market.remaining_seconds(), btc_price=100_150.0, price_to_beat=100_000.0)
+    await manager._retry_partial_orders(market, expensive, "paper", stack["config"], gap_ctx)
     with session_scope() as session:
         order = session.execute(select(Order)).scalars().one()
         assert order.status == "PARTIALLY_FILLED" and order.filled_size == before
@@ -799,10 +800,42 @@ async def test_partial_retry_waits_for_the_second_half_before_buying_a_90_plus_a
     manager._retry_after.clear()
     expensive = books_for(later, up_ask=0.92, down_ask=0.08)
     stage_books(stack, later, expensive)
-    await manager._retry_partial_orders(later, expensive, "paper", stack["config"])
+    later_ctx = make_ctx(remaining=later.remaining_seconds(), btc_price=100_150.0, price_to_beat=100_000.0)
+    await manager._retry_partial_orders(later, expensive, "paper", stack["config"], later_ctx)
     with session_scope() as session:
         order = session.execute(select(Order)).scalars().one()
         assert order.status == "FILLED" and order.filled_size > before
+
+
+async def test_stage0_partial_retry_needs_the_btc_gap_kill_switch_and_daily_limits():
+    stack = build_stack(make_config(**STAGE0, **{**HIGH, "stage0_max_ask": 0.94}))
+    manager = stack["manager"]
+    market = make_market(remaining=140)
+    thin = books_for(market, up_ask=0.85, down_ask=0.10, up_size=3.0)
+    assert [r.status for r in await _stage0_buy(stack, market, thin)] == ["PARTIALLY_FILLED"]
+    with session_scope() as session:
+        before = session.execute(select(Order)).scalars().one().filled_size
+    more = books_for(market, up_ask=0.85, down_ask=0.10)
+    stage_books(stack, market, more)
+    remaining = market.remaining_seconds()
+    good = dict(remaining=remaining, btc_price=100_150.0, price_to_beat=100_000.0)
+
+    for ctx in (
+        None,  # no risk context = no BTC data: fail closed
+        make_ctx(remaining=remaining, btc_price=100_010.0, price_to_beat=100_000.0),  # gap lost
+        make_ctx(kill_switch=True, **good),
+        make_ctx(daily_pnl=-5.0, **good),  # max_daily_loss reached
+        make_ctx(daily_pnl=10.0, **good),  # daily profit target reached
+    ):
+        manager._retry_after.clear()
+        await manager._retry_partial_orders(market, more, "paper", stack["config"], ctx)
+        with session_scope() as session:
+            assert session.execute(select(Order)).scalars().one().filled_size == before
+
+    manager._retry_after.clear()
+    await manager._retry_partial_orders(market, more, "paper", stack["config"], make_ctx(**good))
+    with session_scope() as session:
+        assert session.execute(select(Order)).scalars().one().filled_size > before
 
 
 # ------------------------- max ask by buy price: early limit below the expensive-buy price, stage0_max_ask above it

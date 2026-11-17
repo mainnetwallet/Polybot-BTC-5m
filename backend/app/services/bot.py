@@ -459,12 +459,16 @@ class TradingBot:
         # The risk context hits the database; only build it when a signal needs it.
         ctx = None
         gap_inputs = None
-        if evaluation.signals:
+        # A partly filled paper buy is topped up by the order manager; that is a buy too, so it gets the
+        # same risk context (BTC gap, kill switch, daily limits) even when no new signal fires.
+        topup_pending = self.orders.has_partial_pending(self._mode, market.market_id)
+        if evaluation.signals or topup_pending:
             # BTC price / price to beat are read here on the event loop: the feed's tick buffer is
             # written by the websocket task, so it must not be iterated from the database thread.
             gap_inputs = self.btc.gap_inputs(market)
-            evaluation = self._prefilter_stage0(evaluation, gap_inputs, config)
         if evaluation.signals:
+            evaluation = self._prefilter_stage0(evaluation, gap_inputs, config)
+        if evaluation.signals or topup_pending:
             try:
                 ctx = await asyncio.to_thread(self._risk_context, market, config, now_ms, gap_inputs)
             except Exception as exc:
