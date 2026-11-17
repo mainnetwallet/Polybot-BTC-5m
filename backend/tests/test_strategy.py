@@ -344,3 +344,42 @@ def test_stage2_and_stage3_block_ask_must_not_be_below_the_trigger():
         make_config(stage2_threshold=0.90, stage2_block_ask=0.85)
     with pytest.raises(ValueError):
         make_config(stage3_threshold=0.90, stage3_block_ask=0.85)
+
+
+# --- entry window when stage 1 is switched off -------------------------------------------------
+# The window used to open at stage1_seconds no matter what, so a switched-off stage 1 with a small
+# stage1_seconds cut the start of stage 2 short (the validator only compares the enabled stages).
+
+_NO_STAGE1 = dict(
+    stage0_enabled=False,
+    stage1_enabled=False,
+    stage1_seconds=40,
+    stage2_seconds=50,
+    stage3_seconds=30,
+    stage2_min_price_gap_usd=0,
+    stage3_min_price_gap_usd=0,
+    min_price_gap_usd=0,
+)
+
+
+def test_stage2_window_opens_at_its_own_start_when_stage1_is_off():
+    for remaining in (49, 45, 41):
+        result = evaluate(remaining, 0.95, 0.05, **_NO_STAGE1)
+        assert result.reason == "trigger", remaining
+        assert {signal.stage for signal in result.signals} == {2}
+
+
+def test_nothing_trades_before_the_earliest_enabled_stage_starts():
+    result = evaluate(60, 0.95, 0.05, **_NO_STAGE1)
+    assert result.reason == "outside_stage1"
+    assert result.signals == []
+
+
+def test_entry_window_is_stage1_seconds_while_stage1_is_on():
+    config = make_config(stage1_enabled=True, stage1_seconds=60, stage2_seconds=50, stage3_seconds=30)
+    assert config.entry_window_seconds() == 60.0
+
+
+def test_entry_window_follows_the_earliest_enabled_stage():
+    assert make_config(**_NO_STAGE1).entry_window_seconds() == 50.0
+    assert make_config(**{**_NO_STAGE1, "stage2_enabled": False}).entry_window_seconds() == 30.0

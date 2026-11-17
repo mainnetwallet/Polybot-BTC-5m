@@ -18,9 +18,10 @@ import threading
 import time
 from dataclasses import dataclass
 
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
+from app.api.origin import build_cross_site_guard
 from app.config.settings import Settings
 
 COOKIE_NAME = "polybot_session"
@@ -147,8 +148,9 @@ class AuthService:
             self._attempts.pop(client, None)
 
 
-def build_auth_router(auth: AuthService) -> APIRouter:
-    router = APIRouter(prefix="/api/auth")
+def build_auth_router(auth: AuthService, cors_origins: list[str] | None = None) -> APIRouter:
+    # Login/logout change state too (login CSRF, forced logout): same cross-site rule as the control API.
+    router = APIRouter(prefix="/api/auth", dependencies=[Depends(build_cross_site_guard(cors_origins or []))])
 
     @router.get("/me")
     async def me(request: Request, response: Response) -> dict:

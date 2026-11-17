@@ -1121,7 +1121,7 @@ class TradingBot:
                 if now_ms - self._last_book_event_ms < self._retry_timing()[1]:
                     continue
                 config = self.runtime.get()
-                window = config.stage1_seconds
+                window = config.entry_window_seconds()
                 if config.stage0_enabled:
                     window = max(window, config.stage0_start_seconds)
                 has_exit = self.orders.has_stage0_holding(self._mode, market.market_id)

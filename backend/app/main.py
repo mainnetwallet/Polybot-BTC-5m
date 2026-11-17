@@ -95,9 +95,9 @@ def create_app() -> FastAPI:
     async def healthz() -> dict:
         return {"status": "ok"}
 
-    app.include_router(build_auth_router(auth))
+    app.include_router(build_auth_router(auth, settings.cors_origin_list))
     app.include_router(build_router(bot, runtime, settings, analytics, auth))
-    app.include_router(build_ws_router(hub, bot.snapshot, settings.api_token, auth))
+    app.include_router(build_ws_router(hub, bot.snapshot, settings.api_token, auth, settings.cors_origin_list))
     # Serve the prebuilt dashboard (backend/app/static, built from frontend/) from the same origin as the
     # API, so cookies and the WebSocket work without a separate proxy. Registered last: API routes win.
     static_dir = Path(__file__).resolve().parent / "static"

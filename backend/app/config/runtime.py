@@ -239,6 +239,17 @@ class RuntimeSettings(BaseModel):
                 return float(starts[nxt])
         return 0.0
 
+    def entry_window_seconds(self) -> float:
+        """Seconds left at which the first enabled entry stage (1-3) starts buying.
+
+        Stage 1 normally opens the window (stage1_seconds), but when stage 1 is switched off the
+        window opens where the earliest enabled stage starts. Using stage1_seconds unconditionally
+        would shorten stage 2/3 whenever stage1_seconds is lower than their start time.
+        """
+        starts = {1: self.stage1_seconds, 2: self.stage2_seconds, 3: self.stage3_seconds}
+        enabled = [float(value) for stage, value in starts.items() if self.stage_enabled(stage)]
+        return max(enabled) if enabled else float(self.stage1_seconds)
+
     def stage_enabled(self, stage: int) -> bool:
         """True when `stage` (0-3) is switched on. A switched-off stage buys and sells nothing."""
         return {

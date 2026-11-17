@@ -105,7 +105,7 @@ class RiskManager:
                     f"stage 0 buys only between {config.stage0_start_seconds}s and "
                     f"{config.stage0_end_seconds}s left",
                 )
-        elif ctx.remaining_seconds > config.stage1_seconds:
+        elif ctx.remaining_seconds > config.entry_window_seconds():
             return RiskDecision(False, "outside_stage1", "outside stage 1 trading window")
         if signal.book_age_ms > config.stale_data_max_age_ms:
             return RiskDecision(

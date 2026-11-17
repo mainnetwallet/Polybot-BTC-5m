@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import ValidationError
 from sqlalchemy import select
 
+from app.api.origin import build_cross_site_guard
 from app.api.schemas import (
     KillSwitchRequest,
     ManualSellAllRequest,
@@ -56,9 +57,11 @@ def build_router(
                 return
         raise HTTPException(status_code=401, detail="Authentication required")
 
+    reject_cross_site = build_cross_site_guard(settings.cors_origin_list)
+
     # /health stays open so uptime monitors keep working; everything else needs the token.
     public = APIRouter(prefix="/api")
-    router = APIRouter(prefix="/api", dependencies=[Depends(require_token)])
+    router = APIRouter(prefix="/api", dependencies=[Depends(reject_cross_site), Depends(require_token)])
 
     def _mode(value: str | None) -> str:
         if value is None:

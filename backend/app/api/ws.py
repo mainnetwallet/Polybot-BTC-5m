@@ -5,6 +5,7 @@ import hmac
 import json
 import logging
 
+from app.api.origin import build_origin_checker
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 logger = logging.getLogger(__name__)
@@ -152,11 +153,19 @@ def _encode(event: dict) -> str:
     return json.dumps(event, separators=(",", ":"), ensure_ascii=False)
 
 
-def build_ws_router(hub: RealtimeHub, snapshot_factory, api_token: str = "", auth=None) -> APIRouter:
+def build_ws_router(
+    hub: RealtimeHub, snapshot_factory, api_token: str = "", auth=None, cors_origins: list[str] | None = None
+) -> APIRouter:
     router = APIRouter()
+    origin_allowed = build_origin_checker(cors_origins or [])
 
     @router.websocket("/api/ws")
     async def websocket_endpoint(websocket: WebSocket) -> None:
+        # Browsers attach Origin to WebSocket handshakes and do not apply CORS to them, so another website
+        # could otherwise stream the live state. Clients without Origin (Android app, scripts) are unaffected.
+        if not origin_allowed(websocket.headers.get("origin"), websocket.headers.get("host")):
+            await websocket.close(code=1008)
+            return
         expected = api_token.strip()
         login_on = auth is not None and auth.enabled
         if expected or login_on:
