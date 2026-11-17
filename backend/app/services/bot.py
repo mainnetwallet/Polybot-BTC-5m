@@ -1163,6 +1163,10 @@ class TradingBot:
                 ):
                     self._last_live_reconcile = now
                     await self._reconcile_open_live_orders()
+                if self._mode == "live" and self._status == "RUNNING":
+                    # Keep the CLOB HTTP/2 connection open: a stop-loss must not pay a new
+                    # TLS handshake because the socket idled out (default keep-alive is 5s).
+                    await self.live_engine.keep_connection_warm()
                 if self._mode == "live" and self._redeem_queue:
                     await self._process_redeem_queue()
                 if self._mode == "live" and now - self._live_balance_at >= 15.0:
