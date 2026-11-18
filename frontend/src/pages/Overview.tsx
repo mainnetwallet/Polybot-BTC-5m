@@ -51,7 +51,7 @@ export function Overview() {
         }
       >
         {/* the screen of the design: six cards in two rows that fill the window */}
-        <div className={cx("ov-grid", fit.active && "ov-screen")} style={fit.active ? { height: fit.height } : undefined}>
+        <div className={cx("ov-grid", fit.active && "ov-screen")}>
           <RoundClockCard className="ov-top-left" />
           <BtcTapeCard orders={rows} className="ov-top-right" />
 

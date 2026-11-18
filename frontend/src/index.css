@@ -362,8 +362,9 @@ select:focus-visible,
  */
 .ov-screen {
   --gap: 14px;
-  /* the top row (round clock, BTC tape) is about a third of the screen; the lower cards get the rest */
-  grid-template-rows: minmax(0, 0.55fr) minmax(0, 1fr);
+  /* fixed canvas heights (scaled with the window): a short top row and a short bottom row.
+     The recent orders below the grid come into view instead of blank space. */
+  grid-template-rows: 280px 228px;
 }
 .ov-screen > * {
   min-height: 0;
@@ -442,6 +443,33 @@ select:focus-visible,
 .ov-screen .tape-book .lvl-head { margin-bottom: 4px; }
 .ov-screen .tape-book .lvl-head span { font-size: 16px; line-height: 1.2; }
 .ov-screen .tape-book .lvl-foot { margin-top: 3px; font-size: 10.5px; line-height: 1.2; }
+
+/* bottom row: Account | Stage checks | Positions, 228px tall */
+.ov-screen .ov-b-a, .ov-screen .ov-b-b, .ov-screen .ov-b-c { padding-top: 12px; padding-bottom: 12px; }
+.ov-screen .ov-b-a .card-head, .ov-screen .ov-b-b .card-head, .ov-screen .ov-b-c .card-head { margin-bottom: 8px; }
+.ov-screen .ov-empty { padding-top: 4px; padding-bottom: 4px; }
+.ov-screen .ov-empty > div:first-child { margin-bottom: 6px; }
+
+/* stage checks: four short rows, the engine note sits in the header */
+.ov-screen .sc-foot { display: none; }
+.ov-screen .sc-sub { max-width: 100%; }
+.ov-screen .sc-list .sc-row { padding-top: 1px; padding-bottom: 1px; gap: 10px; }
+.ov-screen .sc-badge { width: 24px; height: 24px; border-radius: 7px; font-size: 12.5px; }
+.ov-screen .sc-row .chip { padding: 1px 7px; font-size: 11px; }
+.ov-screen .sc-row .text-\[14px\] { font-size: 13px; line-height: 1.25; }
+.ov-screen .sc-chips { margin-top: 2px; gap: 4px; }
+
+/* account: balance and chart side by side, the four stats in one row */
+.ov-screen .acc-top { flex-direction: row; gap: 14px; align-items: stretch; }
+.ov-screen .acc-balance { flex: none; }
+.ov-screen .acc-balance .hero-num { font-size: 30px; margin-top: 0; }
+.ov-screen .acc-balance > div:last-child { margin-top: 6px; flex-direction: column; align-items: flex-start; gap: 4px; }
+.ov-screen .acc-chart { margin-top: 0; flex: 1; min-width: 0; min-height: 0; }
+.ov-screen .acc-chart > div:first-child { min-height: 0; }
+.ov-screen .acc-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
+.ov-screen .acc-stats .tile { padding: 6px 8px; }
+.ov-screen .acc-stats .label { font-size: 11px; }
+.ov-screen .acc-stats .tile > div:last-child { margin-top: 3px; font-size: 16px; }
 
 /* round clock: stages in two columns, tiles in one compact row so the ring can sit in the short card */
 .ov-screen .rc-stages { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 22px; row-gap: 6px; }

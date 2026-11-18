@@ -160,6 +160,7 @@ export function PositionsCard({ orders, className }: { orders: OrderRow[]; class
         <div className="scrollbar min-h-0 flex-1 overflow-y-auto pr-1">
         {rows.length === 0 ? (
           <EmptyState
+            className="ov-empty"
             icon={<IconLayers size={22} />}
             title="No open position"
             hint="Filled buys of the live market appear here, one row per stage, with their take profit and stop loss."

@@ -39,13 +39,14 @@ export function StageChecksCard({ orders, className }: { orders: OrderRow[]; cla
       title="Stage checks"
       className={className}
       right={
-        <span>
+        <span className="sc-sub truncate">
           Live, this round
           {ctx.side ? ` · ${ctx.side === "UP" ? "Up" : "Down"} side` : ""}
+          {hold ? <span className="sc-engine"> · Engine: <span className="text-slate-300">{hold}</span></span> : null}
         </span>
       }
     >
-      <ul className="flex min-h-0 flex-1 flex-col divide-y divide-white/[0.06]">
+      <ul className="sc-list flex min-h-0 flex-1 flex-col divide-y divide-white/[0.06]">
         {STAGES.map((stage) => {
           const w = windows[stage];
           const status = stageStatus(w, remaining);
@@ -67,9 +68,9 @@ export function StageChecksCard({ orders, className }: { orders: OrderRow[]; cla
           else right = { text: "Waiting", cls: "border-white/8 bg-white/[0.03] text-slate-400" };
 
           return (
-            <li key={stage} className={cx("flex flex-1 items-center gap-3 py-2 first:pt-0 last:pb-0", status.kind === "off" && "opacity-55")}>
+            <li key={stage} className={cx("sc-row flex flex-1 items-center gap-3 py-2 first:pt-0 last:pb-0", status.kind === "off" && "opacity-55")}>
               <span
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] text-[14px] font-bold text-[#0a141b]"
+                className="sc-badge flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] text-[14px] font-bold text-[#0a141b]"
                 style={{ background: color }}
                 aria-hidden="true"
               >
@@ -83,7 +84,7 @@ export function StageChecksCard({ orders, className }: { orders: OrderRow[]; cla
                   </div>
                   <span className={cx("chip shrink-0", right.cls)}>{right.text}</span>
                 </div>
-                <div className="mt-1.5 flex flex-wrap gap-1">
+                <div className="sc-chips mt-1.5 flex flex-wrap gap-1">
                   {chips.map((chip) => (
                     <span key={chip.key} className={cx("chip !text-[11.5px]", CHIP_TONE[chip.tone])}>
                       {chip.label}
@@ -96,7 +97,7 @@ export function StageChecksCard({ orders, className }: { orders: OrderRow[]; cla
         })}
       </ul>
       {hold ? (
-        <div className="mt-auto shrink-0 pt-2 text-[12px] text-slate-500">
+        <div className="sc-foot mt-auto shrink-0 pt-2 text-[12px] text-slate-500">
           Engine says: <span className="text-slate-300">{hold}</span>
         </div>
       ) : null}

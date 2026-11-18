@@ -79,6 +79,8 @@ export function AccountCard({ className }: { className?: string }) {
 
   return (
     <Card title={live ? "Live account" : "Paper account"} className={className} right={<span>Today</span>}>
+      <div className="acc-top flex min-h-0 flex-1 flex-col">
+        <div className="acc-balance">
       <div className="label">Balance</div>
       <div className="hero-num mt-1 text-[34px]">
         {parts ? (
@@ -109,8 +111,9 @@ export function AccountCard({ className }: { className?: string }) {
           </span>
         ) : null}
       </div>
+        </div>
 
-      <div className="mt-3 flex min-h-[70px] flex-1 flex-col">
+      <div className="acc-chart mt-3 flex min-h-[70px] flex-1 flex-col">
         <div className="relative min-h-[44px] flex-1">
           {curve.points.length >= 3 ? (
             <EquityLine points={curve.points} />
@@ -125,8 +128,9 @@ export function AccountCard({ className }: { className?: string }) {
           {curve.points.length >= 3 ? `: ${fmtSignedUsd(curve.points[curve.points.length - 1])}` : ""}
         </div>
       </div>
+      </div>
 
-      <div className="mt-3 grid grid-cols-2 gap-2.5">
+      <div className="acc-stats mt-3 grid grid-cols-2 gap-2.5">
         <StatTile
           label="Win rate"
           value={isNum(stats?.win_rate) ? `${stats.win_rate.toFixed(1)}%` : "—"}
