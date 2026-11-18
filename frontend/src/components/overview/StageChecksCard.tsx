@@ -78,16 +78,17 @@ export function StageChecksCard({ orders, className }: { orders: OrderRow[]; cla
               </span>
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
-                  <div className="min-w-0 text-[14px]">
-                    <span className="font-semibold text-slate-100">{STAGE_NAME[stage]}</span>{" "}
-                    <span className="text-slate-500">{status.kind === "off" ? "switched off" : windowText(w)}</span>
+                  <div className="sc-title min-w-0 text-[14px]">
+                    <span className="sc-name font-semibold text-slate-100">{STAGE_NAME[stage]}</span>
+                    <span className="sc-window">{status.kind === "off" ? "switched off" : windowText(w)}</span>
                   </div>
-                  <span className={cx("chip shrink-0", right.cls)}>{right.text}</span>
+                  <span className={cx("chip sc-status shrink-0", right.cls)}>{right.text}</span>
                 </div>
                 <div className="sc-chips mt-1.5 flex flex-wrap gap-1">
                   {chips.map((chip) => (
-                    <span key={chip.key} className={cx("chip !text-[11.5px]", CHIP_TONE[chip.tone])}>
-                      {chip.label}
+                    <span key={chip.key} className={cx("chip sc-chip", CHIP_TONE[chip.tone])}>
+                      <span className="sc-chip-k">{chip.label.split(" ")[0]}</span>
+                      <span className="sc-chip-v">{chip.label.split(" ").slice(1).join(" ")}</span>
                     </span>
                   ))}
                 </div>
