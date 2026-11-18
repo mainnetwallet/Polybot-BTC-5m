@@ -51,7 +51,12 @@ class OrderBook:
             prices = [p for p in prices if p >= down_to - 1e-9]
         return [(p, self.bids[p]) for p in prices]
 
-    def snapshot(self) -> dict:
+    def snapshot(self, depth: int = 4) -> dict:
+        """Top of book plus the best ``depth`` levels per side for the dashboard ladder.
+
+        ``asks`` runs best (lowest) first and ``bids`` best (highest) first, each as
+        ``[price, size]``. The best_* and *_size keys stay as they were.
+        """
         return {
             "token_id": self.token_id,
             "market_id": self.market_id,
@@ -60,6 +65,8 @@ class OrderBook:
             "best_ask": self.best_ask,
             "bid_size": self.bid_size,
             "ask_size": self.ask_size,
+            "asks": [[p, size] for p, size in self.level_prices()[:depth]],
+            "bids": [[p, size] for p, size in self.bid_levels()[:depth]],
             "updated_at_ms": self.updated_at_ms,
             "age_ms": round(self.age_ms(), 1) if self.updated_at_ms else None,
             "source": self.source,

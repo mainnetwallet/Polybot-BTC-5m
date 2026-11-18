@@ -14,6 +14,9 @@ interface BookLadderProps {
   compact?: boolean;
 }
 
+/** how many price levels are drawn on each side of the spread */
+const LEVELS = 4;
+
 function Level({ price, size, maxSize, tone }: { price: number | null; size: number | null; maxSize: number; tone: "ask" | "bid" }) {
   const width = isNum(size) && maxSize > 0 ? clamp01(size / maxSize) * 100 : 0;
   return (
@@ -36,7 +39,7 @@ function clamp01(value: number): number {
   return Math.min(1, Math.max(0, value));
 }
 
-/** The best ask, the spread and the best bid of one outcome token, with its ask history for this round. */
+/** The top ask levels, the spread and the top bid levels of one outcome token, with its ask history for this round. */
 export function BookLadder({ side, book, maxSize, history, staleAfterMs, compact = false }: BookLadderProps) {
   const up = side === "UP";
   const ask = book?.best_ask ?? null;
@@ -44,19 +47,32 @@ export function BookLadder({ side, book, maxSize, history, staleAfterMs, compact
   const spread = isNum(ask) && isNum(bid) ? ask - bid : null;
   const stale = isNum(book?.age_ms) && isNum(staleAfterMs) ? book.age_ms > staleAfterMs : false;
 
+  // Deeper levels when the backend sends them, else fall back to the best ask and bid alone.
+  // Asks are drawn highest first so the best ask sits right above the spread, like a real ladder.
+  const askLevels: Array<[number | null, number | null]> = book?.asks?.length
+    ? [...book.asks].slice(0, LEVELS).reverse()
+    : [[ask, book?.ask_size ?? null]];
+  const bidLevels: Array<[number | null, number | null]> = book?.bids?.length
+    ? book.bids.slice(0, LEVELS)
+    : [[bid, book?.bid_size ?? null]];
+
   return (
     <div className="min-w-0">
       <div className="mb-1.5 flex items-baseline justify-between">
         <span className={cx("text-[15px] font-semibold", up ? "text-up" : "text-down")}>{up ? "Up" : "Down"}</span>
         <span className={cx("text-[15px] font-semibold", up ? "text-up" : "text-down")}>{fmtPx(ask)}</span>
       </div>
-      <div className="space-y-1.5">
-        <Level price={ask} size={book?.ask_size ?? null} maxSize={maxSize} tone="ask" />
+      <div className={compact ? "space-y-1" : "space-y-1.5"}>
+        {askLevels.map(([price, size], i) => (
+          <Level key={`a${i}-${price}`} price={price} size={size} maxSize={maxSize} tone="ask" />
+        ))}
         <div className="flex items-center justify-between border-y border-dashed border-white/10 py-1 text-[12.5px] text-slate-500">
           <span>Spread</span>
           <span className="text-slate-300">{fmtPx(spread)}</span>
         </div>
-        <Level price={bid} size={book?.bid_size ?? null} maxSize={maxSize} tone="bid" />
+        {bidLevels.map(([price, size], i) => (
+          <Level key={`b${i}-${price}`} price={price} size={size} maxSize={maxSize} tone="bid" />
+        ))}
       </div>
       {compact ? (
         <div className={cx("mt-1.5 text-[11.5px]", stale ? "text-amber" : "text-slate-500")}>
