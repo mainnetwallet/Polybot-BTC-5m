@@ -349,6 +349,9 @@ select:focus-visible,
 .ov-b-c { grid-column: span 4; }
 .ov-orders { grid-column: span 8; }
 .ov-risk { grid-column: span 4; }
+/* Risk and feed: compact, sized to its content so it is fully visible without scrolling */
+.ov-extra .ov-risk { align-self: start; padding: 14px 18px 14px; }
+.ov-extra .ov-risk .card-head { margin-bottom: 8px; }
 .ov-full { grid-column: span 12; }
 
 /* narrow windows and phones: every card stacks, the round clock stays first */

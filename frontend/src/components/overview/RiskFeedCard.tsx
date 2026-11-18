@@ -6,10 +6,12 @@ import { clamp, cx, fmtSignedUsd, fmtUsd, pnlClass } from "../../lib/format";
 
 function Row({ label, value, hint, className }: { label: string; value: string; hint?: string; className?: string }) {
   return (
-    <div className="tile min-w-0 px-4 py-3">
-      <div className="label truncate">{label}</div>
-      <div className={cx("mt-1.5 truncate text-[18px] font-semibold leading-none", className ?? "text-slate-100")}>{value}</div>
-      {hint ? <div className="mt-1.5 truncate text-[12px] text-slate-500">{hint}</div> : null}
+    <div className="tile flex min-w-0 items-center justify-between gap-2 px-3 py-1.5">
+      <div className="min-w-0">
+        <div className="label truncate !text-[12px]">{label}</div>
+        {hint ? <div className="truncate text-[11px] leading-tight text-slate-500">{hint}</div> : null}
+      </div>
+      <div className={cx("shrink-0 text-[17px] font-semibold leading-none", className ?? "text-slate-100")}>{value}</div>
     </div>
   );
 }
@@ -42,7 +44,7 @@ export function RiskFeedCard({ className }: { className?: string }) {
           <span className="text-slate-400">Daily result</span>
           <span className={cx("font-semibold", pnlClass(daily))}>{fmtSignedUsd(daily)}</span>
         </div>
-        <div className="meter mt-2.5">
+        <div className="meter mt-2">
           {zero !== null ? <div className="absolute inset-y-0 left-0 bg-down/25" style={{ width: `${zero}%` }} /> : null}
           {zero !== null ? <div className="absolute inset-y-0 right-0 bg-up/20" style={{ width: `${100 - zero}%` }} /> : null}
           {zero !== null ? <div className="absolute inset-y-0 w-px bg-white/40" style={{ left: `${zero}%` }} /> : null}
@@ -56,14 +58,14 @@ export function RiskFeedCard({ className }: { className?: string }) {
             />
           ) : null}
         </div>
-        <div className="mt-1.5 flex items-center justify-between text-[12px]">
+        <div className="mt-1 flex items-center justify-between text-[11.5px]">
           <span className="text-down">Stop -{loss !== null ? fmtUsd(loss) : "—"}</span>
           <span className="text-slate-500">{fmtUsd(account.starting_balance)} start</span>
           <span className="text-up">Target +{target !== null ? fmtUsd(target) : "—"}</span>
         </div>
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-3">
+      <div className="mt-2.5 grid grid-cols-2 gap-2">
         <Row label="Open positions" value={String(snapshot.positions.length)} hint={`max ${String(config.max_open_positions ?? "—")}`} />
         <Row label="Trades today" value={String(account.trades_today)} hint={`max ${String(config.max_trades_per_day ?? "—")} a day`} />
         <Row label="Last book message" value={age === null ? "—" : age < 1000 ? "now" : `${Math.round(age / 1000)} s ago`} hint={`${data.reconnects} reconnects`} />
@@ -82,12 +84,12 @@ export function RiskFeedCard({ className }: { className?: string }) {
       </div>
 
       {data.last_error ? (
-        <div className="mt-4 flex gap-2 rounded-xl border border-down/20 bg-down/[0.06] px-3 py-2.5 text-[12px] text-down/90">
+        <div className="mt-2.5 flex gap-2 rounded-xl border border-down/20 bg-down/[0.06] px-3 py-1.5 text-[11.5px] text-down/90">
           <IconAlert size={13} className="mt-0.5 shrink-0" />
           <span className="break-all">{data.last_error}</span>
         </div>
       ) : (
-        <div className="mt-4 flex items-center gap-2 rounded-xl border hairline bg-black/15 px-3 py-2.5 text-[12px] text-slate-500">
+        <div className="mt-2.5 flex items-center gap-2 rounded-xl border hairline bg-black/15 px-3 py-1.5 text-[11.5px] text-slate-500">
           <IconActivity size={13} className="text-up/70" />
           Event driven: feed, then strategy, then risk, then order
         </div>
