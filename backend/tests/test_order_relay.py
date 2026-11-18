@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import httpx
 import pytest
-from py_clob_client_v2.exceptions import PolyApiException
+from py_clob_client_v2.exceptions import PolyApiException, PolyException
 from py_clob_client_v2.http_helpers import helpers
 
 from app.config.settings import Settings
-from app.live_trading.engine import _make_client_class, order_relay_url
+from app.live_trading.engine import _make_client_class, classify_post_exception, order_relay_url
 
 HOST = "https://clob.polymarket.com"
 RELAY = "https://polybot.example.workers.dev"
@@ -18,8 +18,8 @@ def _settings(**kw) -> Settings:
     return Settings(_env_file=None, **kw)
 
 
-def _client(relay_url: str = "", fallback: bool = True):
-    return _make_client_class(relay_url, fallback)(host=HOST, chain_id=137)
+def _client(relay_url: str = ""):
+    return _make_client_class(relay_url)(host=HOST, chain_id=137)
 
 
 @pytest.fixture
@@ -38,11 +38,17 @@ def http(monkeypatch):
 
 
 def test_relay_url_building():
-    assert order_relay_url(_settings(order_proxy_url=RELAY)) == f"{RELAY}/{HOST}"
-    assert order_relay_url(_settings(order_proxy_url=RELAY + "/")) == f"{RELAY}/{HOST}"
-    assert order_relay_url(_settings(order_proxy_url="")) == ""
+    on = dict(order_proxy_enabled=True)
+    assert order_relay_url(_settings(order_proxy_url=RELAY, **on)) == f"{RELAY}/{HOST}"
+    assert order_relay_url(_settings(order_proxy_url=RELAY + "/", **on)) == f"{RELAY}/{HOST}"
+    assert order_relay_url(_settings(order_proxy_url="", **on)) == ""
     # CLOB_BASE_URL already points at the relay: nothing extra to do
-    assert order_relay_url(_settings(order_proxy_url=RELAY, clob_base_url=f"{RELAY}/{HOST}")) == ""
+    assert order_relay_url(_settings(order_proxy_url=RELAY, clob_base_url=f"{RELAY}/{HOST}", **on)) == ""
+
+
+def test_switch_off_means_direct_whatever_the_url():
+    assert order_relay_url(_settings(order_proxy_enabled=False, order_proxy_url=RELAY)) == ""
+    assert order_relay_url(_settings(order_proxy_url=RELAY)) == ""  # default is off
 
 
 def test_order_post_goes_through_relay_and_other_posts_stay_direct(http):
@@ -67,31 +73,30 @@ def test_no_relay_means_direct(http):
     assert seen == [f"{HOST}/order"]
 
 
-def test_unreachable_relay_falls_back_to_direct(http):
+@pytest.mark.parametrize("exc", [httpx.ConnectError("refused"), httpx.ConnectTimeout("slow")])
+def test_unreachable_relay_never_goes_direct(http, exc):
+    """No fallback: with the relay on, an order only ever leaves through it."""
     seen, state = http
-    state["fail_relay"] = httpx.ConnectError("refused")
-    client = _client(f"{RELAY}/{HOST}", fallback=True)
-    assert client._post(f"{HOST}/order", headers={}, data="{}") == {"ok": True}
-    assert seen == [f"{RELAY}/{HOST}/order", f"{HOST}/order"]
-
-
-def test_unreachable_relay_without_fallback_raises(http):
-    seen, state = http
-    state["fail_relay"] = httpx.ConnectTimeout("slow")
-    client = _client(f"{RELAY}/{HOST}", fallback=False)
-    with pytest.raises(PolyApiException):
+    state["fail_relay"] = exc
+    client = _client(f"{RELAY}/{HOST}")
+    with pytest.raises(PolyException) as info:
         client._post(f"{HOST}/order", headers={}, data="{}")
-    assert seen == [f"{RELAY}/{HOST}/order"]
+    assert not isinstance(info.value, PolyApiException)
+    assert seen == [f"{RELAY}/{HOST}/order"]  # nothing was posted direct
+    # ...and it is a definite "not sent", so the order is retried instead of waiting for reconciliation
+    report = classify_post_exception(info.value)
+    assert report.status == "REJECTED"
 
 
-def test_read_timeout_never_falls_back(http):
-    """The order may already be on the exchange: no direct re-post (it could double-submit)."""
+def test_read_timeout_is_an_unknown_outcome(http):
+    """The order may already be on the exchange: unknown outcome (reconciled), never re-posted."""
     seen, state = http
     state["fail_relay"] = httpx.ReadTimeout("no answer")
-    client = _client(f"{RELAY}/{HOST}", fallback=True)
-    with pytest.raises(PolyApiException):
+    client = _client(f"{RELAY}/{HOST}")
+    with pytest.raises(PolyApiException) as info:
         client._post(f"{HOST}/order", headers={}, data="{}")
     assert seen == [f"{RELAY}/{HOST}/order"]
+    assert classify_post_exception(info.value).status == "SUBMITTED"
 
 
 def test_relay_http_error_surfaces_status(http, monkeypatch):

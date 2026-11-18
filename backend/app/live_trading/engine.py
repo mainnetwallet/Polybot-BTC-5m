@@ -80,10 +80,13 @@ def ceil_price_to_tick(price: float, tick: float) -> float:
 
 
 def order_relay_url(settings: Settings) -> str:
-    """Relay prefix for the order POST: ``<ORDER_PROXY_URL>/<CLOB_BASE_URL>``; empty = orders go direct.
+    """Relay prefix for the order POST: ``<ORDER_PROXY_URL>/<CLOB_BASE_URL>``.
 
-    Empty as well when CLOB_BASE_URL already points at the relay (then every call uses it already).
+    Empty (orders go direct) when ORDER_PROXY_ENABLED is false, when ORDER_PROXY_URL is empty, or when
+    CLOB_BASE_URL already points at the relay (then every call uses it already).
     """
+    if not settings.order_proxy_enabled:
+        return ""
     base = (settings.order_proxy_url or "").strip().rstrip("/")
     if not base:
         return ""
@@ -93,7 +96,7 @@ def order_relay_url(settings: Settings) -> str:
     return f"{base}/{clob}"
 
 
-def _make_client_class(relay_url: str = "", fallback_direct: bool = True):
+def _make_client_class(relay_url: str = ""):
     """ClobClient subclass that does not poll for settlement hashes after posting.
 
     ``post_order`` (with ``deferExec=false``, the documented default) polls the trades API for
@@ -103,7 +106,8 @@ def _make_client_class(relay_url: str = "", fallback_direct: bool = True):
 
     With ``relay_url`` set, ONLY the order POST (``/order``: every buy, take-profit and stop-loss
     sell) is sent through the relay. Signing is unchanged (the L2 signature covers the ``/order``
-    path, not the host), and every other request keeps going straight to the CLOB.
+    path, not the host), and every other request keeps going straight to the CLOB. There is no
+    direct fallback: with the relay on, an order never leaves except through it.
     """
     from py_clob_client_v2 import ClobClient
     from py_clob_client_v2.endpoints import POST_ORDER
@@ -114,12 +118,12 @@ def _make_client_class(relay_url: str = "", fallback_direct: bool = True):
 
         def _post(self, endpoint, headers=None, data=None, params=None):
             if relay_url and endpoint == f"{self.host}{POST_ORDER}":
-                return self._post_order_via_relay(endpoint, headers, data, params)
+                return self._post_order_via_relay(headers, data, params)
             return super()._post(endpoint, headers=headers, data=data, params=params)
 
-        def _post_order_via_relay(self, direct_endpoint, headers, data, params):
+        def _post_order_via_relay(self, headers, data, params):
             import httpx
-            from py_clob_client_v2.exceptions import PolyApiException
+            from py_clob_client_v2.exceptions import PolyApiException, PolyException
             from py_clob_client_v2.http_helpers import helpers
 
             request_headers = helpers._overload_headers("POST", dict(headers or {}))
@@ -135,11 +139,10 @@ def _make_client_class(relay_url: str = "", fallback_direct: bool = True):
                     **kwargs,
                 )
             except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
-                # The request never left this machine, so posting it direct cannot double-submit.
-                logger.warning("order relay unreachable (%s)", type(exc).__name__)
-                if fallback_direct:
-                    return super()._post(direct_endpoint, headers=headers, data=data, params=params)
-                raise PolyApiException(error_msg="Request exception!")
+                # The request never left this machine: a definite "not sent" (REJECTED, retried), not an
+                # unknown outcome that would wait for reconciliation.
+                logger.error("order relay unreachable (%s)", type(exc).__name__)
+                raise PolyException(f"relay unreachable ({type(exc).__name__})")
             except httpx.RequestError as exc:
                 # Sent (or maybe sent) and no answer: outcome unknown, same as a direct failure.
                 logger.error("order relay request error (%s)", type(exc).__name__)
@@ -300,9 +303,12 @@ class LiveExecutionEngine(ExecutionEngine):
 
         configure_sdk_http_pool()
 
-        client = _make_client_class(
-            order_relay_url(self._settings), self._settings.order_proxy_fallback_direct
-        )(
+        relay_url = order_relay_url(self._settings)
+        if self._settings.order_proxy_enabled and not relay_url:
+            logger.warning("ORDER_PROXY_ENABLED is true but no usable ORDER_PROXY_URL: orders go direct")
+        elif relay_url:
+            logger.info("live orders go through the relay %s", self._settings.order_proxy_url)
+        client = _make_client_class(relay_url)(
             host=self._settings.clob_base_url,
             chain_id=self._settings.polymarket_chain_id,
             key=self._settings.polymarket_private_key,
