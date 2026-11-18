@@ -3,6 +3,9 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 
+# how many price levels per side the dashboard shows
+DEPTH_LEVELS = 4
+
 
 @dataclass
 class OrderBook:
@@ -51,7 +54,14 @@ class OrderBook:
             prices = [p for p in prices if p >= down_to - 1e-9]
         return [(p, self.bids[p]) for p in prices]
 
+    def depth(self, levels: int = DEPTH_LEVELS) -> tuple[list[list[float]], list[list[float]]]:
+        """The nearest ``levels`` asks (lowest first) and bids (highest first) as [price, size] pairs."""
+        asks = sorted((p, s) for p, s in self.asks.items() if s > 0)[:levels]
+        bids = sorted(((p, s) for p, s in self.bids.items() if s > 0), reverse=True)[:levels]
+        return [[p, s] for p, s in asks], [[p, s] for p, s in bids]
+
     def snapshot(self) -> dict:
+        asks, bids = self.depth()
         return {
             "token_id": self.token_id,
             "market_id": self.market_id,
@@ -60,6 +70,8 @@ class OrderBook:
             "best_ask": self.best_ask,
             "bid_size": self.bid_size,
             "ask_size": self.ask_size,
+            "asks": asks,
+            "bids": bids,
             "updated_at_ms": self.updated_at_ms,
             "age_ms": round(self.age_ms(), 1) if self.updated_at_ms else None,
             "source": self.source,

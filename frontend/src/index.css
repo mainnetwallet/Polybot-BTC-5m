@@ -423,7 +423,8 @@ select:focus-visible,
 .ov-screen .rc-side { flex: 1; align-self: center; gap: 10px; }
 .ov-screen .rc-stages { grid-template-columns: minmax(0, 1fr); row-gap: 7px; }
 .ov-screen .rc-tiles { gap: 10px; }
-.ov-screen .tape-body { flex: 1; min-height: 0; grid-template-columns: minmax(0, 1fr) 236px; }
+.ov-screen .tape-body { flex: 1; min-height: 0; grid-template-columns: minmax(0, 1fr) 300px; }
+.ov-screen .tape-foot { display: none; }
 .ov-screen .tape-chart { display: flex; min-height: 0; flex-direction: column; }
 .ov-screen .tape-chart > .chart-fill { flex: 1; min-height: 0; }
 @container (min-width: 640px) {

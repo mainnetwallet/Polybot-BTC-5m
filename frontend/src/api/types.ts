@@ -9,6 +9,9 @@ export interface BookSnapshot {
   best_ask: number | null;
   bid_size: number | null;
   ask_size: number | null;
+  /** nearest price levels as [price, size]: asks lowest first, bids highest first (older servers omit them) */
+  asks?: Array<[number, number]>;
+  bids?: Array<[number, number]>;
   updated_at_ms: number;
   age_ms: number | null;
   source: string;

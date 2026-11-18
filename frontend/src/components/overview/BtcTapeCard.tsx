@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import type { OrderRow } from "../../api/types";
 import { Card } from "../Card";
-import { BookLadder } from "../BookLadder";
+import { BookLadder, ladderMaxSize } from "../BookLadder";
 import { CandleChart, type BuyMarker } from "../CandleChart";
 import { LoadingPanel } from "../LoadingPanel";
 import { useBot } from "../../hooks/BotContext";
@@ -48,10 +48,8 @@ export function BtcTapeCard({ orders, className }: { orders: OrderRow[]; classNa
   const staleCfg = snapshot.config.stale_data_max_age_ms;
   const stale = typeof staleCfg === "number" ? staleCfg : null;
 
-  const maxSize = Math.max(
-    0,
-    ...[snapshot.books.up?.ask_size, snapshot.books.up?.bid_size, snapshot.books.down?.ask_size, snapshot.books.down?.bid_size].filter(isNum),
-  );
+  const maxSize = ladderMaxSize([snapshot.books.up, snapshot.books.down]);
+  const hasDepth = Boolean(snapshot.books.up?.asks?.length || snapshot.books.down?.asks?.length);
 
   const lateStart =
     start !== null && tape.firstTickMs !== null && tape.firstTickMs - start > 12_000 ? tape.firstTickMs : null;
@@ -110,14 +108,13 @@ export function BtcTapeCard({ orders, className }: { orders: OrderRow[]; classNa
             fill
           />
           </div>
-          <div className="mt-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-[12px] text-slate-500">
-            <span>
-              {tape.candles.length > 0
-                ? lateStart !== null
-                  ? `Candles start at ${fmtHms(lateStart)}, when this browser received its first price`
-                  : `${tape.candles.length} candles this round`
-                : "Waiting for the first price"}
-            </span>
+          {lateStart !== null ? (
+            <div className="mt-2 text-[12px] text-slate-500">
+              Candles start at {fmtHms(lateStart)}, when this browser received its first price
+            </div>
+          ) : null}
+          <div className="tape-foot mt-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-[12px] text-slate-500">
+            <span>{tape.candles.length > 0 ? `${tape.candles.length} candles this round` : "Waiting for the first price"}</span>
             <span className="flex items-center gap-1.5">
               <span className="inline-block h-0 w-0 border-x-[5px] border-b-[8px] border-x-transparent border-b-slate-400" aria-hidden="true" />
               Triangles mark buys, colored by stage
@@ -128,9 +125,11 @@ export function BtcTapeCard({ orders, className }: { orders: OrderRow[]; classNa
         <div className="grid min-w-0 grid-cols-2 gap-x-3 gap-y-2 self-start">
           <BookLadder compact side="UP" book={snapshot.books.up} maxSize={maxSize} history={history.up} staleAfterMs={stale} />
           <BookLadder compact side="DOWN" book={snapshot.books.down} maxSize={maxSize} history={history.down} staleAfterMs={stale} />
-          <p className="col-span-2 text-[11.5px] leading-snug text-slate-500">
-            Best ask and best bid only. The feed does not send deeper levels, so none are drawn.
-          </p>
+          {hasDepth ? null : (
+            <p className="col-span-2 text-[11.5px] leading-snug text-slate-500">
+              Best ask and best bid only. This server does not send deeper levels, so none are drawn.
+            </p>
+          )}
         </div>
       </div>
     </Card>

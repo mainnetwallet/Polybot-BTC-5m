@@ -204,7 +204,11 @@ export function CandleChart({ candles, startMs, endMs, priceToBeat, price, buys,
     >
       <div
         className="pointer-events-none absolute inset-0"
-        style={{ background: "linear-gradient(180deg, rgba(61,220,151,0.09), rgba(61,220,151,0.015) 70%, transparent)" }}
+        style={{
+          backgroundImage:
+            "linear-gradient(180deg, rgba(61,220,151,0.10), rgba(61,220,151,0.02) 70%, transparent), linear-gradient(rgba(255,255,255,0.028) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.028) 1px, transparent 1px)",
+          backgroundSize: "100% 100%, 22px 22px, 22px 22px",
+        }}
       />
       <svg width={width} height={height} className="relative block" role="img" aria-label="BTC price in 5 second candles for this round, with the price to beat line">
         {body}
