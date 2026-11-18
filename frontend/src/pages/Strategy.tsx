@@ -5,7 +5,7 @@ import { IconActivity, IconClock, IconShield, IconTarget, IconZap } from "../com
 import { useBot } from "../hooks/BotContext";
 import { LoadingPanel } from "../components/LoadingPanel";
 import { useLiveRefresh } from "../hooks/useLiveRefresh";
-import { clamp, cx, fmtCents, fmtNum, fmtTime, fmtUsd, shortId } from "../lib/format";
+import { clamp, cx, fmtCents, fmtNum, fmtTime, fmtUsd, sentence, shortId } from "../lib/format";
 
 function mmss(seconds: number): string {
   const safe = Math.max(0, Math.round(seconds));
@@ -44,40 +44,40 @@ function PhaseTimeline() {
             className="relative flex items-center justify-center bg-sky/[0.07]"
             style={{ width: `${observePct}%` }}
           >
-            <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-sky/70">
+            <span className="text-[12px] font-semibold text-sky/70">
               Observe · no orders
             </span>
           </div>
           <div className="relative flex flex-1 items-center justify-center bg-amber/[0.12]">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-amber">
+            <span className="text-[12px] font-semibold text-amber">
               Trade · {stage1Window}s
             </span>
           </div>
         </div>
-        <div className="mt-2 flex justify-between text-[10px] text-slate-600">
+        <div className="mt-2 flex justify-between text-[12px] text-slate-600">
           <span className="mono">00:00 open</span>
           <span className="mono text-amber/70">{mmss(observeSeconds)} active window</span>
           <span className="mono">{mmss(duration)} expiry</span>
         </div>
-      </div> : <div className="mt-6 flex h-9 items-center justify-center rounded-lg border hairline text-[11px] text-slate-500">Waiting for active market timing</div>}
+      </div> : <div className="mt-6 flex h-9 items-center justify-center rounded-lg border hairline text-[12.5px] text-slate-500">Waiting for active market timing</div>}
 
       <div className="mt-6 grid gap-3 sm:grid-cols-2">
         <div className="rounded-lg border hairline bg-black/20 p-3.5">
-          <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-sky/80">
-            <span className="flex h-5 w-5 items-center justify-center rounded-md bg-sky/10 text-[10px]">01</span>
+          <div className="flex items-center gap-2 text-[12px] font-semibold text-sky/80">
+            <span className="flex h-5 w-5 items-center justify-center rounded-md bg-sky/10 text-[12px]">01</span>
             Observation
           </div>
-          <p className="mt-2 text-[11.5px] leading-relaxed text-slate-400">
+          <p className="mt-2 text-[12.5px] leading-relaxed text-slate-400">
             The engine streams both token books but never constructs an order. No candle, RSI or AI confirmation is
             involved.
           </p>
         </div>
         <div className="rounded-lg border border-amber/20 bg-amber/[0.04] p-3.5">
-          <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-amber">
-            <span className="flex h-5 w-5 items-center justify-center rounded-md bg-amber/10 text-[10px]">02</span>
+          <div className="flex items-center gap-2 text-[12px] font-semibold text-amber">
+            <span className="flex h-5 w-5 items-center justify-center rounded-md bg-amber/10 text-[12px]">02</span>
             Stage 1 · {stage1Window}s
           </div>
-          <p className="mt-2 text-[11.5px] leading-relaxed text-slate-400">
+          <p className="mt-2 text-[12.5px] leading-relaxed text-slate-400">
             Each WebSocket update re-evaluates both best asks. The first ask at or above the trigger fires an
             immediate marketable BUY at the current ask size ladder.
           </p>
@@ -91,7 +91,7 @@ function PhaseTimeline() {
           "Stale quotes, expired markets and thin liquidity are blocked before submission.",
           "Duplicate and conflict policies decide when both sides qualify.",
         ].map((rule) => (
-          <div key={rule} className="flex items-start gap-2 text-[11.5px] text-slate-400">
+          <div key={rule} className="flex items-start gap-2 text-[12.5px] text-slate-400">
             <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-up/70" />
             {rule}
           </div>
@@ -126,7 +126,7 @@ function ArmMeter({
         {pct !== null ? <div className={cx("h-full rounded-full", tone)} style={{ width: `${pct}%`, opacity: armed ? 1 : 0.6 }} /> : null}
         {threshold !== null ? <div className="absolute inset-y-0 w-px bg-white/60" style={{ left: `${threshold * 100}%` }} /> : null}
       </div>
-      <div className="mt-2 flex items-center justify-between text-[10px]">
+      <div className="mt-2 flex items-center justify-between text-[12px]">
         <span className="mono text-slate-600">trigger {fmtCents(threshold)}</span>
         {armed ? (
           <span className={cx("chip", side === "UP" ? "border-up/30 bg-up/10 text-up" : "border-down/30 bg-down/10 text-down")}>
@@ -173,18 +173,18 @@ function LiveEvaluation() {
         <div className="mt-1.5 flex items-center justify-between">
           <div className="flex items-center gap-2">
             {armedSide ? <SideBadge side={armedSide} size="sm" /> : <span className="chip border-white/8 bg-white/[0.03] text-slate-500">no signal</span>}
-            <span className="text-[11.5px] text-slate-400">
+            <span className="text-[12.5px] text-slate-400">
               {armedSide ? "marketable BUY at current ask" : "engine holds — threshold not met"}
             </span>
           </div>
           <span className="mono text-[12px] text-slate-300">{fmtUsd(typeof config.trade_amount_usdc === "number" ? config.trade_amount_usdc : null)}</span>
         </div>
-        <div className="mono mt-1.5 text-[10px] text-slate-600">
+        <div className="mono mt-1.5 text-[12px] text-slate-600">
           max execution {fmtCents(typeof config.max_execution_price === "number" ? config.max_execution_price : null)}
         </div>
       </div>
 
-      <div className="mt-3 flex items-center justify-between text-[11px]">
+      <div className="mt-3 flex items-center justify-between text-[12.5px]">
         <span className="text-slate-500">{strategy?.reason.replace(/_/g, " ") ?? "waiting"}</span>
         <span className="mono text-slate-400">
           {strategy?.remaining_seconds != null ? `T-${Math.max(0, Math.ceil(strategy.remaining_seconds))}s` : "—"}
@@ -328,8 +328,8 @@ function PolicyPanel() {
     ],
     ["Max execution price", fmtCents(typeof config.max_execution_price === "number" ? config.max_execution_price : null)],
     ["Trade size", fmtUsd(typeof config.trade_amount_usdc === "number" ? config.trade_amount_usdc : null)],
-    ["Duplicate policy", String(strategy?.duplicate_policy ?? "—").replace(/_/g, " ")],
-    ["Conflict policy", String(strategy?.conflict_policy ?? "—").replace(/_/g, " ")],
+    ["Duplicate policy", strategy?.duplicate_policy ? sentence(String(strategy.duplicate_policy)) : "—"],
+    ["Conflict policy", strategy?.conflict_policy ? sentence(String(strategy.conflict_policy)) : "—"],
     ["Max trades / day", String(config.max_trades_per_day ?? "—")],
     ["Max open positions", String(config.max_open_positions ?? "—")],
     [
@@ -353,13 +353,13 @@ function PolicyPanel() {
       </div>
       <div className="mt-4 divide-y divide-white/[0.04]">
         {rows.map(([label, value]) => (
-          <div key={label} className="flex items-center justify-between py-2 text-[11.5px]">
-            <span className="text-slate-500">{label}</span>
-            <span className="mono capitalize text-slate-300">{value}</span>
+          <div key={label} className="flex items-start justify-between gap-4 py-2 text-[12.5px]">
+            <span className="shrink-0 text-slate-500">{label}</span>
+            <span className="mono block min-w-0 text-right text-slate-300 first-letter:uppercase">{value}</span>
           </div>
         ))}
       </div>
-      <div className="mt-4 rounded-lg border hairline bg-black/20 px-3 py-2.5 text-[10.5px] leading-relaxed text-slate-500">
+      <div className="mt-4 rounded-lg border hairline bg-black/20 px-3 py-2.5 text-[12px] leading-relaxed text-slate-500">
         Values update live from the backend runtime settings. Secrets and the live confirmation phrase are never
         exposed through the dashboard API.
       </div>

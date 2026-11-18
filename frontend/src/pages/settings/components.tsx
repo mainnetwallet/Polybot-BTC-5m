@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { IconAlert, IconCheck, IconClose, IconRefresh } from "../../components/Icons";
+import { STAGE_VAR } from "../../lib/stages";
 import { cx } from "../../lib/format";
 import type { FieldSpec } from "./fields";
 import type { TabId, TabSpec } from "./layout";
@@ -10,7 +11,7 @@ export function DerivedRow({ label, hint, value }: { label: string; hint: string
     <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 px-4 py-2.5">
       <div className="min-w-0">
         <div className="truncate text-[12.5px] font-medium text-slate-200">{label}</div>
-        <p className="mt-0.5 text-[10.5px] leading-snug text-slate-500 sm:truncate" title={hint}>
+        <p className="mt-0.5 text-[12px] leading-snug text-slate-500 sm:truncate" title={hint}>
           {hint}
         </p>
       </div>
@@ -58,7 +59,7 @@ export function SettingRow({
               type="button"
               onClick={() => onChange(savedValue)}
               title={`Revert to saved value: ${saved}`}
-              className="inline-flex shrink-0 items-center gap-1 rounded-full border border-amber/30 bg-amber/10 px-1.5 py-px text-[9px] font-bold uppercase tracking-wider text-amber hover:bg-amber/20"
+              className="inline-flex shrink-0 items-center gap-1 rounded-full border border-amber/30 bg-amber/10 px-1.5 py-px text-[12.5px] font-bold text-amber hover:bg-amber/20"
             >
               <IconRefresh size={9} />
               Revert
@@ -66,12 +67,12 @@ export function SettingRow({
           ) : null}
         </div>
         {error ? (
-          <div className="mt-0.5 flex items-start gap-1 text-[10.5px] leading-snug text-down">
+          <div className="mt-0.5 flex items-start gap-1 text-[12px] leading-snug text-down">
             <IconAlert size={11} className="mt-px shrink-0" />
             {error}
           </div>
         ) : (
-          <p className="mt-0.5 text-[10.5px] leading-snug text-slate-500 sm:truncate" title={spec.hint}>
+          <p className="mt-0.5 text-[12px] leading-snug text-slate-500 sm:truncate" title={spec.hint}>
             {spec.hint}
           </p>
         )}
@@ -87,7 +88,7 @@ export function SettingRow({
             onClick={() => onChange(value === "true" ? "false" : "true")}
             className="ml-auto flex items-center gap-2.5"
           >
-            <span className={cx("w-6 text-right text-[11px] font-semibold", value === "true" ? "text-up" : "text-slate-500")}>
+            <span className={cx("w-6 text-right text-[12.5px] font-semibold", value === "true" ? "text-up" : "text-slate-500")}>
               {value === "true" ? "On" : "Off"}
             </span>
             <span
@@ -133,7 +134,7 @@ export function SettingRow({
               onChange={(event) => onChange(event.target.value)}
             />
             {spec.suffix ? (
-              <span className="mono pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] font-semibold tracking-[0.04em] text-slate-300">
+              <span className="mono pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[12.5px] font-semibold text-slate-300">
                 {spec.suffix}
               </span>
             ) : null}
@@ -160,7 +161,7 @@ export function GroupCard({
       <header className="flex items-start justify-between gap-3 border-b hairline bg-white/[0.015] px-4 py-2.5">
         <div className="min-w-0">
           <h3 className="text-[12.5px] font-semibold tracking-tight text-slate-100">{title}</h3>
-          {description ? <p className="mt-0.5 text-[10.5px] leading-snug text-slate-500">{description}</p> : null}
+          {description ? <p className="mt-0.5 text-[12px] leading-snug text-slate-500">{description}</p> : null}
         </div>
         {badge}
       </header>
@@ -208,14 +209,15 @@ export function TabBar({
             {on !== null ? (
               <span
                 title={on ? "Stage is on" : "Stage is off"}
-                className={cx("h-1.5 w-1.5 rounded-full", on ? "bg-up" : "bg-slate-600")}
+                className={cx("h-2 w-2 rounded-full", !on && "bg-slate-600")}
+                style={on ? { background: STAGE_VAR[(Number(/\d/.exec(tab.id)?.[0] ?? 0) as 0 | 1 | 2 | 3)] } : undefined}
               />
             ) : null}
             {tab.label}
             {errors > 0 ? (
-              <span className="mono rounded-full bg-down/15 px-1.5 text-[9.5px] font-bold text-down">{errors}</span>
+              <span className="mono rounded-full bg-down/15 px-1.5 text-[12.5px] font-bold text-down">{errors}</span>
             ) : edited > 0 ? (
-              <span className="mono rounded-full bg-amber/15 px-1.5 text-[9.5px] font-bold text-amber">{edited}</span>
+              <span className="mono rounded-full bg-amber/15 px-1.5 text-[12.5px] font-bold text-amber">{edited}</span>
             ) : null}
           </button>
         );
@@ -244,7 +246,7 @@ export function SaveControls({
       {count > 0 ? (
         <span
           className={cx(
-            "mr-1 hidden items-center gap-1.5 text-[11px] font-medium md:flex",
+            "mr-1 hidden items-center gap-1.5 text-[12.5px] font-medium md:flex",
             errors ? "text-down" : "text-amber",
           )}
         >
@@ -311,12 +313,12 @@ export function ActionRow({
           </div>
           <div>
             <div className="text-[12.5px] font-semibold text-slate-100">{title}</div>
-            <div className="mt-0.5 max-w-[68ch] text-[10.5px] leading-relaxed text-slate-500">{description}</div>
+            <div className="mt-0.5 max-w-[68ch] text-[12px] leading-relaxed text-slate-500">{description}</div>
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">{children}</div>
       </div>
-      {note ? <div className="mt-3 text-[10.5px] text-amber/80">{note}</div> : null}
+      {note ? <div className="mt-3 text-[12px] text-amber/80">{note}</div> : null}
     </div>
   );
 }
@@ -332,8 +334,8 @@ export function CheckRow({ ok, label, detail }: { ok: boolean; label: string; de
       >
         {ok ? <IconCheck size={10} /> : <IconClose size={10} />}
       </span>
-      <span className={cx("mono text-[11.5px]", ok ? "text-slate-300" : "text-slate-500")}>{label}</span>
-      {detail ? <span className="mono ml-auto text-[10px] text-slate-600">{detail}</span> : null}
+      <span className={cx("mono text-[12.5px]", ok ? "text-slate-300" : "text-slate-500")}>{label}</span>
+      {detail ? <span className="mono ml-auto text-[12px] text-slate-600">{detail}</span> : null}
     </div>
   );
 }
@@ -358,7 +360,7 @@ export function ToggleRow({
         <label htmlFor={id} className="text-[12px] font-medium text-slate-200">
           {label}
         </label>
-        <p className="mt-0.5 text-[10.5px] leading-snug text-slate-500">{hint}</p>
+        <p className="mt-0.5 text-[12px] leading-snug text-slate-500">{hint}</p>
       </div>
       <button
         id={id}
@@ -368,7 +370,7 @@ export function ToggleRow({
         onClick={() => onChange(!checked)}
         className="flex shrink-0 items-center gap-2.5"
       >
-        <span className={cx("w-6 text-right text-[11px] font-semibold", checked ? "text-up" : "text-slate-500")}>
+        <span className={cx("w-6 text-right text-[12.5px] font-semibold", checked ? "text-up" : "text-slate-500")}>
           {checked ? "On" : "Off"}
         </span>
         <span
@@ -425,8 +427,8 @@ export function StageHeader({
           </span>
           {dirty ? <span className="chip border-amber/30 bg-amber/10 text-amber">edited</span> : null}
         </div>
-        <p className="mt-0.5 text-[11px] text-slate-500">{description}</p>
-        {note ? <p className="mt-1 text-[10.5px] leading-relaxed text-sky/80">{note}</p> : null}
+        <p className="mt-0.5 text-[12.5px] text-slate-500">{description}</p>
+        {note ? <p className="mt-1 text-[12px] leading-relaxed text-sky/80">{note}</p> : null}
       </div>
       <button
         type="button"
@@ -436,7 +438,7 @@ export function StageHeader({
         onClick={onToggle}
         className="flex shrink-0 items-center gap-2.5"
       >
-        <span className={cx("text-[11px] font-semibold", on ? "text-up" : "text-slate-500")}>{on ? "Enabled" : "Disabled"}</span>
+        <span className={cx("text-[12.5px] font-semibold", on ? "text-up" : "text-slate-500")}>{on ? "Enabled" : "Disabled"}</span>
         <span
           className={cx(
             "relative h-5 w-9 rounded-full border transition-colors",

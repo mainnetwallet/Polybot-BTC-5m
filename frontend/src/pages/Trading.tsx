@@ -52,7 +52,7 @@ export function Trading() {
             <div className="text-[13px] font-semibold text-slate-100">
               {mode === "live" ? "Live CLOB execution" : mode === "paper" ? "Paper execution on live market data" : "Loading execution mode"}
             </div>
-            <div className="mt-0.5 text-[11px] text-slate-500">
+            <div className="mt-0.5 text-[12.5px] text-slate-500">
               {mode === "live"
                 ? "Real FOK marketable orders; balances and positions reconciled with the exchange."
                 : mode === "paper"
@@ -111,7 +111,7 @@ export function Trading() {
           <div className="mt-4 space-y-3">
             <div className="flex items-center justify-between">
               <StatusChip status={last.status} />
-              <span className="mono text-[11px] text-slate-500">{last.ts ? fmtTime(last.ts) : "—"}</span>
+              <span className="mono text-[12.5px] text-slate-500">{last.ts ? fmtTime(last.ts) : "—"}</span>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -129,13 +129,13 @@ export function Trading() {
             </div>
             <div className="rounded-lg border hairline bg-black/20 px-3 py-2">
               <div className="label">Reason</div>
-              <div className="mt-1 text-[11.5px] text-slate-400">{last.reason || "—"}</div>
+              <div className="mt-1 text-[12.5px] text-slate-400">{last.reason || "—"}</div>
               {last.exchange_order_id ? (
-                <div className="mono mt-1 truncate text-[10px] text-slate-600" title={last.exchange_order_id}>
+                <div className="mono mt-1 truncate text-[12px] text-slate-600" title={last.exchange_order_id}>
                   exchange {shortId(last.exchange_order_id, 14, 6)}
                 </div>
               ) : null}
-              {last.error ? <div className="mt-1 text-[10.5px] text-down">{last.error}</div> : null}
+              {last.error ? <div className="mt-1 text-[12px] text-down">{last.error}</div> : null}
             </div>
           </div>
         ) : (
@@ -161,7 +161,7 @@ export function Trading() {
       <section className="panel overflow-hidden xl:col-span-12">
         <div className="flex items-center justify-between border-b hairline px-5 py-4">
           <div>
-            <div className="label">{mode} ledger</div>
+            <div className="label">{mode === "live" ? "Live" : "Paper"} ledger</div>
             <div className="mt-1 text-[14px] font-semibold tracking-tight text-slate-100">Order history</div>
           </div>
           <div className="flex items-center gap-2">
@@ -188,13 +188,13 @@ export function Trading() {
       <section className="panel overflow-hidden xl:col-span-12">
         <div className="flex items-center justify-between border-b hairline px-5 py-4">
           <div>
-            <div className="label">{mode} portfolio</div>
+            <div className="label">{mode === "live" ? "Live" : "Paper"} portfolio</div>
             <div className="mt-1 text-[14px] font-semibold tracking-tight text-slate-100">Open positions</div>
           </div>
           <div className="flex items-center gap-2">
             <span className="chip border-white/8 bg-white/[0.03] text-slate-500">
               <IconActivity size={10} />
-              {snapshot?.positions.length ?? "—"} positions
+              {snapshot?.positions.length ?? "—"} {snapshot?.positions.length === 1 ? "position" : "positions"}
             </span>
           </div>
         </div>
