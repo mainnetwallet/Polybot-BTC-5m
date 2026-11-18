@@ -2,6 +2,8 @@ import { api } from "../api/client";
 import { ModeBadge } from "../components/Badges";
 import { IconActivity, IconAnalytics, IconTarget } from "../components/Icons";
 import { Stat } from "../components/Stat";
+import { EquityLine } from "../components/overview/AccountCard";
+import { realizedCurve } from "../lib/equity";
 import { useBot } from "../hooks/BotContext";
 import { useLiveRefresh } from "../hooks/useLiveRefresh";
 import { clamp, cx, fmtCents, fmtSignedUsd, fmtUsd, pnlClass } from "../lib/format";
@@ -11,10 +13,12 @@ export function Analytics() {
   const mode = snapshot?.bot.mode;
   const polled = useLiveRefresh(async () => {
     if (!mode) return null;
-    return { analytics: await api.analytics(mode) };
+    const [analytics, positions] = await Promise.all([api.analytics(mode), api.positions(mode, 200)]);
+    return { analytics, positions };
   }, [mode], dataVersion, mode !== undefined);
 
   const analytics = polled.data?.analytics;
+  const curve = realizedCurve(polled.data?.positions ?? []);
   const unrealized = snapshot && snapshot.bot.mode === mode ? snapshot.account.unrealized_pnl : analytics?.unrealized_pnl;
   const totalPnl = analytics && unrealized != null ? analytics.realized_pnl + unrealized : null;
   const closed = analytics ? analytics.wins + analytics.losses : null;
@@ -34,12 +38,12 @@ export function Analytics() {
           {snapshot ? <ModeBadge mode={snapshot.bot.mode} /> : null}
           <div>
             <div className="text-[13px] font-semibold text-slate-100">Mode-separated performance</div>
-            <div className="mt-0.5 text-[11px] text-slate-500">
+            <div className="mt-0.5 text-[12.5px] text-slate-500">
               Paper and live balances, fills and statistics never mix. This view reads only the {mode ?? "—"} ledger.
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2 text-[10px] text-slate-500">
+        <div className="flex items-center gap-2 text-[12px] text-slate-500">
           {polled.error ? <span className="chip border-down/25 bg-down/10 text-down">api error</span> : null}
           <span className="chip border-white/8 bg-white/[0.03] text-slate-500">
             <IconActivity size={10} />
@@ -70,7 +74,7 @@ export function Analytics() {
           <span className={cx("mono text-[38px] font-semibold leading-none", winPct != null && winPct >= 50 ? "text-up" : "text-slate-200")}>
             {winPct != null ? `${winPct.toFixed(1)}%` : "—"}
           </span>
-          <span className="text-[11px] text-slate-500">{closed ?? "—"} settled</span>
+          <span className="text-[12.5px] text-slate-500">{closed ?? "—"} settled</span>
         </div>
         <div className="mt-4 flex h-2.5 overflow-hidden rounded-full bg-white/[0.05]">
           {closed && winPct !== null ? (
@@ -82,11 +86,11 @@ export function Analytics() {
             <div className="h-full w-full bg-white/[0.06]" />
           )}
         </div>
-        <div className="mt-3 flex items-center justify-between text-[11px]">
+        <div className="mt-3 flex items-center justify-between text-[12.5px]">
           <span className="text-up">{analytics?.wins ?? "—"} wins</span>
           <span className="text-down">{analytics?.losses ?? "—"} losses</span>
         </div>
-        <div className="mt-4 border-t hairline pt-3 text-[10.5px] leading-relaxed text-slate-500">
+        <div className="mt-4 border-t hairline pt-3 text-[12px] leading-relaxed text-slate-500">
           A position wins when its realized payout exceeds cost basis and fees after resolution.
         </div>
       </section>
@@ -104,7 +108,7 @@ export function Analytics() {
             const width = row.value == null ? 0 : clamp((Math.abs(row.value) / maxAbs) * 100, 0, 100);
             return (
               <div key={row.label}>
-                <div className="flex items-center justify-between text-[11px]">
+                <div className="flex items-center justify-between text-[12.5px]">
                   <span className={row.label === "Total" ? "font-semibold text-slate-200" : "text-slate-500"}>
                     {row.label}
                   </span>
@@ -120,11 +124,31 @@ export function Analytics() {
             );
           })}
         </div>
-        <div className="mt-4 border-t hairline pt-3 text-[10.5px] leading-relaxed text-slate-500">
+        <div className="mt-4 border-t hairline pt-3 text-[12px] leading-relaxed text-slate-500">
           Unrealized PnL marks open positions at the current best bid; it is not withdrawable until resolution.
         </div>
       </section>
 
+      <section className="panel p-5 xl:col-span-4">
+        <div className="mb-4">
+          <div className="label">Equity</div>
+          <div className="mt-1 text-[14px] font-semibold tracking-tight text-slate-100">Realized P&amp;L by closed position</div>
+        </div>
+        <div className="h-[150px]">
+          {curve.points.length >= 3 ? (
+            <EquityLine points={curve.points} />
+          ) : (
+            <div className="flex h-full items-center justify-center rounded-[var(--radius-tile)] border border-dashed border-white/10 px-3 text-center text-[12.5px] text-slate-500">
+              {polled.data ? "The chart appears after two closed positions" : "Loading closed positions"}
+            </div>
+          )}
+        </div>
+        <div className="mt-3 border-t hairline pt-3 text-[12.5px] leading-relaxed text-slate-500">
+          {curve.points.length >= 3
+            ? `${curve.count} closed ${curve.count === 1 ? "position" : "positions"}, ending at ${fmtSignedUsd(curve.points[curve.points.length - 1])}.`
+            : "Built from the closed positions the API returns."}
+        </div>
+      </section>
     </div>
   );
 }

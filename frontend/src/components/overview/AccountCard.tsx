@@ -4,6 +4,7 @@ import { Card } from "../Card";
 import { LoadingPanel } from "../LoadingPanel";
 import { useBot } from "../../hooks/BotContext";
 import { useLiveRefresh } from "../../hooks/useLiveRefresh";
+import { realizedCurve } from "../../lib/equity";
 import { cx, fmtPx, fmtSignedPct, fmtSignedUsd, fmtUsd, isNum, usdParts } from "../../lib/format";
 
 function StatTile({ label, value, tone }: { label: string; value: string; tone?: "up" | "down" }) {
@@ -18,7 +19,7 @@ function StatTile({ label, value, tone }: { label: string; value: string; tone?:
 }
 
 /** Cumulative realized P&L as a filled line. */
-function EquityLine({ points }: { points: number[] }) {
+export function EquityLine({ points }: { points: number[] }) {
   const gradient = `eq${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
   const width = 300;
   const height = 100;
@@ -65,19 +66,7 @@ export function AccountCard({ className }: { className?: string }) {
     mode !== undefined,
   );
 
-  // realized P&L over the closed positions the API returned, oldest first
-  const curve = useMemo(() => {
-    const rows = (closed.data ?? [])
-      .filter((row) => row.status !== "open" && row.closed_at)
-      .sort((a, b) => Date.parse(a.closed_at ?? "") - Date.parse(b.closed_at ?? ""));
-    let total = 0;
-    const points = [0];
-    for (const row of rows) {
-      total += row.realized_pnl;
-      points.push(total);
-    }
-    return { points, count: rows.length };
-  }, [closed.data]);
+  const curve = useMemo(() => realizedCurve(closed.data ?? []), [closed.data]);
 
   if (!snapshot) return <LoadingPanel className={className} />;
 
