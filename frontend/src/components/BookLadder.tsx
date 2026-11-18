@@ -61,7 +61,7 @@ export function BookLadder({ side, book, maxSize, history, staleAfterMs }: BookL
           <span>Ask this round</span>
           <span className={stale ? "text-amber" : undefined}>{book ? (stale ? "Stale quote" : "Fresh quote") : "No book"}</span>
         </div>
-        <Sparkline data={history} tone={up ? "up" : "down"} height={44} />
+        <Sparkline data={history} tone={up ? "up" : "down"} height={72} />
       </div>
     </div>
   );

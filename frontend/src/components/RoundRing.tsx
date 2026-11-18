@@ -61,7 +61,7 @@ export function RoundRing({ remaining, duration, windows, chip }: RoundRingProps
 
   return (
     <div className="relative mx-auto w-full max-w-[440px]" style={{ containerType: "inline-size" }}>
-      <svg viewBox="0 0 440 440" className="block h-auto w-full" role="img" aria-label={summary}>
+      <svg viewBox="-12 -12 464 464" className="block h-auto w-full" role="img" aria-label={summary}>
         <defs>
           <radialGradient id="ring-dial" cx="50%" cy="45%" r="60%">
             <stop offset="0%" stopColor="#123039" />

@@ -135,3 +135,11 @@ export function fmtGapUsd(value: number | null | undefined): string {
   const abs = Math.abs(value);
   return abs >= 100 ? `$${abs.toFixed(0)}` : `$${abs.toFixed(2)}`;
 }
+
+/** 24 hour clock time with seconds (21:15:00) from an ISO timestamp or epoch milliseconds. */
+export function fmtHms(value: string | number | null | undefined): string {
+  if (value === null || value === undefined) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+}

@@ -6,7 +6,7 @@ import { CandleChart, type BuyMarker } from "../CandleChart";
 import { LoadingPanel } from "../LoadingPanel";
 import { useBot } from "../../hooks/BotContext";
 import { useBtcCandles } from "../../hooks/BtcTape";
-import { cx, fmtPx, fmtSignedPct, fmtTime, isNum, usdParts } from "../../lib/format";
+import { cx, fmtPx, fmtSignedPct, fmtHms, isNum, usdParts } from "../../lib/format";
 import type { StageId } from "../../lib/stages";
 
 export function BtcTapeCard({ orders, className }: { orders: OrderRow[]; className?: string }) {
@@ -32,7 +32,7 @@ export function BtcTapeCard({ orders, className }: { orders: OrderRow[]; classNa
         key: String(order.id),
         t,
         stage,
-        label: `Stage ${stage} ${order.side} buy: ${order.filled_size.toFixed(1)} shares at ${fmtPx(price)}, ${fmtTime(order.created_at)}`,
+        label: `Stage ${stage} ${order.side} buy: ${order.filled_size.toFixed(1)} shares at ${fmtPx(price)}, ${fmtHms(order.created_at)}`,
       });
     }
     return out;
@@ -106,12 +106,13 @@ export function BtcTapeCard({ orders, className }: { orders: OrderRow[]; classNa
             priceToBeat={beat}
             price={price}
             buys={buys}
+            height={310}
           />
           <div className="mt-2.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-[12.5px] text-slate-500">
             <span>
               {tape.candles.length > 0
                 ? lateStart !== null
-                  ? `Candles start at ${fmtTime(new Date(lateStart).toISOString())}, when this browser received its first price`
+                  ? `Candles start at ${fmtHms(lateStart)}, when this browser received its first price`
                   : `${tape.candles.length} candles this round`
                 : "Waiting for the first price"}
             </span>

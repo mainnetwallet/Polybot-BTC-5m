@@ -10,7 +10,7 @@ import { Modal } from "../Modal";
 import { useBot } from "../../hooks/BotContext";
 import { useRemainingSeconds } from "../../hooks/useCountdown";
 import { useLiveRefresh } from "../../hooks/useLiveRefresh";
-import { cx, fmtNum, fmtPx, fmtSignedUsd, fmtTime, sentence } from "../../lib/format";
+import { cx, fmtNum, fmtPx, fmtSignedUsd, fmtHms, sentence } from "../../lib/format";
 import { useConfirmSells } from "../../lib/prefs";
 import { STAGE_VAR, stopLossPrice, takeProfitPrice, type StageId } from "../../lib/stages";
 
@@ -296,7 +296,7 @@ export function PositionsCard({ orders, className }: { orders: OrderRow[]; class
             <ul className="space-y-2">
               {lines.map((line) => (
                 <li key={line.key} className="grid grid-cols-[4.2rem_1fr] gap-2 text-[13px] leading-snug">
-                  <span className="text-slate-500">{fmtTime(new Date(line.t).toISOString())}</span>
+                  <span className="text-slate-500">{fmtHms(line.t)}</span>
                   <span className={cx("min-w-0 break-words text-slate-300", line.tone === "down" && "text-down", line.tone === "amber" && "text-amber")}>
                     {line.bold ? <b className={cx("font-semibold", line.tone === "up" ? "text-up" : "text-slate-100")}>{line.bold}</b> : null}
                     {line.bold ? " " : ""}

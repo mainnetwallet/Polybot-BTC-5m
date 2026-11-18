@@ -2,7 +2,7 @@ import { Card } from "../Card";
 import { IconActivity, IconAlert } from "../Icons";
 import { LoadingPanel } from "../LoadingPanel";
 import { useBot } from "../../hooks/BotContext";
-import { clamp, cx, fmtCents, fmtSignedUsd, fmtUsd, pnlClass } from "../../lib/format";
+import { clamp, cx, fmtSignedUsd, fmtUsd, pnlClass } from "../../lib/format";
 
 function Row({ label, value, hint, className }: { label: string; value: string; hint?: string; className?: string }) {
   return (
@@ -66,12 +66,6 @@ export function RiskFeedCard({ className }: { className?: string }) {
       <div className="mt-4 grid grid-cols-2 gap-3">
         <Row label="Open positions" value={String(snapshot.positions.length)} hint={`max ${String(config.max_open_positions ?? "—")}`} />
         <Row label="Trades today" value={String(account.trades_today)} hint={`max ${String(config.max_trades_per_day ?? "—")} a day`} />
-        <Row label="Order size" value={fmtUsd(typeof config.trade_amount_usdc === "number" ? config.trade_amount_usdc : null)} hint="marketable notional" />
-        <Row
-          label="Max execution price"
-          value={fmtCents(typeof config.max_execution_price === "number" ? config.max_execution_price : null)}
-          hint="hard price cap"
-        />
         <Row label="Last book message" value={age === null ? "—" : age < 1000 ? "now" : `${Math.round(age / 1000)} s ago`} hint={`${data.reconnects} reconnects`} />
         <Row
           label="Unrealized"

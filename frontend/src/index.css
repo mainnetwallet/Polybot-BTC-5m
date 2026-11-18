@@ -368,8 +368,16 @@ select:focus-visible,
   gap: 20px;
   grid-template-columns: minmax(0, 1fr);
 }
+.rc-side {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr);
+}
+.rc-stages { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 28px; row-gap: 10px; }
+.rc-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 @container (min-width: 470px) {
-  .rc-body { grid-template-columns: minmax(0, 1.08fr) minmax(0, 1fr); align-items: center; }
+  .rc-body { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); align-items: center; }
+  .rc-stages { grid-template-columns: minmax(0, 1fr); }
 }
 
 .tape-body {

@@ -3,7 +3,7 @@ import type { Page } from "../lib/navigation";
 import { NAV, PAGE_META } from "../lib/navigation";
 import { useAuth } from "../hooks/AuthContext";
 import { useBot } from "../hooks/BotContext";
-import { cx, fmtAge, fmtTime, isNum, sentence } from "../lib/format";
+import { cx, fmtAge, fmtHms, isNum, sentence } from "../lib/format";
 import { IconAlert, IconLogout, IconPlay, IconShield, IconZap } from "./Icons";
 
 interface TopbarProps {
@@ -102,7 +102,7 @@ export function Topbar({ page, onNavigate, onOpenMode, onStartLive, onOpenKill }
     );
   }
   pills.push(
-    <Pill key="rd" tone="none" label="Round" value={market ? fmtTime(market.window_start) : "—"} title={market?.slug ?? "No active market"} />,
+    <Pill key="rd" tone="none" label="Round ends" value={market ? fmtHms(market.window_end) : "—"} title={market?.slug ?? "No active market"} />,
   );
 
   return (
@@ -120,8 +120,8 @@ export function Topbar({ page, onNavigate, onOpenMode, onStartLive, onOpenKill }
           ) : null}
         </div>
 
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          <div className="hidden flex-wrap items-center gap-2 xl:flex">{pills}</div>
+        <div className="flex w-full flex-wrap items-center gap-2 xl:ml-auto xl:w-auto">
+          <div className="flex w-full flex-wrap items-center gap-2 xl:w-auto">{pills}</div>
 
           {killActive ? (
             <span className="chip border-down/35 bg-down/10 text-down">
@@ -160,6 +160,7 @@ export function Topbar({ page, onNavigate, onOpenMode, onStartLive, onOpenKill }
             disabled={!bot}
             className={cx("btn h-10", killActive ? "border-amber/35 bg-amber/10 text-amber" : "btn-danger")}
             title={killActive ? "Clear the emergency kill switch" : "Emergency kill switch"}
+            aria-label={killActive ? "Clear the emergency kill switch" : "Emergency kill switch"}
           >
             <IconShield size={14} />
             <span className="hidden 2xl:inline">{killActive ? "Clear kill switch" : "Kill switch"}</span>

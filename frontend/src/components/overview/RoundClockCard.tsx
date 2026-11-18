@@ -2,7 +2,7 @@ import { Card } from "../Card";
 import { RoundRing } from "../RoundRing";
 import { useBot } from "../../hooks/BotContext";
 import { useRemainingSeconds } from "../../hooks/useCountdown";
-import { cx, fmtGapUsd, fmtPx, fmtTime, isNum } from "../../lib/format";
+import { cx, fmtGapUsd, fmtPx, fmtHms, isNum } from "../../lib/format";
 import {
   STAGES,
   STAGE_VAR,
@@ -63,20 +63,20 @@ export function RoundClockCard({ className }: { className?: string }) {
     <Card
       title="Round clock"
       className={cx("cq", className)}
-      right={market ? <span>Ends {fmtTime(market.window_end)}</span> : <span>No active market</span>}
+      right={market ? <span>Ends {fmtHms(market.window_end)}</span> : <span>No active market</span>}
     >
       <div className="rc-body">
         <RoundRing remaining={remaining} duration={market?.duration_seconds ?? null} windows={windows} chip={chip} />
 
-        <div className="flex min-w-0 flex-col gap-4">
-          <ul className="space-y-2.5" aria-label="Stage status">
+        <div className="rc-side min-w-0">
+          <ul className="rc-stages" aria-label="Stage status">
             {STAGES.map((stage) => {
               const w = windows[stage];
               const status = stageStatus(w, remaining);
               const watching = status.kind === "watching";
               return (
                 <li key={stage} className={cx("flex items-center justify-between gap-3 text-[14px]", status.kind === "off" && "opacity-50")}>
-                  <span className="flex items-center gap-2.5 text-slate-300">
+                  <span className="flex items-center gap-2.5 whitespace-nowrap text-slate-300">
                     <span className="h-3 w-3 rounded-[4px]" style={{ background: STAGE_VAR[stage] }} aria-hidden="true" />
                     Stage {stage}
                   </span>
@@ -91,12 +91,12 @@ export function RoundClockCard({ className }: { className?: string }) {
             })}
           </ul>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="rc-tiles">
             <AskTile side="UP" ask={books.up?.best_ask ?? null} bid={books.up?.best_bid ?? null} />
             <AskTile side="DOWN" ask={books.down?.best_ask ?? null} bid={books.down?.best_bid ?? null} />
           </div>
 
-          <div className="tile px-4 py-3">
+          <div className="tile rc-gap px-4 py-3">
             <div className="label">Gap to price to beat</div>
             <div
               className={cx(
