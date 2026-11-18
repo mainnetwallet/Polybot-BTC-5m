@@ -1,6 +1,5 @@
-import { useMemo, useState } from "react";
-import { api } from "../../api/client";
-import type { OrderRow, PositionRow, SellableHolding, TriggerRow } from "../../api/types";
+import { useState } from "react";
+import type { OrderRow, PositionRow, SellableHolding } from "../../api/types";
 import { Card } from "../Card";
 import { EmptyState } from "../EmptyState";
 import { ExitMeter } from "../ExitMeter";
@@ -9,8 +8,7 @@ import { LoadingPanel } from "../LoadingPanel";
 import { Modal } from "../Modal";
 import { useBot } from "../../hooks/BotContext";
 import { useRemainingSeconds } from "../../hooks/useCountdown";
-import { useLiveRefresh } from "../../hooks/useLiveRefresh";
-import { cx, fmtNum, fmtPx, fmtSignedUsd, fmtHms, sentence } from "../../lib/format";
+import { cx, fmtNum, fmtPx, fmtSignedUsd } from "../../lib/format";
 import { useConfirmSells } from "../../lib/prefs";
 import { STAGE_VAR, stopLossPrice, takeProfitPrice, type StageId } from "../../lib/stages";
 
@@ -39,77 +37,13 @@ function stageEntryPrice(orders: OrderRow[], marketId: string, side: string, sta
   return qty > 0 ? cost / qty : null;
 }
 
-interface LogLine {
-  key: string;
-  t: number;
-  text: string;
-  bold?: string;
-  tone?: "up" | "down" | "amber";
-}
-
-function sideWord(side: string): string {
-  return side === "UP" ? "Up" : "Down";
-}
-
 export function PositionsCard({ orders, className }: { orders: OrderRow[]; className?: string }) {
-  const { snapshot, sellNow, sellAll, dataVersion, logs } = useBot();
+  const { snapshot, sellNow, sellAll } = useBot();
   const remaining = useRemainingSeconds();
   const [selling, setSelling] = useState<Set<string>>(new Set());
   const [confirmSells] = useConfirmSells();
   const [pending, setPending] = useState<{ kind: "one"; row: StageHolding } | { kind: "all" } | null>(null);
-  const mode = snapshot?.bot.mode;
-  const triggers = useLiveRefresh<TriggerRow[]>(
-    () => (mode ? api.triggers(60) : Promise.resolve([])),
-    [mode],
-    dataVersion,
-    mode !== undefined,
-  );
-
   const marketId = snapshot?.market?.market_id ?? null;
-
-  const lines = useMemo<LogLine[]>(() => {
-    const out: LogLine[] = [];
-    for (const row of triggers.data ?? []) {
-      if (marketId && row.market_id !== marketId) continue;
-      const t = Date.parse(row.created_at);
-      if (!Number.isFinite(t)) continue;
-      out.push({
-        key: `t${row.id}`,
-        t,
-        bold: `${sideWord(row.side)} ask ${fmtPx(row.best_ask)}`,
-        text: `${sentence(row.decision)}${row.reason ? `, ${row.reason.replace(/_/g, " ")}` : ""}`,
-        tone: row.triggered ? "up" : undefined,
-      });
-    }
-    for (const o of orders) {
-      if (marketId && o.market_id !== marketId) continue;
-      if (!(o.filled_size > 0)) continue;
-      const t = Date.parse(o.created_at);
-      if (!Number.isFinite(t)) continue;
-      const price = o.avg_fill_price ?? o.submitted_price ?? o.requested_price;
-      const sell = o.action === "SELL";
-      out.push({
-        key: `o${o.id}`,
-        t,
-        bold: `${sell ? "Sold" : "Filled"} ${fmtNum(o.filled_size, 1)} at ${fmtPx(price)}`,
-        text: `stage ${o.stage ?? 1} ${sideWord(o.side)}`,
-        tone: sell ? "amber" : "up",
-      });
-    }
-    for (const log of logs) {
-      const warn = log.level === "WARNING" || log.level === "ERROR" || log.level === "CRITICAL";
-      if (log.category !== "settlement" && !warn) continue;
-      const t = Date.parse(log.created_at);
-      if (!Number.isFinite(t)) continue;
-      out.push({
-        key: `l${log.id ?? `${log.created_at}${log.message}`}`,
-        t,
-        text: log.message,
-        tone: log.level === "INFO" ? undefined : log.level === "WARNING" ? "amber" : "down",
-      });
-    }
-    return out.sort((a, b) => b.t - a.t).slice(0, 8);
-  }, [triggers.data, orders, logs, marketId]);
 
   if (!snapshot) return <LoadingPanel className={className} />;
 
@@ -287,27 +221,6 @@ export function PositionsCard({ orders, className }: { orders: OrderRow[]; class
           </ul>
         )}
 
-        <div className="mt-3 border-t hairline pt-3">
-          <div className="mb-2 text-[12.5px] font-medium text-slate-400">Trigger log</div>
-          {lines.length === 0 ? (
-            <div className="text-[12.5px] text-slate-500">
-              {triggers.data ? "No trigger, fill or settlement yet for this round." : "Loading the trigger log"}
-            </div>
-          ) : (
-            <ul className="space-y-1.5">
-              {lines.map((line) => (
-                <li key={line.key} className="grid grid-cols-[4.2rem_1fr] gap-2 text-[12.5px] leading-snug">
-                  <span className="text-slate-500">{fmtHms(line.t)}</span>
-                  <span className={cx("min-w-0 break-words text-slate-300", line.tone === "down" && "text-down", line.tone === "amber" && "text-amber")}>
-                    {line.bold ? <b className={cx("font-semibold", line.tone === "up" ? "text-up" : "text-slate-100")}>{line.bold}</b> : null}
-                    {line.bold ? " " : ""}
-                    {line.text}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
         </div>
       </Card>
 
