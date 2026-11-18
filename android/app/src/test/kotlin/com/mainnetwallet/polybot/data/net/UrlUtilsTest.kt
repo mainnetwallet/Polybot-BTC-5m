@@ -56,6 +56,14 @@ class UrlUtilsTest {
         assertEquals("https://pc.example.com:8443", direct("pc.example.com:8443"))
     }
 
+    @Test fun barePublicIpGetsHttpOnDashboardPort() {
+        assertEquals("http://191.96.110.155:5173", direct("191.96.110.155"))
+        assertEquals("http://191.96.110.155:5173", direct("  191.96.110.155  "))
+        // an explicit port or scheme is never overridden
+        assertEquals("https://191.96.110.155:8443", direct("191.96.110.155:8443"))
+        assertEquals("http://191.96.110.155:8000", direct("http://191.96.110.155:8000"))
+    }
+
     @Test fun plainHostGetsHttpOnPrivateNetworks() {
         assertEquals("http://192.168.1.20:8000", direct("192.168.1.20:8000"))
         assertEquals("http://10.0.0.5:8000", direct("10.0.0.5:8000"))

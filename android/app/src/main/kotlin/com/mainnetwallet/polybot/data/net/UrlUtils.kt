@@ -26,6 +26,9 @@ object UrlUtils {
     )
     private val ipv4 = Regex("""^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$""")
 
+    /** Port of the dashboard (Vite) started by start.sh; it proxies the API for a bare VPS IP. */
+    private const val VPS_DASHBOARD_PORT = 5173
+
     /**
      * Turns the text of the PC URL field into a [PcTarget]:
      * `gist:<id>` or a gist.github.com URL, `https://...`, `http://...` (LAN) or a bare host.
@@ -41,7 +44,11 @@ object UrlUtils {
             return TargetParse.Invalid("That Gist id looks wrong. Use gist:<id> with the 32-character id.")
         }
 
-        val withScheme = if ("://" in raw) raw else defaultScheme(raw) + raw
+        val withScheme = when {
+            "://" in raw -> raw
+            isPublicIpv4Only(raw) -> "http://$raw:$VPS_DASHBOARD_PORT"
+            else -> defaultScheme(raw) + raw
+        }
         val lower = withScheme.lowercase()
         if (!lower.startsWith("http://") && !lower.startsWith("https://")) {
             return TargetParse.Invalid("Only http:// and https:// addresses are supported.")
@@ -62,6 +69,16 @@ object UrlUtils {
     }
 
     private fun defaultScheme(raw: String): String = if (isPrivateHost(rawHost(raw))) "http://" else "https://"
+
+    /**
+     * True when the whole input is just a public IPv4 address (no scheme, port or path), e.g. a VPS IP.
+     * Such an address has no HTTPS certificate, so it is reached over plain http on the dashboard port,
+     * which forwards /api and /healthz to the backend (backend itself only listens on 127.0.0.1).
+     */
+    private fun isPublicIpv4Only(raw: String): Boolean {
+        val octets = ipv4.matchEntire(raw)?.groupValues?.drop(1)?.map { it.toInt() } ?: return false
+        return octets.all { it <= 255 } && !isPrivateHost(raw)
+    }
 
     private fun rawHost(raw: String): String {
         var authority = raw.substringBefore('/').substringBefore('?').substringBefore('#')

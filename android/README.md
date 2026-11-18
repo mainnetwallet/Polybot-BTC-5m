@@ -38,6 +38,7 @@ The PC URL field accepts:
 | `gist:<id>` or `https://gist.github.com/<user>/<id>` | Read the current tunnel URL from file `pc-url.txt` of that Gist |
 | `https://host` | Used as is |
 | `http://192.168.1.20:8000` | LAN use; a banner warns when plain `http` is used outside private ranges |
+| `203.0.113.10` (a public IP only, no port) | VPS shortcut: becomes `http://203.0.113.10:5173`, the dashboard port that `start.sh` opens (open it in the firewall). Plain http, so use a long `API_TOKEN`; the Gist/tunnel is encrypted |
 | `host` | `https://` is added (`http://` for private IPs) |
 
 The Gist is only re-read when a request or the WebSocket fails (at most once per 15 s, GitHub allows 60
