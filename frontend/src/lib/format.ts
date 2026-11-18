@@ -129,6 +129,16 @@ export function fmtAge(ms: number | null | undefined): string {
   return safe < 1000 ? `${Math.round(safe)} ms` : `${(safe / 1000).toFixed(1)} s`;
 }
 
+/**
+ * How fresh a feed is, without a number that changes on every update: "live" under a second, then whole
+ * seconds. The text only changes about once a second, so the top bar does not flicker.
+ */
+export function fmtFreshness(ms: number | null | undefined): string {
+  if (!isNum(ms)) return "—";
+  const safe = Math.max(0, ms);
+  return safe < 1000 ? "live" : `${Math.floor(safe / 1000)} s`;
+}
+
 /** Whole dollars from $1 up, cents below $1 (the BTC gap to the price to beat). */
 export function fmtGapUsd(value: number | null | undefined): string {
   if (!isNum(value)) return "—";

@@ -3,7 +3,7 @@ import type { Page } from "../lib/navigation";
 import { NAV, PAGE_META } from "../lib/navigation";
 import { useAuth } from "../hooks/AuthContext";
 import { useBot } from "../hooks/BotContext";
-import { cx, fmtAge, fmtHms, isNum, sentence } from "../lib/format";
+import { cx, fmtFreshness, fmtHms, isNum, sentence } from "../lib/format";
 import { IconAlert, IconLogout, IconPlay, IconShield, IconZap } from "./Icons";
 
 interface TopbarProps {
@@ -24,7 +24,7 @@ function Pill({ tone, label, value, title }: { tone: "up" | "amber" | "down" | "
         />
       ) : null}
       <span className="text-slate-400">{label}</span>
-      <span className="font-semibold text-slate-100">{value}</span>
+      <span className="min-w-[2.6em] text-right font-semibold tabular-nums text-slate-100">{value}</span>
     </span>
   );
 }
@@ -86,7 +86,7 @@ export function Topbar({ page, onNavigate, onOpenMode, onStartLive, onOpenKill }
       key="pm"
       tone={data ? (data.connected ? "up" : "down") : "none"}
       label="Polymarket feed"
-      value={data ? (data.connected ? fmtAge(lastBook) : "offline") : "—"}
+      value={data ? (data.connected ? fmtFreshness(lastBook) : "offline") : "—"}
       title="Time since the last order book message"
     />,
   );
@@ -96,7 +96,7 @@ export function Topbar({ page, onNavigate, onOpenMode, onStartLive, onOpenKill }
         key="btc"
         tone={btc ? (btc.connected && !btc.stale ? "up" : btc.connected ? "amber" : "down") : "none"}
         label="Chainlink BTC"
-        value={btc ? (isNum(btc.age_ms) ? fmtAge(btc.age_ms) : btc.connected ? "—" : "offline") : "—"}
+        value={btc ? (isNum(btc.age_ms) ? fmtFreshness(btc.age_ms) : btc.connected ? "—" : "offline") : "—"}
         title={btc?.last_error ?? "Age of the latest Chainlink BTC price"}
       />,
     );
