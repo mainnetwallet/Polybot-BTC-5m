@@ -17,10 +17,10 @@ import { LoadingPanel } from "../LoadingPanel";
 function AskTile({ side, ask, bid }: { side: "UP" | "DOWN"; ask: number | null; bid: number | null }) {
   const up = side === "UP";
   return (
-    <div className="tile px-4 py-3">
+    <div className="tile px-3.5 py-2.5">
       <div className="label">{up ? "Up ask" : "Down ask"}</div>
-      <div className={cx("hero-num mt-1.5 text-[30px]", up ? "!text-up" : "!text-down")}>{fmtPx(ask)}</div>
-      <div className="mt-1.5 text-[12.5px] text-slate-500">bid {fmtPx(bid)}</div>
+      <div className={cx("hero-num mt-1 text-[26px]", up ? "!text-up" : "!text-down")}>{fmtPx(ask)}</div>
+      <div className="mt-1 text-[12px] text-slate-500">bid {fmtPx(bid)}</div>
     </div>
   );
 }
@@ -75,7 +75,7 @@ export function RoundClockCard({ className }: { className?: string }) {
               const status = stageStatus(w, remaining);
               const watching = status.kind === "watching";
               return (
-                <li key={stage} className={cx("flex items-center justify-between gap-3 text-[14px]", status.kind === "off" && "opacity-50")}>
+                <li key={stage} className={cx("flex items-center justify-between gap-3 text-[13.5px]", status.kind === "off" && "opacity-50")}>
                   <span className="flex items-center gap-2.5 whitespace-nowrap text-slate-300">
                     <span className="h-3 w-3 rounded-[4px]" style={{ background: STAGE_VAR[stage] }} aria-hidden="true" />
                     Stage {stage}
@@ -96,17 +96,17 @@ export function RoundClockCard({ className }: { className?: string }) {
             <AskTile side="DOWN" ask={books.down?.best_ask ?? null} bid={books.down?.best_bid ?? null} />
           </div>
 
-          <div className="tile rc-gap px-4 py-3">
+          <div className="tile rc-gap px-3.5 py-2.5">
             <div className="label">Gap to price to beat</div>
             <div
               className={cx(
-                "hero-num mt-1.5 text-[30px]",
+                "hero-num mt-1 text-[26px]",
                 diff === null ? "!text-slate-500" : diff >= 0 ? "!text-up" : "!text-down",
               )}
             >
               {diff === null ? "—" : `${diff >= 0 ? "+" : "-"}$${Math.abs(diff).toFixed(2)}`}
             </div>
-            <div className={cx("mt-1.5 text-[12.5px]", gapMet ? "text-up" : "text-slate-500")}>{gapNote}</div>
+            <div className={cx("mt-1 text-[12px]", gapMet ? "text-up" : "text-slate-500")}>{gapNote}</div>
           </div>
         </div>
       </div>

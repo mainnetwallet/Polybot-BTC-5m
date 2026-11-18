@@ -5,13 +5,15 @@ interface ExitMeterProps {
   bid: number | null;
   stop: number | null;
   takeProfit: number | null;
+  /** one line of text (stop, progress, take profit) without the bar */
+  inline?: boolean;
 }
 
 /**
  * Where the bid sits between the stop loss and the take profit of one position. Red is the stop side, green
  * the take profit side, the white tick is the entry price and the dot is the current bid.
  */
-export function ExitMeter({ entry, bid, stop, takeProfit }: ExitMeterProps) {
+export function ExitMeter({ entry, bid, stop, takeProfit, inline = false }: ExitMeterProps) {
   if (!isNum(entry) || (!isNum(stop) && !isNum(takeProfit))) {
     return <div className="text-[12.5px] text-slate-500">No take profit or stop loss set for these shares</div>;
   }
@@ -35,6 +37,16 @@ export function ExitMeter({ entry, bid, stop, takeProfit }: ExitMeterProps) {
     } else {
       note = "At entry";
     }
+  }
+
+  if (inline) {
+    return (
+      <span className="flex min-w-0 items-center gap-2 whitespace-nowrap text-[12px]">
+        <span className="text-down">{isNum(stop) ? `Stop ${fmtPx(stop)}` : "No stop"}</span>
+        <span className={tone}>{note}</span>
+        <span className="text-up">{isNum(takeProfit) ? `Take profit ${fmtPx(takeProfit)}` : "No take profit"}</span>
+      </span>
+    );
   }
 
   return (

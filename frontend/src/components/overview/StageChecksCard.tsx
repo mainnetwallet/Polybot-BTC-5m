@@ -45,7 +45,7 @@ export function StageChecksCard({ orders, className }: { orders: OrderRow[]; cla
         </span>
       }
     >
-      <ul className="divide-y divide-white/[0.06]">
+      <ul className="flex min-h-0 flex-1 flex-col divide-y divide-white/[0.06]">
         {STAGES.map((stage) => {
           const w = windows[stage];
           const status = stageStatus(w, remaining);
@@ -67,9 +67,9 @@ export function StageChecksCard({ orders, className }: { orders: OrderRow[]; cla
           else right = { text: "Waiting", cls: "border-white/8 bg-white/[0.03] text-slate-400" };
 
           return (
-            <li key={stage} className={cx("flex items-start gap-3.5 py-3.5 first:pt-0 last:pb-0", status.kind === "off" && "opacity-55")}>
+            <li key={stage} className={cx("flex flex-1 items-center gap-3 py-2 first:pt-0 last:pb-0", status.kind === "off" && "opacity-55")}>
               <span
-                className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] text-[15px] font-bold text-[#0a141b]"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] text-[14px] font-bold text-[#0a141b]"
                 style={{ background: color }}
                 aria-hidden="true"
               >
@@ -77,15 +77,15 @@ export function StageChecksCard({ orders, className }: { orders: OrderRow[]; cla
               </span>
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
-                  <div className="min-w-0 text-[15px]">
+                  <div className="min-w-0 text-[14px]">
                     <span className="font-semibold text-slate-100">{STAGE_NAME[stage]}</span>{" "}
                     <span className="text-slate-500">{status.kind === "off" ? "switched off" : windowText(w)}</span>
                   </div>
                   <span className={cx("chip shrink-0", right.cls)}>{right.text}</span>
                 </div>
-                <div className="mt-2 flex flex-wrap gap-1.5">
+                <div className="mt-1.5 flex flex-wrap gap-1">
                   {chips.map((chip) => (
-                    <span key={chip.key} className={cx("chip !text-[12px]", CHIP_TONE[chip.tone])}>
+                    <span key={chip.key} className={cx("chip !text-[11.5px]", CHIP_TONE[chip.tone])}>
                       {chip.label}
                     </span>
                   ))}
@@ -96,7 +96,7 @@ export function StageChecksCard({ orders, className }: { orders: OrderRow[]; cla
         })}
       </ul>
       {hold ? (
-        <div className="mt-auto pt-4 text-[12.5px] text-slate-500">
+        <div className="mt-auto shrink-0 pt-2 text-[12px] text-slate-500">
           Engine says: <span className="text-slate-300">{hold}</span>
         </div>
       ) : null}

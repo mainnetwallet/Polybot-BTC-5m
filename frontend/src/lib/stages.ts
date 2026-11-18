@@ -264,8 +264,7 @@ export function stageChecks(
     chips.push({ key: "tp", label: `Take profit ${fmtPx(s.stage2_sell_price)}`, tone: "neutral" });
   }
 
-  const stop = stopLossPct(stage, null, s, null);
-  if (stop > 0) chips.push({ key: "stop", label: `Stop loss ${stop}%`, tone: "neutral" });
+  // the stop loss level of an open position is shown in Positions and triggers, so no chip here
   return chips;
 }
 

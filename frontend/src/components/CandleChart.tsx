@@ -19,6 +19,8 @@ interface CandleChartProps {
   price: number | null;
   buys: BuyMarker[];
   height?: number;
+  /** fill the parent box (which must be `relative` with a height) instead of using a fixed height */
+  fill?: boolean;
 }
 
 const AXIS_W = 66;
@@ -27,18 +29,20 @@ const PAD_T = 10;
 
 function useWidth() {
   const ref = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(640);
+  const [size, setSize] = useState({ width: 640, height: 0 });
   useEffect(() => {
     const node = ref.current;
     if (!node) return;
     const observer = new ResizeObserver((entries) => {
-      const next = Math.round(entries[0]?.contentRect.width ?? 0);
-      if (next > 0) setWidth(next);
+      const rect = entries[0]?.contentRect;
+      const width = Math.round(rect?.width ?? 0);
+      const height = Math.round(rect?.height ?? 0);
+      if (width > 0) setSize((prev) => (prev.width === width && prev.height === height ? prev : { width, height }));
     });
     observer.observe(node);
     return () => observer.disconnect();
   }, []);
-  return { ref, width };
+  return { ref, width: size.width, measuredHeight: size.height };
 }
 
 function niceStep(range: number, target: number): number {
@@ -58,8 +62,9 @@ function axisPrice(value: number): string {
 }
 
 /** 5 second candles over the whole round, with the dashed price to beat line and a marker for every buy. */
-export function CandleChart({ candles, startMs, endMs, priceToBeat, price, buys, height = 330 }: CandleChartProps) {
-  const { ref, width } = useWidth();
+export function CandleChart({ candles, startMs, endMs, priceToBeat, price, buys, height: fixedHeight = 330, fill = false }: CandleChartProps) {
+  const { ref, width, measuredHeight } = useWidth();
+  const height = fill ? Math.max(150, measuredHeight) : fixedHeight;
   const plotW = Math.max(120, width - AXIS_W);
   const plotH = height - AXIS_H - PAD_T;
 
@@ -192,7 +197,11 @@ export function CandleChart({ candles, startMs, endMs, priceToBeat, price, buys,
   }
 
   return (
-    <div ref={ref} className="relative w-full overflow-hidden rounded-[var(--radius-tile)] border hairline" style={{ height }}>
+    <div
+      ref={ref}
+      className={`${fill ? "absolute inset-0" : "relative w-full"} overflow-hidden rounded-[var(--radius-tile)] border hairline`}
+      style={fill ? undefined : { height }}
+    >
       <div
         className="pointer-events-none absolute inset-0"
         style={{ background: "linear-gradient(180deg, rgba(61,220,151,0.09), rgba(61,220,151,0.015) 70%, transparent)" }}

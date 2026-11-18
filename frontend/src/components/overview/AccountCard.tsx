@@ -9,9 +9,9 @@ import { cx, fmtPx, fmtSignedPct, fmtSignedUsd, fmtUsd, isNum, usdParts } from "
 
 function StatTile({ label, value, tone }: { label: string; value: string; tone?: "up" | "down" }) {
   return (
-    <div className="tile min-w-0 px-4 py-3">
+    <div className="tile min-w-0 px-3.5 py-2">
       <div className="label truncate">{label}</div>
-      <div className={cx("mt-1.5 truncate text-[22px] font-semibold leading-none tracking-tight", tone === "up" ? "text-up" : tone === "down" ? "text-down" : "text-slate-100")}>
+      <div className={cx("mt-1 truncate text-[19px] font-semibold leading-none tracking-tight", tone === "up" ? "text-up" : tone === "down" ? "text-down" : "text-slate-100")}>
         {value}
       </div>
     </div>
@@ -80,7 +80,7 @@ export function AccountCard({ className }: { className?: string }) {
   return (
     <Card title={live ? "Live account" : "Paper account"} className={className} right={<span>Today</span>}>
       <div className="label">Balance</div>
-      <div className="hero-num mt-1.5 text-[38px]">
+      <div className="hero-num mt-1 text-[34px]">
         {parts ? (
           <>
             {parts.sign}${parts.whole}
@@ -91,7 +91,7 @@ export function AccountCard({ className }: { className?: string }) {
         )}
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-2">
+      <div className="mt-2.5 flex flex-wrap items-center gap-2">
         <span
           className={cx(
             "chip",
@@ -110,8 +110,8 @@ export function AccountCard({ className }: { className?: string }) {
         ) : null}
       </div>
 
-      <div className="mt-4 flex min-h-[110px] flex-1 flex-col">
-        <div className="relative min-h-[84px] flex-1">
+      <div className="mt-3 flex min-h-[70px] flex-1 flex-col">
+        <div className="relative min-h-[44px] flex-1">
           {curve.points.length >= 3 ? (
             <EquityLine points={curve.points} />
           ) : (
@@ -120,13 +120,13 @@ export function AccountCard({ className }: { className?: string }) {
             </div>
           )}
         </div>
-        <div className="mt-1.5 text-[12px] text-slate-500">
+        <div className="mt-1 text-[11.5px] text-slate-500">
           Realized P&L, last {curve.count} closed {curve.count === 1 ? "position" : "positions"}
           {curve.points.length >= 3 ? `: ${fmtSignedUsd(curve.points[curve.points.length - 1])}` : ""}
         </div>
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-3">
+      <div className="mt-3 grid grid-cols-2 gap-2.5">
         <StatTile
           label="Win rate"
           value={isNum(stats?.win_rate) ? `${stats.win_rate.toFixed(1)}%` : "—"}

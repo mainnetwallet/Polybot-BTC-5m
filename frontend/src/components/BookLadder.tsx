@@ -10,14 +10,16 @@ interface BookLadderProps {
   history: number[];
   /** stale limit in ms from the settings, to flag an old quote */
   staleAfterMs: number | null;
+  /** top of book only, no ask history chart (the one-screen Overview) */
+  compact?: boolean;
 }
 
 function Level({ price, size, maxSize, tone }: { price: number | null; size: number | null; maxSize: number; tone: "ask" | "bid" }) {
   const width = isNum(size) && maxSize > 0 ? clamp01(size / maxSize) * 100 : 0;
   return (
-    <div className="grid grid-cols-[3.4rem_1fr] items-center gap-2 text-[13px]">
+    <div className="grid grid-cols-[3.4rem_1fr] items-center gap-2 text-[12.5px]">
       <span className={cx("font-semibold", tone === "ask" ? "text-down" : "text-up")}>{fmtPx(price)}</span>
-      <div className="relative h-7 overflow-hidden rounded-md bg-white/[0.03]">
+      <div className="relative h-6 overflow-hidden rounded-md bg-white/[0.03]">
         <div
           className={cx("absolute inset-y-0 right-0 rounded-md", tone === "ask" ? "bg-down/25" : "bg-up/25")}
           style={{ width: `${Math.max(width, isNum(size) && size > 0 ? 6 : 0)}%` }}
@@ -35,7 +37,7 @@ function clamp01(value: number): number {
 }
 
 /** The best ask, the spread and the best bid of one outcome token, with its ask history for this round. */
-export function BookLadder({ side, book, maxSize, history, staleAfterMs }: BookLadderProps) {
+export function BookLadder({ side, book, maxSize, history, staleAfterMs, compact = false }: BookLadderProps) {
   const up = side === "UP";
   const ask = book?.best_ask ?? null;
   const bid = book?.best_bid ?? null;
@@ -44,7 +46,7 @@ export function BookLadder({ side, book, maxSize, history, staleAfterMs }: BookL
 
   return (
     <div className="min-w-0">
-      <div className="mb-2 flex items-baseline justify-between">
+      <div className="mb-1.5 flex items-baseline justify-between">
         <span className={cx("text-[15px] font-semibold", up ? "text-up" : "text-down")}>{up ? "Up" : "Down"}</span>
         <span className={cx("text-[15px] font-semibold", up ? "text-up" : "text-down")}>{fmtPx(ask)}</span>
       </div>
@@ -56,13 +58,19 @@ export function BookLadder({ side, book, maxSize, history, staleAfterMs }: BookL
         </div>
         <Level price={bid} size={book?.bid_size ?? null} maxSize={maxSize} tone="bid" />
       </div>
-      <div className="mt-3">
-        <div className="mb-1 flex items-center justify-between text-[12px] text-slate-500">
-          <span>Ask this round</span>
-          <span className={stale ? "text-amber" : undefined}>{book ? (stale ? "Stale quote" : "Fresh quote") : "No book"}</span>
+      {compact ? (
+        <div className={cx("mt-1.5 text-[11.5px]", stale ? "text-amber" : "text-slate-500")}>
+          {book ? (stale ? "Stale quote" : "Fresh quote") : "No book"}
         </div>
-        <Sparkline data={history} tone={up ? "up" : "down"} height={72} />
-      </div>
+      ) : (
+        <div className="mt-3">
+          <div className="mb-1 flex items-center justify-between text-[12px] text-slate-500">
+            <span>Ask this round</span>
+            <span className={stale ? "text-amber" : undefined}>{book ? (stale ? "Stale quote" : "Fresh quote") : "No book"}</span>
+          </div>
+          <Sparkline data={history} tone={up ? "up" : "down"} height={72} />
+        </div>
+      )}
     </div>
   );
 }

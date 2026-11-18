@@ -7,6 +7,7 @@ import { IconAlert } from "./components/Icons";
 import { AuthProvider, useAuth } from "./hooks/AuthContext";
 import { BotProvider, useBot } from "./hooks/BotContext";
 import { BtcTapeProvider } from "./hooks/BtcTape";
+import { cx } from "./lib/format";
 import { PAGE_META, pageFromHash, type Page } from "./lib/navigation";
 import { Analytics } from "./pages/Analytics";
 import { Logs } from "./pages/Logs";
@@ -71,7 +72,7 @@ function Shell() {
         />
 
         <main className="flex-1 overflow-y-auto scrollbar">
-          <div className="mx-auto w-full max-w-[1680px] px-4 py-5 sm:px-6">
+          <div className={cx("mx-auto w-full px-4 sm:px-6", page === "overview" ? "py-4" : "max-w-[1680px] py-5")}>
             {feedState === "offline" && !snapshot ? (
               <div className="mb-4 flex items-center gap-2.5 rounded-xl border border-amber/25 bg-amber/[0.06] px-4 py-3 text-[12px] text-amber/90">
                 <IconAlert size={15} />
