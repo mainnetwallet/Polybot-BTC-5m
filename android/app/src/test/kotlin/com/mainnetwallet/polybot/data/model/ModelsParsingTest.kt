@@ -153,5 +153,14 @@ class ModelsParsingTest {
         assertEquals(5.0, order.requestedNotional, 0.0)
         assertNull(order.submittedPrice)
         assertEquals("OPEN", order.result)
+        assertNull(order.route) // paper / older orders carry no route
+    }
+
+    @Test fun orderRowParsesRoute() {
+        val order = AppJson.decodeFromString(
+            OrderRow.serializer(),
+            """{"id":5,"market_id":"0xm","side":"UP","status":"FILLED","route":"proxy"}""",
+        )
+        assertEquals("proxy", order.route)
     }
 }

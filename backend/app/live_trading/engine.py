@@ -118,6 +118,7 @@ def _make_client_class(relay_url: str = ""):
 
     class LiveClobClient(ClobClient):
         _route = threading.local()
+        uses_relay = bool(relay_url)  # buys are posted through the order relay
 
         def _resolve_transactions_hashes(self, response):
             return response
@@ -475,6 +476,7 @@ class LiveExecutionEngine(ExecutionEngine):
                 error="sell submission outcome is unknown; reconcile before retrying",
             )
         report.latency_ms = float(max(0, clock.now_ms() - request.observed_at_ms))
+        report.route = "direct"  # sells (take-profit / stop-loss) never use the order relay
         return report
 
     def _ensure_conditional_allowance(self, client, token_id: str) -> None:
@@ -626,6 +628,12 @@ class LiveExecutionEngine(ExecutionEngine):
             logger.debug("market params refresh failed (%s)", type(exc).__name__)
 
     def _place_sync(self, client, request: OrderRequest) -> ExecutionReport:
+        report = self._post_buy_sync(client, request)
+        # Tell the user how this buy left the machine (shown as a tag on the order).
+        report.route = "proxy" if getattr(client, "uses_relay", False) else "direct"
+        return report
+
+    def _post_buy_sync(self, client, request: OrderRequest) -> ExecutionReport:
         from py_clob_client_v2 import MarketOrderArgs, OrderType, Side
 
         balance = self._balance_hint() if self._balance_hint else None

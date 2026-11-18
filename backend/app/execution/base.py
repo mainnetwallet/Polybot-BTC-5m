@@ -52,6 +52,9 @@ class ExecutionReport:
     latency_ms: float | None = None
     error: str | None = None
     raw: dict | None = None
+    # How the order POST left this machine: "proxy" (order relay), "direct" (straight to Polymarket)
+    # or None (paper: nothing was sent).
+    route: str | None = None
 
 
 class ExecutionEngine(ABC):

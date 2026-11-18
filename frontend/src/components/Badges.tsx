@@ -139,6 +139,19 @@ export function StatusChip({
   );
 }
 
+/** Tags a buy that was sent through the order proxy (direct orders and paper orders get no tag). */
+export function RouteChip({ route }: { route?: string | null }) {
+  if (route !== "proxy") return null;
+  return (
+    <span
+      className="chip ml-1.5 border-violet-400/40 bg-violet-400/15 text-violet-300"
+      title="Sent through the order proxy"
+    >
+      Proxy
+    </span>
+  );
+}
+
 export function StageChip({ stage, action }: { stage?: number | null; action?: string | null }) {
   if (stage == null) return <span className="text-slate-600">—</span>;
   const id = Math.min(3, Math.max(0, stage)) as StageId;

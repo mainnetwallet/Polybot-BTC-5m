@@ -30,5 +30,6 @@ def current_revision() -> str | None:
 def ensure_schema() -> None:
     # SQLite file lives in data/; create it before Alembic opens the DB.
     Path(ROOT_DIR / "data").mkdir(parents=True, exist_ok=True)
-    if current_revision() is None:
-        upgrade_database()
+    # Always run to head (a no-op when current): an existing database must pick up new migrations too,
+    # e.g. the orders.route column, not only a brand-new one.
+    upgrade_database()

@@ -146,6 +146,7 @@ export interface OrderRow {
   filled_size: number;
   avg_fill_price: number | null;
   fee: number;
+  route?: "proxy" | "direct" | null;
   exchange_order_id: string | null;
   error?: string | null;
   reason?: string;

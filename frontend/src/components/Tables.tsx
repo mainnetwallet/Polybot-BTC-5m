@@ -1,6 +1,6 @@
 import type { OrderRow, PositionRow } from "../api/types";
 import { cx, fmtCents, fmtDateTime, fmtNum, fmtSignedUsd, fmtTime, fmtUsd, pnlClass, shortId } from "../lib/format";
-import { ResultChip, SideBadge, StageChip, StatusChip } from "./Badges";
+import { ResultChip, RouteChip, SideBadge, StageChip, StatusChip } from "./Badges";
 import { EmptyState } from "./EmptyState";
 import { IconLayers } from "./Icons";
 
@@ -58,6 +58,7 @@ export function OrdersTable({
                 </td>
                 <td>
                   <StatusChip status={order.status} action={order.action} reason={order.reason} />
+                  <RouteChip route={order.route} />
                 </td>
                 <td>
                   <ResultChip result={order.action === "BUY" && order.filled_size > 0 ? "BUY" : order.result} pnl={order.result_pnl} />

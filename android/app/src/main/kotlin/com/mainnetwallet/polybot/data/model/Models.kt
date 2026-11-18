@@ -168,6 +168,8 @@ data class OrderRow(
     @SerialName("avg_fill_price") val avgFillPrice: Double? = null,
     val fee: Double = 0.0,
     @SerialName("latency_ms") val latencyMs: Double? = null,
+    /** How the order was sent: "proxy" (order relay), "direct", or null (paper / older orders). */
+    val route: String? = null,
     @SerialName("exchange_order_id") val exchangeOrderId: String? = null,
     val error: String? = null,
     val reason: String? = null,

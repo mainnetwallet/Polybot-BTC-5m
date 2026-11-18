@@ -482,6 +482,7 @@ class OrderManager:
                     existing.error = None
                     existing.reason = ""
                     existing.latency_ms = None
+                    existing.route = None
                     session.flush()
                     return existing.id, None, None
                 order = Order(
@@ -530,6 +531,7 @@ class OrderManager:
             order.exchange_order_id = report.exchange_order_id or order.exchange_order_id
             if order.latency_ms is None:
                 order.latency_ms = report.latency_ms
+            order.route = report.route or order.route
             order.error = report.error
             order.reason = signal.reason if hasattr(signal, "reason") else ""
 
@@ -1324,6 +1326,7 @@ class OrderManager:
             order.submitted_price = report.submitted_price or order.submitted_price
             order.exchange_order_id = report.exchange_order_id or order.exchange_order_id
             order.latency_ms = report.latency_ms
+            order.route = report.route or order.route
             order.error = report.error
             self._portfolio.apply_sell_report(
                 session, mode, order, report,

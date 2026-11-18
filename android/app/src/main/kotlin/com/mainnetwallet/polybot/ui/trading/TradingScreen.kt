@@ -654,7 +654,13 @@ private fun OrderDetailSheet(order: OrderRow, onDismiss: () -> Unit) {
                             maxLines = 1,
                         )
                     }
-                    ToneChip(order.status.replace('_', ' '), statusTone(order.status))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        if (order.route == "proxy") ToneChip("PROXY", Tone.Info)
+                        ToneChip(order.status.replace('_', ' '), statusTone(order.status))
+                    }
                 }
             }
 
@@ -666,6 +672,14 @@ private fun OrderDetailSheet(order: OrderRow, onDismiss: () -> Unit) {
                 KeyValueRow("Avg fill", Fmt.cents(order.avgFillPrice))
                 KeyValueRow("Fee", Fmt.usd(order.fee, 4))
                 KeyValueRow("Latency", if (order.latencyMs == null) "—" else Fmt.num(order.latencyMs, 0) + " ms")
+                KeyValueRow(
+                    "Sent via",
+                    when (order.route) {
+                        "proxy" -> "Proxy relay"
+                        "direct" -> "Direct"
+                        else -> "—"
+                    },
+                )
             }
 
             ProCard {
