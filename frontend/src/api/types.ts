@@ -9,6 +9,10 @@ export interface BookSnapshot {
   best_ask: number | null;
   bid_size: number | null;
   ask_size: number | null;
+  /** best 4 ask levels, lowest price first, as [price, size] */
+  asks?: Array<[number, number]>;
+  /** best 4 bid levels, highest price first, as [price, size] */
+  bids?: Array<[number, number]>;
   updated_at_ms: number;
   age_ms: number | null;
   source: string;

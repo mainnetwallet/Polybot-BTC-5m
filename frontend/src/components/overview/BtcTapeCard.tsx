@@ -48,10 +48,13 @@ export function BtcTapeCard({ orders, className }: { orders: OrderRow[]; classNa
   const staleCfg = snapshot.config.stale_data_max_age_ms;
   const stale = typeof staleCfg === "number" ? staleCfg : null;
 
-  const maxSize = Math.max(
-    0,
-    ...[snapshot.books.up?.ask_size, snapshot.books.up?.bid_size, snapshot.books.down?.ask_size, snapshot.books.down?.bid_size].filter(isNum),
-  );
+  const levelSizes = (book: typeof snapshot.books.up) => [
+    book?.ask_size,
+    book?.bid_size,
+    ...(book?.asks ?? []).map(([, size]) => size),
+    ...(book?.bids ?? []).map(([, size]) => size),
+  ];
+  const maxSize = Math.max(0, ...[...levelSizes(snapshot.books.up), ...levelSizes(snapshot.books.down)].filter(isNum));
 
   const lateStart =
     start !== null && tape.firstTickMs !== null && tape.firstTickMs - start > 12_000 ? tape.firstTickMs : null;
@@ -128,9 +131,6 @@ export function BtcTapeCard({ orders, className }: { orders: OrderRow[]; classNa
         <div className="grid min-w-0 grid-cols-2 gap-x-3 gap-y-2 self-start">
           <BookLadder compact side="UP" book={snapshot.books.up} maxSize={maxSize} history={history.up} staleAfterMs={stale} />
           <BookLadder compact side="DOWN" book={snapshot.books.down} maxSize={maxSize} history={history.down} staleAfterMs={stale} />
-          <p className="col-span-2 text-[11.5px] leading-snug text-slate-500">
-            Best ask and best bid only. The feed does not send deeper levels, so none are drawn.
-          </p>
         </div>
       </div>
     </Card>
