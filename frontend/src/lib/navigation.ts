@@ -27,28 +27,28 @@ export const NAV: NavItem[] = [
 
 export const PAGE_META: Record<Page, { title: string; subtitle: string }> = {
   overview: {
-    title: "Command center",
-    subtitle: "Live market data · event driven execution",
+    title: "Overview",
+    subtitle: "Bitcoin up or down, 5 minutes",
   },
   strategy: {
     title: "Strategy monitor",
-    subtitle: "Observation window, configured trigger and execution rules",
+    subtitle: "Stage windows, entry rules and exits",
   },
   trading: {
-    title: "Trading desk",
+    title: "Trading",
     subtitle: "Orders, fills, positions and execution quality",
   },
   analytics: {
-    title: "Performance analytics",
-    subtitle: "Mode-separated PnL, win rate and volume",
+    title: "Analytics",
+    subtitle: "Profit, win rate and volume by mode",
   },
   settings: {
-    title: "Configuration",
-    subtitle: "Runtime strategy, risk and simulation parameters",
+    title: "Settings",
+    subtitle: "Strategy, risk and simulation parameters",
   },
   logs: {
-    title: "System logs",
-    subtitle: "Live event stream persisted to the local database",
+    title: "Logs",
+    subtitle: "Live event stream saved to the local database",
   },
 };
 

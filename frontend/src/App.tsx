@@ -6,6 +6,7 @@ import { ToastStack } from "./components/ToastStack";
 import { IconAlert } from "./components/Icons";
 import { AuthProvider, useAuth } from "./hooks/AuthContext";
 import { BotProvider, useBot } from "./hooks/BotContext";
+import { BtcTapeProvider } from "./hooks/BtcTape";
 import { PAGE_META, pageFromHash, type Page } from "./lib/navigation";
 import { Analytics } from "./pages/Analytics";
 import { Logs } from "./pages/Logs";
@@ -70,7 +71,7 @@ function Shell() {
         />
 
         <main className="flex-1 overflow-y-auto scrollbar">
-          <div className="mx-auto w-full max-w-[1560px] px-4 py-5 sm:px-6">
+          <div className="mx-auto w-full max-w-[1680px] px-4 py-5 sm:px-6">
             {feedState === "offline" && !snapshot ? (
               <div className="mb-4 flex items-center gap-2.5 rounded-xl border border-amber/25 bg-amber/[0.06] px-4 py-3 text-[12px] text-amber/90">
                 <IconAlert size={15} />
@@ -100,9 +101,11 @@ function Gate() {
   // BotProvider (REST + WebSocket) only starts once the browser is signed in
   return (
     <BotProvider>
-      <div className="app-enter h-full">
-        <Shell />
-      </div>
+      <BtcTapeProvider>
+        <div className="app-enter h-full">
+          <Shell />
+        </div>
+      </BtcTapeProvider>
     </BotProvider>
   );
 }

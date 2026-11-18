@@ -1,35 +1,35 @@
-import { useBot } from "../hooks/BotContext";
-import { cx, fmtSignedUsd, fmtUsd, pnlClass } from "../lib/format";
 import { NAV, type Page } from "../lib/navigation";
-import { ModeBadge } from "./Badges";
-import { IconLock, IconShield, IconTarget } from "./Icons";
+import { useBot } from "../hooks/BotContext";
+import { useAuth } from "../hooks/AuthContext";
+import { cx } from "../lib/format";
+import { IconLogout, IconUser } from "./Icons";
 
 interface SidebarProps {
   page: Page;
   onNavigate: (page: Page) => void;
 }
 
+/** The 64px icon rail (large screens). Below 1024px the Topbar shows the same pages as a tab strip. */
 export function Sidebar({ page, onNavigate }: SidebarProps) {
-  const { snapshot, feedState } = useBot();
-  const account = snapshot?.account;
-  const bot = snapshot?.bot;
+  const { feedState } = useBot();
+  const { authRequired, username, logout } = useAuth();
 
   return (
-    <aside className="hidden w-[236px] shrink-0 flex-col border-r hairline bg-ink-950/55 px-3.5 pb-4 pt-5 lg:flex">
-      <div className="flex items-center gap-2.5 px-2">
-        <div className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-up to-emerald-600 text-[13px] font-black tracking-tight text-[#04140d] shadow-[0_0_24px_-6px_rgba(53,224,161,0.8)]">
-          PB
-        </div>
-        <div>
-          <div className="text-[13px] font-semibold tracking-tight text-slate-100">Polybot</div>
-          <div className="text-[9.5px] font-semibold uppercase tracking-[0.16em] text-slate-600">
-            Polymarket markets
-          </div>
-        </div>
+    <aside
+      className="hidden w-[var(--rail-w)] shrink-0 flex-col items-center border-r hairline bg-[var(--bg-rail)] py-4 lg:flex"
+      aria-label="Main navigation"
+    >
+      <div
+        className="flex h-11 w-11 items-center justify-center rounded-[14px] bg-gradient-to-br from-[#5eead4] to-[#3b9ff2] text-[#04141c]"
+        title="Polybot"
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M3 17l6-6 4 4 8-8" />
+          <path d="M15 7h6v6" />
+        </svg>
       </div>
 
-      <nav className="mt-7 flex flex-col gap-1">
-        <div className="label mb-2 px-2">Workspace</div>
+      <nav className="mt-8 flex flex-col items-center gap-2">
         {NAV.map((item) => {
           const Icon = item.icon;
           const active = item.id === page;
@@ -38,89 +38,52 @@ export function Sidebar({ page, onNavigate }: SidebarProps) {
               key={item.id}
               type="button"
               onClick={() => onNavigate(item.id)}
+              aria-label={item.label}
+              aria-current={active ? "page" : undefined}
               className={cx(
-                "group flex items-center gap-3 rounded-lg px-2.5 py-2 text-left text-[12.5px] font-medium",
+                "rail-item group relative flex h-11 w-11 items-center justify-center rounded-[14px] border transition-colors",
                 active
-                  ? "bg-white/[0.07] text-slate-100"
-                  : "text-slate-400 hover:bg-white/[0.03] hover:text-slate-200",
+                  ? "border-white/10 bg-white/[0.06] text-slate-100"
+                  : "border-transparent text-slate-500 hover:bg-white/[0.04] hover:text-slate-200",
               )}
             >
-              <span
-                className={cx(
-                  "flex h-6 w-6 items-center justify-center rounded-md border",
-                  active ? "border-up/30 bg-up/10 text-up" : "border-white/5 bg-white/[0.02] text-slate-500 group-hover:text-slate-300",
-                )}
-              >
-                <Icon size={14} />
+              {active ? <span className="absolute -left-[10px] top-2.5 bottom-2.5 w-[3px] rounded-r-full bg-up" aria-hidden="true" /> : null}
+              <Icon size={19} />
+              <span className="rail-tip" role="tooltip">
+                {item.label}
               </span>
-              <span className="flex-1">{item.label}</span>
             </button>
           );
         })}
       </nav>
 
-      <div className="mt-6 rounded-xl border hairline bg-white/[0.02] p-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-            <IconTarget size={12} />
-            Strategy
-          </div>
-          <IconLock size={11} className="text-slate-600" />
-        </div>
-        <div className="mt-2 text-[11.5px] font-semibold leading-snug text-slate-200">
-          Marketable BUY
-        </div>
-        <div className="mt-2.5 space-y-1.5 text-[10.5px] text-slate-500">
-          <div className="flex items-center justify-between">
-            <span>Before window</span>
-            <span className="text-slate-400">no trades</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span>Stage 1</span>
-            <span className="mono text-slate-400">{snapshot ? `${snapshot.strategy.stage1_seconds}s` : "—"}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span>Stage 1 ask</span>
-            <span className="mono text-slate-400">
-              {snapshot ? snapshot.strategy.stage1_threshold.toFixed(2) : "—"}
+      <div className="mt-auto flex flex-col items-center gap-3">
+        <span
+          className={cx(
+            "h-2 w-2 rounded-full",
+            feedState === "open" ? "live-dot bg-up" : feedState === "connecting" ? "bg-amber" : "bg-down",
+          )}
+          title={feedState === "open" ? "Realtime feed connected" : feedState === "connecting" ? "Connecting to the backend" : "Backend feed offline"}
+          role="img"
+          aria-label={feedState === "open" ? "Realtime feed connected" : feedState === "connecting" ? "Connecting" : "Feed offline"}
+        />
+        {authRequired ? (
+          <button
+            type="button"
+            onClick={() => void logout()}
+            className="rail-item relative flex h-11 w-11 items-center justify-center rounded-[14px] text-slate-500 hover:bg-white/[0.04] hover:text-slate-200"
+            aria-label={`Sign out${username ? ` (${username})` : ""}`}
+          >
+            <IconLogout size={18} />
+            <span className="rail-tip" role="tooltip">
+              Sign out{username ? ` (${username})` : ""}
             </span>
+          </button>
+        ) : (
+          <div className="flex h-11 w-11 items-center justify-center text-slate-600" title="Local session">
+            <IconUser size={18} />
           </div>
-        </div>
-      </div>
-
-      <div className="mt-auto space-y-3 pt-5">
-        <div className="rounded-xl border hairline bg-white/[0.02] p-3">
-          <div className="flex items-center justify-between">
-            <span className="label">Account</span>
-            {bot ? <ModeBadge mode={bot.mode} size="sm" /> : null}
-          </div>
-          <div className="mono mt-2 text-[20px] font-semibold leading-none text-slate-100">
-            {fmtUsd(account?.balance)}
-          </div>
-          <div className="mt-2 flex items-center justify-between text-[10.5px]">
-            <span className="text-slate-600">Today</span>
-            <span className={cx("mono font-semibold", pnlClass(account?.daily_pnl))}>
-              {fmtSignedUsd(account?.daily_pnl)}
-            </span>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between px-1 text-[9.5px] text-slate-600">
-          <span className="flex items-center gap-1.5">
-            <span
-              className={cx(
-                "h-1.5 w-1.5 rounded-full",
-                feedState === "open" ? "live-dot bg-up" : feedState === "connecting" ? "bg-amber" : "bg-down",
-              )}
-            />
-            {feedState === "open" ? "Realtime feed" : feedState === "connecting" ? "Connecting" : "Feed offline"}
-          </span>
-          <span className="mono">v1.0.0</span>
-        </div>
-        <div className="flex items-center gap-1.5 px-1 text-[9px] uppercase tracking-[0.14em] text-slate-700">
-          <IconShield size={10} />
-          Local execution only
-        </div>
+        )}
       </div>
     </aside>
   );

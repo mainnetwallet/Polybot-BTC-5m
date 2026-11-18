@@ -4,7 +4,7 @@ import { LevelChip, ModeBadge } from "../components/Badges";
 import { EmptyState } from "../components/EmptyState";
 import { IconAlert, IconLogs, IconPause, IconPlay, IconSearch, IconTrash } from "../components/Icons";
 import { useBot } from "../hooks/BotContext";
-import { cx, fmtTime } from "../lib/format";
+import { cx, fmtTime, sentence } from "../lib/format";
 
 const LEVELS = ["ALL", "INFO", "WARNING", "ERROR"] as const;
 
@@ -62,7 +62,7 @@ export function Logs() {
             </div>
             <div>
               <div className="text-[13px] font-semibold text-slate-100">Event stream</div>
-              <div className="mt-0.5 text-[11px] text-slate-500">
+              <div className="mt-0.5 text-[12.5px] text-slate-500">
                 Persisted to SQLite and streamed over the dashboard WebSocket · newest first
               </div>
             </div>
@@ -106,16 +106,16 @@ export function Logs() {
                   type="button"
                   onClick={() => setLevel(value)}
                   className={cx(
-                    "rounded-md px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.1em]",
-                    level === value ? "bg-white/8 text-slate-100" : "text-slate-600 hover:text-slate-400",
+                    "rounded-md px-2.5 py-1.5 text-[12px] font-semibold",
+                    level === value ? "bg-white/8 text-slate-100" : "text-slate-500 hover:text-slate-300",
                   )}
                 >
-                  {value}
+                  {sentence(value)}
                 </button>
               ))}
             </div>
             <select
-              className="input w-auto appearance-none py-2 text-[11px]"
+              className="input w-auto appearance-none py-2 text-[12.5px]"
               value={category}
               onChange={(event) => setCategory(event.target.value)}
             >
@@ -130,7 +130,7 @@ export function Logs() {
       </section>
 
       <section className="panel overflow-hidden">
-        <div className="flex items-center justify-between border-b hairline px-5 py-3 text-[10px] text-slate-500">
+        <div className="flex items-center justify-between border-b hairline px-5 py-3 text-[12px] text-slate-500">
           <span>
             Showing {filtered.length} of {source.length}
             {paused ? " · stream paused" : ""}
@@ -142,7 +142,7 @@ export function Logs() {
             {filtered.map((row, index) => (
               <div
                 key={row.id ?? `${row.created_at}-${index}`}
-                className="flex flex-col gap-1 border-b border-white/[0.03] px-5 py-2.5 font-mono text-[11.5px] hover:bg-white/[0.015] sm:flex-row sm:items-start sm:gap-3"
+                className="flex flex-col gap-1 border-b border-white/[0.03] px-5 py-2.5 font-mono text-[12.5px] hover:bg-white/[0.015] sm:flex-row sm:items-start sm:gap-3"
               >
                 <span className="shrink-0 text-slate-600" title={row.created_at}>
                   {fmtTime(row.created_at)}
@@ -150,7 +150,7 @@ export function Logs() {
                 <span className="shrink-0">
                   <LevelChip level={row.level} />
                 </span>
-                <span className="shrink-0 rounded border border-white/6 bg-white/[0.02] px-1.5 py-0.5 text-[9.5px] uppercase tracking-[0.1em] text-slate-500">
+                <span className="shrink-0 rounded border border-white/6 bg-white/[0.02] px-1.5 py-0.5 text-[12.5px] text-slate-500">
                   {row.category}
                 </span>
                 {row.mode === "live" || row.mode === "paper" ? (
@@ -163,7 +163,7 @@ export function Logs() {
                     {row.message}
                   </div>
                   {row.payload && Object.keys(row.payload).length ? (
-                    <div className="mt-0.5 truncate text-[10px] text-slate-600">{JSON.stringify(row.payload)}</div>
+                    <div className="mt-0.5 truncate text-[12px] text-slate-600">{JSON.stringify(row.payload)}</div>
                   ) : null}
                 </div>
               </div>

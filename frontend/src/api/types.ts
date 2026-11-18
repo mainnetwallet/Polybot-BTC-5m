@@ -39,6 +39,16 @@ export interface StrategyState {
   stage1_threshold: number;
   stage1_seconds: number;
   stage1_max_ask: number;
+  /** the fields below are already sent by the backend snapshot; optional so older servers still type-check */
+  stage2_max_ask?: number;
+  stage2_max_spread?: number;
+  stage3_max_ask?: number;
+  stage3_max_spread?: number;
+  stage3_min_stop_headroom?: number;
+  stage3_mid_seconds?: number;
+  stage3_mid_stop_loss_pct?: number;
+  stage3_last_seconds?: number;
+  stage3_last_seconds_stop_loss_pct?: number;
   stage1_block_ask: number;
   stage2_block_ask: number;
   stage3_block_ask: number;

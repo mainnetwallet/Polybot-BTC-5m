@@ -264,15 +264,15 @@ export function Settings() {
             <div className="rounded-lg border hairline bg-black/20 p-3">
               <div className="label">Fill ratio</div>
               <div className="mono mt-1 text-[13px] text-slate-300">{settings.paper_fill_ratio}</div>
-              <div className="mt-1 text-[10px] text-slate-600">Environment-only</div>
+              <div className="mt-1 text-[12px] text-slate-600">Environment-only</div>
             </div>
             <div className="rounded-lg border hairline bg-black/20 p-3">
               <div className="label">Fee exponent</div>
               <div className="mono mt-1 text-[13px] text-slate-300">{settings.paper_fee_exponent}</div>
-              <div className="mt-1 text-[10px] text-slate-600">Environment-only</div>
+              <div className="mt-1 text-[12px] text-slate-600">Environment-only</div>
             </div>
           </div>
-          <div className="px-4 py-3 text-[10.5px] leading-relaxed text-slate-500">
+          <div className="px-4 py-3 text-[12px] leading-relaxed text-slate-500">
             Paper fees use <span className="mono">shares × rate × (price × (1 − price))^exponent</span>. The formula is
             an approximation of Polymarket fees, not an exchange quote.
           </div>
@@ -283,7 +283,7 @@ export function Settings() {
           description="Real fills on Polymarket."
           badge={<span className="chip border-down/25 bg-down/10 text-down">Live mode</span>}
         >
-          <div className="px-4 py-3 text-[11px] leading-relaxed text-slate-500">
+          <div className="px-4 py-3 text-[12.5px] leading-relaxed text-slate-500">
             Live orders are filled by Polymarket, so the paper slippage and fee simulation do not apply. Fees come from
             the market&apos;s own CLOB parameters. Strategy, exit and risk settings apply to live orders exactly as they
             do in paper mode. Switch to paper mode to edit the paper fill model.
@@ -301,12 +301,12 @@ export function Settings() {
         <CheckRow ok={readiness?.credentials_present ?? false} label="Signing key present" detail="backend only" />
         <CheckRow ok={readiness?.funder_configured ?? false} label="Funded wallet configured" detail=".env" />
         <div className="flex items-center justify-between gap-3 px-4 py-2.5">
-          <span className="text-[11px] text-slate-500">
+          <span className="text-[12.5px] text-slate-500">
             {readiness?.balance != null ? `Collateral ${fmtUsd(readiness.balance)}` : "No live balance loaded"}
           </span>
           <button
             type="button"
-            className="btn h-8 text-[11px]"
+            className="btn h-8 text-[12.5px]"
             disabled={!readiness?.ready || validating}
             onClick={() => void validateLive()}
           >
@@ -315,7 +315,7 @@ export function Settings() {
           </button>
         </div>
         {!readiness?.ready ? (
-          <div className="bg-amber/[0.04] px-4 py-2.5 text-[10.5px] leading-relaxed text-amber/85">
+          <div className="bg-amber/[0.04] px-4 py-2.5 text-[12px] leading-relaxed text-amber/85">
             <div className="flex items-center gap-1.5 font-semibold">
               <IconAlert size={11} />
               Live gate blocked
@@ -327,7 +327,7 @@ export function Settings() {
             </ul>
           </div>
         ) : null}
-        <div className="flex items-center gap-1.5 px-4 py-3 text-[10px] text-slate-600">
+        <div className="flex items-center gap-1.5 px-4 py-3 text-[12px] text-slate-600">
           <IconAlert size={10} />
           Private keys are read by the backend only and never serialized to this dashboard.
         </div>
@@ -441,7 +441,7 @@ export function Settings() {
                 {snapshot ? <ModeBadge mode={snapshot.bot.mode} size="sm" /> : null}
                 <StatusPill running={snapshot ? running : null} killSwitch={snapshot?.bot.kill_switch ?? null} />
               </div>
-              <p className="hidden text-[10.5px] text-slate-500 xl:block">
+              <p className="hidden text-[12px] text-slate-500 xl:block">
                 Changes apply to the running bot immediately. Secrets and live enablement stay environment-only.
               </p>
             </div>
@@ -488,7 +488,7 @@ export function Settings() {
       </header>
 
       {running && !searching ? (
-        <div className="mb-3 flex items-center gap-2 rounded-lg border border-amber/20 bg-amber/[0.05] px-3 py-1.5 text-[11px] text-amber/90">
+        <div className="mb-3 flex items-center gap-2 rounded-lg border border-amber/20 bg-amber/[0.05] px-3 py-1.5 text-[12.5px] text-amber/90">
           <IconAlert size={12} />
           The bot is running. Saved strategy and risk changes take effect on the next evaluation.
         </div>
@@ -504,7 +504,7 @@ export function Settings() {
       <div>
         {searching ? (
           <>
-            <div className="mb-3 px-1 text-[11px] text-slate-500">
+            <div className="mb-3 px-1 text-[12.5px] text-slate-500">
               {matches.length} {matches.length === 1 ? "setting matches" : "settings match"}{" "}
               <span className="mono text-slate-300">&ldquo;{query.trim()}&rdquo;</span>
             </div>
@@ -551,7 +551,7 @@ export function Settings() {
             ) : (
               <div className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 px-1">
                 <h2 className="text-[13px] font-semibold tracking-tight text-slate-100">{activeTab.title}</h2>
-                <p className="text-[11px] text-slate-500">{activeTab.description}</p>
+                <p className="text-[12.5px] text-slate-500">{activeTab.description}</p>
               </div>
             )}
             <div className="lg:columns-2 lg:gap-4">
@@ -587,7 +587,7 @@ export function Settings() {
             The saved overrides are deleted and the values from <span className="mono">.env</span> take over right away,
             even while the bot is running. Orders, positions, balance and history are not touched.
           </p>
-          <div className="flex items-center gap-2 rounded-lg border border-amber/20 bg-amber/[0.06] px-3 py-2 text-[11px] text-amber/90">
+          <div className="flex items-center gap-2 rounded-lg border border-amber/20 bg-amber/[0.06] px-3 py-2 text-[12.5px] text-amber/90">
             <IconAlert size={13} />
             Strategy and risk limits change immediately for the active mode.
           </div>
@@ -617,7 +617,7 @@ export function Settings() {
             <span className="mono text-slate-200">{snapshot?.bot.mode ?? "current"}</span> mode and lifts any daily
             loss/profit halt. It can be used while the bot is running.
           </p>
-          <div className="flex items-center gap-2 rounded-lg border border-amber/20 bg-amber/[0.06] px-3 py-2 text-[11px] text-amber/90">
+          <div className="flex items-center gap-2 rounded-lg border border-amber/20 bg-amber/[0.06] px-3 py-2 text-[12.5px] text-amber/90">
             <IconAlert size={13} />
             Risk limits will allow new trades again after this reset.
           </div>
@@ -664,7 +664,7 @@ export function Settings() {
             touched, and the reset is refused while live positions or orders are still open.
           </p>
           <div>
-            <label className="mb-1 block text-[11px] text-slate-500">
+            <label className="mb-1 block text-[12.5px] text-slate-500">
               Type <span className="mono text-slate-200">RESET ALL</span> to confirm
             </label>
             <input
@@ -675,7 +675,7 @@ export function Settings() {
               autoComplete="off"
             />
           </div>
-          <div className="flex items-center gap-2 rounded-lg border border-down/20 bg-down/[0.06] px-3 py-2 text-[11px] text-down/90">
+          <div className="flex items-center gap-2 rounded-lg border border-down/20 bg-down/[0.06] px-3 py-2 text-[12.5px] text-down/90">
             <IconAlert size={13} />
             This cannot be undone.
           </div>
@@ -711,7 +711,7 @@ export function Settings() {
             <span className="mono text-slate-200">{fmtUsd(Number(resetValue))}</span> of virtual USDC. The bot must be
             stopped; live positions and balances are never touched.
           </p>
-          <div className="flex items-center gap-2 rounded-lg border border-down/20 bg-down/[0.06] px-3 py-2 text-[11px] text-down/90">
+          <div className="flex items-center gap-2 rounded-lg border border-down/20 bg-down/[0.06] px-3 py-2 text-[12.5px] text-down/90">
             <IconAlert size={13} />
             This cannot be undone.
           </div>
