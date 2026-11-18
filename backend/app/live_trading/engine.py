@@ -79,19 +79,85 @@ def ceil_price_to_tick(price: float, tick: float) -> float:
     return round(min(max(steps * tick, tick), 1.0 - tick), 6)
 
 
-def _make_client_class():
+def order_relay_url(settings: Settings) -> str:
+    """Relay prefix for the order POST: ``<ORDER_PROXY_URL>/<CLOB_BASE_URL>``; empty = orders go direct.
+
+    Empty as well when CLOB_BASE_URL already points at the relay (then every call uses it already).
+    """
+    base = (settings.order_proxy_url or "").strip().rstrip("/")
+    if not base:
+        return ""
+    clob = settings.clob_base_url.strip().rstrip("/")
+    if clob.startswith(base):
+        return ""
+    return f"{base}/{clob}"
+
+
+def _make_client_class(relay_url: str = "", fallback_direct: bool = True):
     """ClobClient subclass that does not poll for settlement hashes after posting.
 
     ``post_order`` (with ``deferExec=false``, the documented default) polls the trades API for
     up to 30s to attach transaction hashes to a matched order. Nothing here uses those hashes
     and the poll would hold the order lock, so it is skipped. If a future SDK renames the hook
     the override simply stops applying: orders still work, only slower.
+
+    With ``relay_url`` set, ONLY the order POST (``/order``: every buy, take-profit and stop-loss
+    sell) is sent through the relay. Signing is unchanged (the L2 signature covers the ``/order``
+    path, not the host), and every other request keeps going straight to the CLOB.
     """
     from py_clob_client_v2 import ClobClient
+    from py_clob_client_v2.endpoints import POST_ORDER
 
     class LiveClobClient(ClobClient):
         def _resolve_transactions_hashes(self, response):
             return response
+
+        def _post(self, endpoint, headers=None, data=None, params=None):
+            if relay_url and endpoint == f"{self.host}{POST_ORDER}":
+                return self._post_order_via_relay(endpoint, headers, data, params)
+            return super()._post(endpoint, headers=headers, data=data, params=params)
+
+        def _post_order_via_relay(self, direct_endpoint, headers, data, params):
+            import httpx
+            from py_clob_client_v2.exceptions import PolyApiException
+            from py_clob_client_v2.http_helpers import helpers
+
+            request_headers = helpers._overload_headers("POST", dict(headers or {}))
+            kwargs = (
+                {"content": data.encode("utf-8")} if isinstance(data, str) else {"json": data}
+            )
+            try:
+                resp = helpers._http_client.request(
+                    method="POST",
+                    url=f"{relay_url}{POST_ORDER}",
+                    headers=request_headers,
+                    params=params,
+                    **kwargs,
+                )
+            except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
+                # The request never left this machine, so posting it direct cannot double-submit.
+                logger.warning("order relay unreachable (%s)", type(exc).__name__)
+                if fallback_direct:
+                    return super()._post(direct_endpoint, headers=headers, data=data, params=params)
+                raise PolyApiException(error_msg="Request exception!")
+            except httpx.RequestError as exc:
+                # Sent (or maybe sent) and no answer: outcome unknown, same as a direct failure.
+                logger.error("order relay request error (%s)", type(exc).__name__)
+                raise PolyApiException(error_msg="Request exception!")
+            if resp.status_code != 200:
+                logger.error("order relay returned HTTP %s", resp.status_code)
+                raise PolyApiException(resp)
+            try:
+                return resp.json()
+            except ValueError:
+                return resp.text
+
+        def ping_relay(self) -> None:
+            """Keep the connection to the relay warm (a GET /time through it; no order involved)."""
+            if relay_url:
+                from py_clob_client_v2.http_helpers import helpers
+
+                helpers.get(f"{relay_url}/time")
 
     return LiveClobClient
 
@@ -234,7 +300,9 @@ class LiveExecutionEngine(ExecutionEngine):
 
         configure_sdk_http_pool()
 
-        client = _make_client_class()(
+        client = _make_client_class(
+            order_relay_url(self._settings), self._settings.order_proxy_fallback_direct
+        )(
             host=self._settings.clob_base_url,
             chain_id=self._settings.polymarket_chain_id,
             key=self._settings.polymarket_private_key,
@@ -309,6 +377,9 @@ class LiveExecutionEngine(ExecutionEngine):
         async def _ping() -> None:
             try:
                 await asyncio.get_running_loop().run_in_executor(self._sell_pool, client.get_server_time)
+                ping_relay = getattr(client, "ping_relay", None)
+                if callable(ping_relay):
+                    await asyncio.get_running_loop().run_in_executor(self._sell_pool, ping_relay)
             except Exception as exc:  # best effort only
                 logger.debug("live keep-alive ping failed (%s)", type(exc).__name__)
 
@@ -814,7 +885,7 @@ class LiveExecutionEngine(ExecutionEngine):
                     if cursor:
                         params["cursor"] = cursor
                     response = await client.get(
-                        "https://data-api.polymarket.com/v2/positions",
+                        f"{self._settings.data_api_base_url.rstrip('/')}/v2/positions",
                         params=params,
                         headers={"User-Agent": self._settings.http_user_agent},
                     )

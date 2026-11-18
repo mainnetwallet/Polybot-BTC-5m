@@ -48,6 +48,14 @@ class Settings(BaseSettings):
     # --- polymarket endpoints ------------------------------------------
     gamma_base_url: str = "https://gamma-api.polymarket.com"
     clob_base_url: str = "https://clob.polymarket.com"
+    data_api_base_url: str = "https://data-api.polymarket.com"
+    # Relay (Cloudflare Worker) used ONLY for the live order POST (buy, take-profit sell, stop-loss sell). Every
+    # other call (market data, balance, positions, cancel, ...) goes straight to Polymarket. The order is
+    # posted to <ORDER_PROXY_URL>/<CLOB_BASE_URL>/order. Empty = orders go direct.
+    order_proxy_url: str = "https://polybot.akramhossain5010.workers.dev"
+    # If the relay cannot be reached at all (connection refused / connect timeout: the order was never sent),
+    # post the order direct instead, so a relay outage cannot leave a stop-loss unsold.
+    order_proxy_fallback_direct: bool = True
     clob_ws_url: str = "wss://ws-subscriptions-clob.polymarket.com/ws/market"
     rtds_ws_url: str = "wss://ws-live-data.polymarket.com"
     # Since 2026-08-14 Polymarket's 5-minute crypto markets settle on the Chainlink 60-second TWAP (both
