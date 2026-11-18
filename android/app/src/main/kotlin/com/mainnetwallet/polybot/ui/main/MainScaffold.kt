@@ -52,9 +52,6 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.mainnetwallet.polybot.data.net.FeedState
-import com.mainnetwallet.polybot.data.net.PcTarget
-import com.mainnetwallet.polybot.data.net.TargetParse
-import com.mainnetwallet.polybot.data.net.UrlUtils
 import com.mainnetwallet.polybot.data.store.AppPrefs
 import com.mainnetwallet.polybot.domain.SettingsSpec
 import com.mainnetwallet.polybot.ui.LocalGraph
@@ -147,7 +144,7 @@ fun MainScaffold(prefs: AppPrefs, snackbar: SnackbarHostState) {
         snackbarHost = { SnackbarHost(snackbar) },
     ) { inner ->
         Column(Modifier.padding(inner)) {
-            StatusBanners(prefs = prefs, feed = feed, onEditConnection = {
+            StatusBanners(feed = feed, onEditConnection = {
                 nav.navigate(ROUTE_CONNECTION) { launchSingleTop = true }
             })
             NavHost(
@@ -248,17 +245,8 @@ private fun PolyTopBar(
 }
 
 @Composable
-private fun StatusBanners(prefs: AppPrefs, feed: FeedState, onEditConnection: () -> Unit) {
+private fun StatusBanners(feed: FeedState, onEditConnection: () -> Unit) {
     val colors = Poly.colors
-    val target = (UrlUtils.parseTarget(prefs.pcUrl) as? TargetParse.Ok)?.target
-    val insecure = target is PcTarget.Direct && UrlUtils.isInsecureOutsidePrivate(target.baseUrl)
-    if (insecure) {
-        Banner(
-            text = "Plain http outside your home network: the token and all data travel unencrypted. Use https or a Gist link.",
-            container = colors.warnContainer,
-            accent = colors.warn,
-        )
-    }
     if (feed == FeedState.AuthFailed) {
         Banner(
             text = "The PC rejected the API token. Check API_TOKEN in the PC's .env file.",
