@@ -252,3 +252,31 @@ def test_recent_ticks_are_sorted_deduplicated_and_filtered():
     assert feed.recent_ticks() == [(1_000, 71_010.0), (2_000, 71_021.0), (3_000, 71_030.0)]
     assert feed.recent_ticks(since_ms=2_000) == [(2_000, 71_021.0), (3_000, 71_030.0)]
     assert feed.recent_ticks(limit=1) == [(3_000, 71_030.0)]
+
+
+def test_ticks_are_saved_and_reloaded_after_a_restart(tmp_path):
+    from app import clock
+
+    path = tmp_path / "ticks.csv"
+    settings = Settings(btc_tick_history_file=str(path))
+    now = clock.now_ms()
+    feed = BtcPriceFeed(settings)
+    feed.handle_message(_frame(now - 3_000, 71_000.0))
+    feed.handle_message(_frame(now - 2_000, 71_010.0))
+    feed._flush_history()  # normally done every few seconds and on stop
+    path.write_text(path.read_text() + "garbage line\n")  # a crash can leave a broken line
+
+    reborn = BtcPriceFeed(settings)
+    reborn._load_history()
+    assert reborn.recent_ticks() == [(now - 3_000, 71_000.0), (now - 2_000, 71_010.0)]
+    assert reborn.latest is None  # old ticks are history, never the current price
+
+
+def test_old_saved_ticks_are_dropped(tmp_path):
+    from app import clock
+
+    path = tmp_path / "ticks.csv"
+    path.write_text(f"1000,70000.0\n{clock.now_ms() - 1_000},71000.0\n")
+    feed = BtcPriceFeed(Settings(btc_tick_history_file=str(path)))
+    feed._load_history()
+    assert [price for _, price in feed.recent_ticks()] == [71_000.0]

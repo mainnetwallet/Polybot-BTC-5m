@@ -30,6 +30,7 @@ import logging
 import time
 from datetime import timezone
 from collections import deque
+from pathlib import Path
 
 import httpx
 import websockets
@@ -45,6 +46,7 @@ FIRST_TICK_TIMEOUT_SECONDS = 8.0  # no BTC tick this long after subscribing -> t
 TICK_SILENCE_RECONNECT_SECONDS = 15.0  # stream was alive but went quiet -> reconnect
 RTDS_OPEN_TOLERANCE_MS = 1_000  # max distance between the window start and the RTDS tick used as its open
 TICK_HISTORY = 7_300  # ~2 hours of one-per-second TWAP ticks: window-start lookups and the dashboard candle history
+TICK_FLUSH_SECONDS = 5.0  # how often new ticks are appended to the history file
 OPEN_LOOKUP_RETRY_SECONDS = 1.0  # keeps asking until the official value is published
 BROWSER_HEADERS = {
     "User-Agent": (
@@ -97,6 +99,11 @@ class BtcPriceFeed:
         self._ticks: deque[tuple[int, float]] = deque(maxlen=TICK_HISTORY)
         self._rtds_opens: dict[str, tuple[float, str]] = {}
         self._http: httpx.AsyncClient | None = None
+        # real ticks are also kept on disk so the dashboard's candle history survives a restart
+        path = (settings.btc_tick_history_file or "").strip()
+        self._history_path: Path | None = Path(path) if path else None
+        self._unsaved: list[tuple[int, float]] = []
+        self._last_flush = time.monotonic()
 
     # ------------------------------------------------------------------ public
     @property
@@ -111,6 +118,7 @@ class BtcPriceFeed:
         if self._running or not self._settings.btc_price_enabled:
             return
         self._running = True
+        self._load_history()
         self._http = httpx.AsyncClient(
             timeout=httpx.Timeout(5.0),
             headers=BROWSER_HEADERS,
@@ -123,6 +131,7 @@ class BtcPriceFeed:
 
     async def stop(self) -> None:
         self._running = False
+        self._flush_history()
         self._market_changed.set()
         for task in self._tasks:
             task.cancel()
@@ -164,6 +173,49 @@ class BtcPriceFeed:
         if beat is None:
             return latest[1], None, "price to beat is not available yet"
         return latest[1], beat[0], ""
+
+    def _load_history(self) -> None:
+        """Read the ticks saved by earlier runs (real ones only, newest ~2 hours) and rewrite the file compactly."""
+        path = self._history_path
+        if path is None or not path.exists():
+            return
+        cutoff = _now_ms() - TICK_HISTORY * 1000
+        rows: dict[int, float] = {}
+        try:
+            with path.open("r", encoding="utf-8") as handle:
+                for line in handle:
+                    ts_text, _, price_text = line.strip().partition(",")
+                    try:
+                        ts_ms, price = int(ts_text), float(price_text)
+                    except ValueError:
+                        continue  # a half-written line from a crash: skip it
+                    if ts_ms >= cutoff and price > 0:
+                        rows[ts_ms] = price
+        except OSError as exc:
+            logger.warning("btc tick history not read: %s", exc)
+            return
+        saved = sorted(rows.items())[-TICK_HISTORY:]
+        merged = sorted([*saved, *((ts, p) for ts, p in self._ticks if ts not in rows)])
+        self._ticks.clear()
+        self._ticks.extend(merged[-TICK_HISTORY:])
+        try:
+            with path.open("w", encoding="utf-8") as handle:
+                handle.writelines(f"{ts_ms},{price}\n" for ts_ms, price in saved)
+        except OSError as exc:
+            logger.warning("btc tick history not rewritten: %s", exc)
+        logger.info("btc tick history loaded: %d ticks", len(saved))
+
+    def _flush_history(self) -> None:
+        path = self._history_path
+        if path is None or not self._unsaved:
+            return
+        rows, self._unsaved = self._unsaved, []
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("a", encoding="utf-8") as handle:
+                handle.writelines(f"{ts_ms},{price}\n" for ts_ms, price in rows)
+        except OSError as exc:
+            logger.warning("btc tick history not saved: %s", exc)
 
     def recent_ticks(self, since_ms: int | None = None, limit: int = TICK_HISTORY) -> list[tuple[int, float]]:
         """Recent official TWAP60 ticks (ts_ms, price), oldest first, one per timestamp.
@@ -230,6 +282,11 @@ class BtcPriceFeed:
 
     def _record(self, ts_ms: int, price: float) -> None:
         self._ticks.append((ts_ms, price))  # kept even if out of order: only used for window-start lookups
+        if self._history_path is not None:
+            self._unsaved.append((ts_ms, price))
+            if time.monotonic() - self._last_flush >= TICK_FLUSH_SECONDS:
+                self._last_flush = time.monotonic()
+                self._flush_history()
         if self._latest is not None and ts_ms < self._latest[0]:
             return  # out-of-order tick
         self._latest = (ts_ms, price)

@@ -25,3 +25,4 @@ android/.kotlin/
 *.jks
 android/keystore/*
 !android/keystore/debug.keystore
+data/btc_ticks.csv

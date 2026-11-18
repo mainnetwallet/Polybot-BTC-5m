@@ -5,7 +5,7 @@ import { BookLadder } from "../BookLadder";
 import { CandleChart, type BuyMarker } from "../CandleChart";
 import { LoadingPanel } from "../LoadingPanel";
 import { useBot } from "../../hooks/BotContext";
-import { useBtcCandles } from "../../hooks/BtcTape";
+import { useBtcCandles, useBtcHistoryState } from "../../hooks/BtcTape";
 import { cx, fmtPx, fmtSignedPct, fmtHms, isNum, usdParts } from "../../lib/format";
 import type { StageId } from "../../lib/stages";
 
@@ -41,6 +41,7 @@ export function BtcTapeCard({ orders, className }: { orders: OrderRow[]; classNa
   const tf = TIMEFRAMES.find((item) => item.id === tfId) ?? TIMEFRAMES[0];
   const viewStart = start !== null ? start - (tf.rounds - 1) * ROUND_MS : null;
   const tape = useBtcCandles(viewStart, end, tf.candleMs);
+  const historyState = useBtcHistoryState();
 
   const pickTimeframe = (id: TimeframeId) => {
     setTfId(id);
@@ -170,7 +171,9 @@ export function BtcTapeCard({ orders, className }: { orders: OrderRow[]; classNa
             <span>
               {tape.candles.length > 0
                 ? lateStart !== null
-                  ? `History starts at ${fmtHms(lateStart)}, the first price received`
+                  ? historyState === "unavailable"
+                    ? `Server history not loaded (restart the backend). Candles start at ${fmtHms(lateStart)}`
+                    : `History starts at ${fmtHms(lateStart)}, the first price the server has saved`
                   : `${tape.candles.length} candles, ${tf.span}`
                 : "Waiting for the first price"}
             </span>

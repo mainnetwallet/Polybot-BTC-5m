@@ -30,6 +30,10 @@ export interface Candle {
 
 const TapeContext = createContext<BtcTick[]>([]);
 
+/** Whether the server's saved ticks were loaded: "unavailable" usually means the backend was not restarted after an update. */
+export type HistoryState = "loading" | "ready" | "unavailable";
+const HistoryContext = createContext<HistoryState>("loading");
+
 function isTick(row: unknown): row is BtcTick {
   return typeof row === "object" && row !== null && Number.isFinite((row as BtcTick).t) && Number.isFinite((row as BtcTick).p);
 }
@@ -65,6 +69,7 @@ function mergeTicks(a: BtcTick[], b: BtcTick[]): BtcTick[] {
 export function BtcTapeProvider({ children }: { children: ReactNode }) {
   const { snapshot } = useBot();
   const [ticks, setTicks] = useState<BtcTick[]>(readStored);
+  const [history, setHistory] = useState<HistoryState>("loading");
   const lastTs = useRef(0);
   const lastSaved = useRef(0);
   const btc = snapshot?.btc;
@@ -79,11 +84,13 @@ export function BtcTapeProvider({ children }: { children: ReactNode }) {
       .btcTicks()
       .then((res) => {
         if (cancelled || !Array.isArray(res.ticks)) return;
-        const history = res.ticks.filter((row) => Array.isArray(row) && Number.isFinite(row[0]) && Number.isFinite(row[1])).map(([t, p]) => ({ t, p }));
-        if (history.length > 0) setTicks((prev) => mergeTicks(prev, history));
+        const rows = res.ticks.filter((row) => Array.isArray(row) && Number.isFinite(row[0]) && Number.isFinite(row[1])).map(([t, p]) => ({ t, p }));
+        if (rows.length > 0) setTicks((prev) => mergeTicks(prev, rows));
+        setHistory("ready");
       })
       .catch(() => {
         // older backend without the endpoint, or offline: the chart just builds from live prices
+        if (!cancelled) setHistory("unavailable");
       });
     return () => {
       cancelled = true;
@@ -113,11 +120,19 @@ export function BtcTapeProvider({ children }: { children: ReactNode }) {
     });
   }, [btc, serverTime]);
 
-  return <TapeContext.Provider value={ticks}>{children}</TapeContext.Provider>;
+  return (
+    <HistoryContext.Provider value={history}>
+      <TapeContext.Provider value={ticks}>{children}</TapeContext.Provider>
+    </HistoryContext.Provider>
+  );
 }
 
 export function useBtcTicks(): BtcTick[] {
   return useContext(TapeContext);
+}
+
+export function useBtcHistoryState(): HistoryState {
+  return useContext(HistoryContext);
 }
 
 export interface TapeWindow {

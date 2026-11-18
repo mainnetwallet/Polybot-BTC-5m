@@ -18,6 +18,7 @@ os.environ["LIVE_TRADING_ENABLED"] = "false"
 os.environ["POLYMARKET_GEO_VERIFIED"] = "false"
 os.environ["POLYMARKET_PRIVATE_KEY"] = ""
 os.environ["BTC_PRICE_ENABLED"] = "false"
+os.environ["BTC_TICK_HISTORY_FILE"] = ""  # tests never touch the real tick history
 os.environ["DISCOVERY_REFRESH_SECONDS"] = "3600"
 os.environ["RESOLUTION_POLL_SECONDS"] = "3600"
 # The shared test books carry a 0.50 bid; with the production stop-loss defaults (20 / 15 %) every

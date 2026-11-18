@@ -631,3 +631,19 @@ def test_prefilter_uses_60_gap_for_expensive_stage0_buys_and_70_for_cheap_ones()
         assert kept(0.80, 65.0) == []  # cheaper buy still needs 70
         assert kept(0.80, 75.0) == [0.80]
 
+
+
+def test_btc_ticks_endpoint_returns_the_real_ticks_the_server_saw():
+    import json
+
+    with TestClient(create_app()) as client:
+        feed = client.app.state.bot.btc
+
+        def frame(ts_ms: int, value: float) -> str:
+            return json.dumps({"payload": {"symbol": "btc/usd", "timestamp": ts_ms, "value": value}})
+
+        feed.handle_message(frame(2_000, 71_020.0))
+        feed.handle_message(frame(1_000, 71_010.0))
+        body = client.get("/api/btc/ticks").json()
+        assert body == {"ticks": [[1_000, 71_010.0], [2_000, 71_020.0]]}
+        assert client.get("/api/btc/ticks", params={"since_ms": 2_000}).json() == {"ticks": [[2_000, 71_020.0]]}

@@ -53,6 +53,9 @@ class Settings(BaseSettings):
     # Since 2026-08-14 Polymarket's 5-minute crypto markets settle on the Chainlink 60-second TWAP (both
     # the price to beat and the final price); the bot streams only that official series (no spot fallback).
     btc_price_enabled: bool = True  # dashboard-only official Polymarket BTC price / price-to-beat
+    # Real BTC ticks are appended here so the dashboard's candle history survives a backend restart
+    # (empty = keep them in memory only). Only ticks the server really received are ever stored.
+    btc_tick_history_file: str = str(DATA_DIR / "btc_ticks.csv")
     series_slug: str = "btc-up-or-down-5m"
     event_slug_prefix: str = "btc-updown-5m"  # event slug = <prefix>-<window start unix>
     http_user_agent: str = (
