@@ -181,7 +181,8 @@ nano .env        # settings are read only at startup: edit, then ./start.sh agai
 - Options: `--attach` stays in the terminal (Ctrl+C stops everything), `--no-pull` skips `git pull`, `--no-restart` keeps a running instance, `--local` keeps the dashboard on `127.0.0.1`.
 - The bot starts **STOPPED** after every start: press Start in the dashboard. Orders, positions and settings persist in `data/polymarket_bot.db`.
 - Logs: `logs/backend.log`, `logs/backend.err.log`, `logs/frontend.err.log`.
-- Same `.env` keys as on Windows (see [Configuration](#configuration)); `QUICK_TUNNEL` and `GIST_TOKEN` are Windows-only and ignored.
+- Android app: same steps as [Android app and remote access](#android-app-and-remote-access). Put `API_TOKEN`, `ADMIN_PASSWORD`, `GIST_TOKEN` (classic token, only the `gist` scope) and `QUICK_TUNNEL=1` in `.env`, then `./start.sh`: it downloads `cloudflared` into `.bin/` by itself, starts the tunnel, writes the link into your secret Gist and prints `In the app enter: gist:<id>`. The tunnel needs no open firewall port. Enter that `gist:<id>` and the `API_TOKEN` in the app.
+- Same `.env` keys as on Windows, see [Configuration](#configuration).
 - If `git pull` fails (local changes, no network) the script says so and starts the version that is already there. Private repo: use an SSH deploy key or a credential helper, never a token in the clone URL.
 
 ## How it works

@@ -26,3 +26,6 @@ android/.kotlin/
 android/keystore/*
 !android/keystore/debug.keystore
 data/btc_ticks.csv
+
+# Linux server: cloudflared binary downloaded by start.sh
+.bin/

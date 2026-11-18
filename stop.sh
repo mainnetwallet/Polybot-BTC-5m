@@ -75,6 +75,8 @@ is_tracked_process() {
     case "$name" in
         backend)  case "$cmd" in *uvicorn*app.main:app*) return 0 ;; esac ;;
         frontend) case "$cmd" in *vite*) return 0 ;; esac ;;
+        # Only the quick tunnel that start.sh launched for this project (QUICK_TUNNEL=1).
+        cloudflared) case "$cmd" in *cloudflared*tunnel*localhost:8000*) return 0 ;; esac ;;
     esac
     return 1
 }
@@ -150,7 +152,7 @@ if port_open 8000; then
     sleep 0.8
 fi
 
-for name in frontend backend; do
+for name in cloudflared frontend backend; do
     pidfile="$PIDS/$name.pid"
     [ -f "$pidfile" ] || continue
     pid="$(head -n1 "$pidfile" 2>/dev/null | tr -dc '0-9')"

@@ -105,6 +105,193 @@ launch() {
     )
 }
 
+# ---------------------------------------------------------------------------
+# Optional: Cloudflare quick tunnel + secret Gist link publisher (for the Android app).
+# Runs only when QUICK_TUNNEL=1 is set in .env (same as start.bat):
+#   QUICK_TUNNEL=1   start a free Cloudflare quick tunnel to http://localhost:8000
+#   GIST_TOKEN=...   GitHub classic token with ONLY the "gist" scope
+#   GIST_ID=...      created on the first run and written to .env automatically
+# The tunnel URL changes on every start; the app reads the current one from the secret Gist ("gist:<id>").
+# ---------------------------------------------------------------------------
+TUNNEL_URL=""
+TUNNEL_GIST=""
+CLOUDFLARED=""
+
+# Sets KEY=value in .env: every uncommented KEY line is replaced, otherwise the line is appended.
+set_env_value() {
+    local key="$1" value="$2" tmp="$ROOT/.env.tmp.$$"
+    awk -v k="$key" -v v="$value" '
+        $0 ~ "^[ \t]*" k "[ \t]*=" { print k "=" v; found = 1; next }
+        { print }
+        END { if (!found) print k "=" v }' "$ROOT/.env" > "$tmp" && cat "$tmp" > "$ROOT/.env"
+    rm -f "$tmp"
+}
+
+# Stops the tunnel recorded in logs/pids/cloudflared.pid (only if it really is this project's tunnel).
+stop_tunnel() {
+    local pidfile="$PIDS/cloudflared.pid" pid cmd
+    [ -f "$pidfile" ] || return 0
+    pid="$(head -n1 "$pidfile" 2>/dev/null | tr -dc '0-9')"
+    if [ -n "$pid" ] && [ -d "/proc/$pid" ]; then
+        cmd="$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null)"
+        case "$cmd" in *cloudflared*tunnel*localhost:8000*) kill "$pid" 2>/dev/null ;; esac
+    fi
+    rm -f "$pidfile"
+}
+
+# Finds cloudflared, or downloads the official static binary into .bin/ (no root needed).
+ensure_cloudflared() {
+    local arch url part ok=0
+    if command -v cloudflared >/dev/null 2>&1; then CLOUDFLARED="$(command -v cloudflared)"; return 0; fi
+    if [ -x "$ROOT/.bin/cloudflared" ]; then CLOUDFLARED="$ROOT/.bin/cloudflared"; return 0; fi
+    case "$(uname -m)" in
+        x86_64|amd64) arch=amd64 ;;
+        aarch64|arm64) arch=arm64 ;;
+        armv7l|armv6l|arm) arch=arm ;;
+        i386|i686) arch=386 ;;
+        *) warn "There is no cloudflared download for the CPU type $(uname -m)."; return 1 ;;
+    esac
+    url="https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-$arch"
+    part="$ROOT/.bin/cloudflared.part"
+    warn "Downloading cloudflared ($arch) into .bin/ ..."
+    mkdir -p "$ROOT/.bin"
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL -o "$part" "$url" && ok=1
+    elif command -v wget >/dev/null 2>&1; then
+        wget -q -O "$part" "$url" && ok=1
+    else
+        warn "Neither curl nor wget is installed."
+    fi
+    if [ "$ok" != 1 ]; then rm -f "$part"; warn "Could not download cloudflared from $url"; return 1; fi
+    chmod +x "$part"
+    if ! "$part" --version >/dev/null 2>&1; then rm -f "$part"; warn "The downloaded cloudflared does not run on this machine."; return 1; fi
+    mv "$part" "$ROOT/.bin/cloudflared"
+    CLOUDFLARED="$ROOT/.bin/cloudflared"
+}
+
+# Writes the tunnel URL into the file pc-url.txt of the secret Gist and prints the Gist id. Creates the Gist on the
+# first run (or when the stored one no longer exists). The token goes through the environment, never the command line.
+publish_gist() { # url token gist_id
+    TUNNEL_URL_IN="$1" GIST_TOKEN_IN="$2" GIST_ID_IN="$3" "$VENV_PY" - <<'PY'
+import json, os, sys
+import urllib.error as err
+import urllib.request as req
+
+api = os.environ.get("GITHUB_API", "https://api.github.com").rstrip("/")
+headers = {
+    "Authorization": "Bearer " + os.environ["GIST_TOKEN_IN"],
+    "User-Agent": "polybot-btc-5m",
+    "Accept": "application/vnd.github+json",
+    "Content-Type": "application/json; charset=utf-8",
+}
+files = {"pc-url.txt": {"content": os.environ["TUNNEL_URL_IN"]}}
+
+
+def call(method, path, body):
+    request = req.Request(api + path, data=json.dumps(body).encode("utf-8"), headers=headers, method=method)
+    with req.urlopen(request, timeout=20) as response:
+        return json.load(response)
+
+
+try:
+    gist_id = os.environ.get("GIST_ID_IN", "").strip()
+    if gist_id:
+        try:
+            call("PATCH", "/gists/" + gist_id, {"files": files})
+            print(gist_id)
+            sys.exit(0)
+        except err.HTTPError as exc:
+            if exc.code != 404:
+                raise
+            print("Gist " + gist_id + " no longer exists; creating a new secret Gist.", file=sys.stderr)
+    created = call("POST", "/gists", {"description": "polybot-btc-5m link", "public": False, "files": files})
+    print(created["id"])
+except err.HTTPError as exc:
+    print("GitHub answered HTTP %d" % exc.code, file=sys.stderr)
+    sys.exit(2)
+except Exception as exc:
+    print(str(exc), file=sys.stderr)
+    sys.exit(2)
+PY
+}
+
+# Sets TUNNEL_URL / TUNNEL_GIST. Returns 1 when the tunnel is off, refused or failed; never aborts the start-up.
+start_quick_tunnel() {
+    [ "$(env_get QUICK_TUNNEL)" = "1" ] || return 1
+    step "Quick tunnel requested (QUICK_TUNNEL=1)"
+
+    local api_token gist_token host_value old_gist gist_id url tpid i reachable=0
+    api_token="$(env_get API_TOKEN | tr -d '[:space:]')"
+    gist_token="$(env_get GIST_TOKEN | tr -d '[:space:]')"
+    # Safety: never publish an API that has no token. The Android app authenticates with API_TOKEN.
+    if [ -z "$api_token" ]; then
+        printf '%s    Tunnel NOT started: API_TOKEN is empty in .env.%s\n' "$C_RED" "$C_OFF"
+        printf '%s    Without a token anyone who learns the tunnel link could control the bot.%s\n' "$C_RED" "$C_OFF"
+        warn "Set a long random API_TOKEN in .env (for example: openssl rand -hex 32) and run ./start.sh again."
+        return 1
+    fi
+    if [ -z "$gist_token" ]; then
+        printf '%s    Tunnel NOT started: GIST_TOKEN is empty in .env.%s\n' "$C_RED" "$C_OFF"
+        warn "Without it the app cannot learn the new link after each restart. Create a classic GitHub token with ONLY the 'gist' scope."
+        return 1
+    fi
+    host_value="$(env_get HOST | tr 'A-Z' 'a-z')"
+    case "$host_value" in
+        ""|127.0.0.1|localhost|::1) dim "HOST must stay 127.0.0.1 (cloudflared connects locally)." ;;
+        *) warn "WARNING: HOST=$host_value in .env. Keep HOST=127.0.0.1: cloudflared connects locally and nothing else should reach the API directly." ;;
+    esac
+    if [ "$(env_get ADMIN_PASSWORD)" = "ChangeMe-123" ]; then
+        printf '%s    Tunnel NOT started: ADMIN_PASSWORD is still the old example password (ChangeMe-123), which is public.%s\n' "$C_RED" "$C_OFF"
+        return 1
+    fi
+
+    ensure_cloudflared || { warn "cloudflared is not available; the bot keeps running without the tunnel."; return 1; }
+
+    stop_tunnel   # a tunnel from an earlier run would keep the old URL alive; replace it
+    rm -f "$LOGS/cloudflared.log" "$LOGS/cloudflared.out.log"
+    launch cloudflared "$ROOT" "$LOGS/cloudflared.out.log" "$LOGS/cloudflared.log" \
+        "$CLOUDFLARED" tunnel --no-autoupdate --url http://localhost:8000
+    tpid="$(read_pid cloudflared)" || { warn "Could not start cloudflared."; return 1; }
+    dim "cloudflared PID $tpid"
+
+    # cloudflared prints the link to stderr. api.trycloudflare.com only shows up in error lines: ignore it.
+    url=""
+    for i in $(seq 1 45); do
+        sleep 1
+        kill -0 "$tpid" 2>/dev/null || break
+        url="$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' "$LOGS/cloudflared.log" 2>/dev/null | grep -v '^https://api\.' | head -n1)"
+        [ -n "$url" ] && break
+    done
+    if [ -z "$url" ]; then
+        warn "Could not get a tunnel link. See logs/cloudflared.log. The bot keeps running without the tunnel."
+        show_tail "$LOGS/cloudflared.log"
+        stop_tunnel
+        return 1
+    fi
+    printf '%s    Tunnel link: %s%s\n' "$C_GREEN" "$url" "$C_OFF"
+    TUNNEL_URL="$url"
+
+    old_gist="$(env_get GIST_ID | tr -d '[:space:]')"
+    if gist_id="$(publish_gist "$url" "$gist_token" "$old_gist" 2>"$LOGS/gist.err")" && [ -n "$gist_id" ]; then
+        [ "$gist_id" = "$old_gist" ] || set_env_value GIST_ID "$gist_id"
+        TUNNEL_GIST="$gist_id"
+    else
+        warn "Could not update the Gist: $(tail -n1 "$LOGS/gist.err" 2>/dev/null)"
+        warn "Check that GIST_TOKEN is a classic token with the 'gist' scope. The link above still works if you type it into the app."
+        return 0
+    fi
+
+    # A fresh quick-tunnel hostname needs a few seconds before it resolves; wait a little, but never fail.
+    for i in $(seq 1 15); do
+        if "$VENV_PY" -c 'import sys, urllib.request as u; u.urlopen(u.Request(sys.argv[1], headers={"User-Agent": "polybot-btc-5m"}), timeout=4)' "$url/healthz" 2>/dev/null; then
+            reachable=1; break
+        fi
+        sleep 1
+    done
+    [ "$reachable" = 1 ] || dim "The tunnel does not answer yet; it usually needs a few more seconds before the phone can use it."
+    return 0
+}
+
 echo
 printf '%sPolymarket BTC 5m bot%s\n' "$C_GREEN" "$C_OFF"
 dim "Starting backend and dashboard"
@@ -218,6 +405,8 @@ if [ -n "$frontend_pid" ]; then
     dim "Dashboard ready"
 fi
 
+start_quick_tunnel || true
+
 mode="$("$VENV_PY" - "$API_URL/api/health" <<'PY' 2>/dev/null
 import json, sys
 import urllib.request as req
@@ -230,15 +419,29 @@ PY
 )"
 
 server_ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+is_private_ip() {
+    case "$1" in
+        10.*|192.168.*|172.1[6-9].*|172.2[0-9].*|172.3[01].*|100.6[4-9].*|100.[7-9][0-9].*|100.1[01][0-9].*|100.12[0-7].*|169.254.*) return 0 ;;
+    esac
+    return 1
+}
 echo
 printf '%sPolymarket BTC 5m bot is running.%s\n' "$C_GREEN" "$C_OFF"
-if [ "$dash_host" = "0.0.0.0" ]; then
-    printf '    Dashboard: http://%s:5173   (open port 5173 in the server firewall)\n' "${server_ip:-YOUR_SERVER_IP}"
-else
+if [ "$dash_host" != "0.0.0.0" ]; then
     printf '    Dashboard: http://127.0.0.1:5173   (this server only)\n'
+elif [ -z "$server_ip" ] || is_private_ip "$server_ip"; then
+    printf '    Dashboard: http://YOUR_SERVER_PUBLIC_IP:5173   (open port 5173 in the firewall; the server'"'"'s local address %s is not public)\n' "${server_ip:-unknown}"
+else
+    printf '    Dashboard: http://%s:5173   (open port 5173 in the server firewall)\n' "$server_ip"
 fi
 printf '    API docs:  %s/docs   (this server only)\n' "$API_URL"
 printf '    Mode:      %s\n' "${mode:-PAPER}"
+if [ -n "$TUNNEL_URL" ]; then
+    printf '    Tunnel:    %s\n' "$TUNNEL_URL"
+    if [ -n "$TUNNEL_GIST" ]; then
+        printf '%s    In the app enter: gist:%s  (and your API_TOKEN)%s\n' "$C_GREEN" "$TUNNEL_GIST" "$C_OFF"
+    fi
+fi
 dim "Logs:      logs/backend.log, logs/frontend.out.log"
 if [ "$ATTACH" = 1 ]; then
     dim "Stop:      press Ctrl+C here, or run ./stop.sh"
