@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { fmtClock } from "../lib/format";
 import { STAGE_VAR, stageStatus, type StageWindow } from "../lib/stages";
 
 interface RoundRingProps {
@@ -34,6 +33,11 @@ function arcPath(radius: number, from: number, to: number): string {
  * opens at "90 s left" sits at 70 % of the way around. Each enabled stage is its own colored arc, the
  * one that is open glows, finished ones fade, and the dot is "now".
  */
+/** Whole seconds left, counting down 300, 299 ... 0. */
+function secs(value: number): number {
+  return Math.max(0, Math.ceil(value));
+}
+
 export function RoundRing({ remaining, duration, windows, chip }: RoundRingProps) {
   const total = duration && duration > 0 ? duration : 300;
   const angleAt = (secondsLeft: number) => 360 * (1 - Math.min(Math.max(secondsLeft, 0), total) / total);
@@ -57,7 +61,7 @@ export function RoundRing({ remaining, duration, windows, chip }: RoundRingProps
   const summary =
     remaining === null
       ? "Round clock, no active market"
-      : `Round clock, ${fmtClock(remaining)} left${active ? `, stage ${active.stage} watching` : ""}`;
+      : `Round clock, ${secs(remaining)} seconds left${active ? `, stage ${active.stage} watching` : ""}`;
 
   return (
     <div className="rc-ring relative mx-auto w-full max-w-[440px]" style={{ containerType: "inline-size" }}>
@@ -81,7 +85,7 @@ export function RoundRing({ remaining, duration, windows, chip }: RoundRingProps
         <circle cx={C} cy={C} r={R_IN} fill="none" stroke="rgba(255,255,255,0.025)" strokeWidth="8" />
         <circle cx={C} cy={C} r={R_DIAL} fill="url(#ring-dial)" stroke="rgba(255,255,255,0.06)" />
 
-        {/* minute and 15 second ticks, time left labels */}
+        {/* minute and 15 second ticks, seconds-left labels */}
         {ticks.map((seconds) => {
           const major = seconds % 60 === 0;
           const a = angleAt(seconds);
@@ -104,7 +108,7 @@ export function RoundRing({ remaining, duration, windows, chip }: RoundRingProps
           const [x, y] = polar(R_OUT + 36, angleAt(seconds));
           return (
             <text key={seconds} x={x} y={y} fill="#86999f" fontSize="13" fontWeight="500" textAnchor="middle" dominantBaseline="central">
-              {fmtClock(seconds)}
+              {seconds}
             </text>
           );
         })}
@@ -163,9 +167,9 @@ export function RoundRing({ remaining, duration, windows, chip }: RoundRingProps
         ) : (
           <>
             <div className="hero-num" style={{ fontSize: "17cqw" }}>
-              {fmtClock(remaining)}
+              {secs(remaining)}
             </div>
-            <div className="mt-[1.4cqw] text-[3.5cqw] text-slate-500">left in this round</div>
+            <div className="mt-[1.4cqw] text-[3.5cqw] text-slate-500">seconds left in this round</div>
             {chip ? <div className="mt-[3cqw]">{chip}</div> : null}
           </>
         )}
