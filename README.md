@@ -20,6 +20,7 @@
   <a href="#quick-start-powershell">Quick start</a> ·
   <a href="android/README.md">Android app</a> ·
   <a href="#android-app-and-remote-access">Remote access</a> ·
+  <a href="#vps-linux-server-247">VPS (Linux)</a> ·
   <a href="#how-it-works">How it works</a>
 </p>
 
@@ -27,7 +28,7 @@
   <img src="docs/safe-by-default.svg" alt="Safe by default: paper trading first, live trading is gated" width="460">
 </p>
 
-Local Windows app for Polymarket BTC up/down 5-minute markets: Python (FastAPI) backend, React dashboard and a native Android app (`android/`). **Paper trading is the default**; live trading is disabled until you pass explicit safety gates.
+Local Windows app (or Linux VPS, see [VPS](#vps-linux-server-247)) for Polymarket BTC up/down 5-minute markets: Python (FastAPI) backend, React dashboard and a native Android app (`android/`). **Paper trading is the default**; live trading is disabled until you pass explicit safety gates.
 
 ## Requirements
 
@@ -156,6 +157,238 @@ Away from home the PC publishes a free Cloudflare quick tunnel and writes its ch
 4. In the app enter `gist:<id>` and the `API_TOKEN`, tap *Test connection*, then *Save*. After a PC restart the app re-reads the Gist and reconnects itself.
 
 Every endpoint except `/healthz` and `/api/health` needs `API_TOKEN`; treat it and `GIST_TOKEN` like passwords.
+
+## VPS (Linux server, 24/7)
+
+Runs the same backend on a Linux VPS. The FastAPI process serves the dashboard itself (from `backend/app/static`), so there is **no Vite dev server** on a VPS; Node.js is only used to build the dashboard. `setup.bat` / `start.bat` / `stop.bat` are Windows-only: on a VPS `systemd` starts, restarts and stops the bot, and Cloudflare quick tunnel + Gist (`QUICK_TUNNEL`, `GIST_TOKEN`) are not needed because the VPS has a fixed address.
+
+**You need:** a VPS with Ubuntu 24.04 (Python 3.12) or Debian 12 (Python 3.11), 1 vCPU / 1 GB RAM or more, root SSH access, and a region where Polymarket is reachable and allowed for you (step 5 checks the feed). A domain name is optional (step 8). Ubuntu 22.04 ships Python 3.10, which is too old: install 3.11+ first (`add-apt-repository ppa:deadsnakes/ppa`, `apt install python3.12 python3.12-venv`) and use `python3.12` in step 4.
+
+Steps 1, 6, 7, 8 and 9 run as `root`; steps 3-5 run as the `polybot` user.
+
+### 1. System packages (root)
+
+```bash
+apt update && apt upgrade -y
+apt install -y git curl ca-certificates build-essential python3 python3-dev python3-venv python3-pip chrony sqlite3 ufw
+curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+apt install -y nodejs
+systemctl enable --now chrony      # synced clock is required, clock drift makes books look stale
+python3 --version                  # must be 3.11 or newer
+node --version                     # must be 20.19+ or 22.12+
+chronyc tracking | head -3
+```
+
+### 2. Dedicated user (root)
+
+The bot never needs root. It runs as its own user:
+
+```bash
+adduser --disabled-password --gecos "" polybot
+su - polybot
+```
+
+### 3. Get the code (as `polybot`)
+
+Public repo:
+
+```bash
+git clone https://github.com/mainnetwallet/polybot-btc-5m.git
+```
+
+Private repo: use a read-only deploy key (never put a token in the clone URL):
+
+```bash
+ssh-keygen -t ed25519 -N "" -C polybot-vps -f ~/.ssh/id_ed25519
+cat ~/.ssh/id_ed25519.pub          # GitHub repo > Settings > Deploy keys > Add deploy key (read-only)
+ssh-keyscan github.com >> ~/.ssh/known_hosts
+git clone git@github.com:mainnetwallet/polybot-btc-5m.git
+```
+
+### 4. Install and configure (as `polybot`)
+
+```bash
+cd ~/polybot-btc-5m
+
+# Python environment
+python3 -m venv .venv
+.venv/bin/pip install --upgrade pip
+.venv/bin/pip install -r backend/requirements.txt
+# only for LIVE_AUTO_REDEEM=true:  .venv/bin/pip install -r backend/requirements-redeem.txt
+
+# Dashboard: build it and put it where the backend serves it from
+(cd frontend && npm ci --no-fund --no-audit && npm run build)
+rm -rf backend/app/static/* && cp -r frontend/dist/. backend/app/static/
+
+# Configuration
+cp .env.example .env
+sed -i "s|^API_TOKEN=.*|API_TOKEN=$(openssl rand -hex 32)|" .env
+sed -i "s|^ADMIN_PASSWORD=.*|ADMIN_PASSWORD=$(openssl rand -base64 18 | tr -d '/+=')|" .env
+sed -i 's|^LIVE_TRADING_ENABLED=.*|LIVE_TRADING_ENABLED=false|' .env
+sed -i 's|^QUICK_TUNNEL=.*|QUICK_TUNNEL=0|' .env
+chmod 600 .env
+grep -E '^(API_TOKEN|ADMIN_USERNAME|ADMIN_PASSWORD)=' .env     # write these down: dashboard login + app token
+
+# Database
+(cd backend && ../.venv/bin/python -c "from app.database.migrate import ensure_schema; ensure_schema(); print('database ready')")
+```
+
+- `.env.example` ships with `LIVE_TRADING_ENABLED=true` and `POLYMARKET_GEO_VERIFIED=true`; the `sed` lines above switch live trading off for the first run. Go live later only through [Live trading](#live-trading).
+- Keep `HOST=127.0.0.1` and `PORT=8000` in `.env`. The address the server really binds to is the `--host/--port` in the systemd unit (step 6); `.env` `HOST`/`PORT` only drive the app's safety warnings, so keep them identical.
+- Edit anything else with `nano .env` (every key is documented in `.env.example`). `.env` is read only at startup.
+
+### 5. Check that the VPS can reach Polymarket (as `polybot`)
+
+```bash
+.venv/bin/python scripts/check_btc_feed.py
+```
+
+It prints what Polymarket answers for the price to beat and the BTC feed. If it is refused or empty, the region or IP of the VPS is blocked: choose another region or provider before going further. Then leave the `polybot` user:
+
+```bash
+exit
+```
+
+### 6. systemd service (root)
+
+```bash
+cat > /etc/systemd/system/polybot.service <<'EOF'
+[Unit]
+Description=Polybot BTC 5m (FastAPI)
+After=network-online.target chrony.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=polybot
+Group=polybot
+WorkingDirectory=/home/polybot/polybot-btc-5m/backend
+ExecStart=/home/polybot/polybot-btc-5m/.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --no-access-log
+Restart=always
+RestartSec=3
+LimitNOFILE=65536
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable --now polybot
+sleep 3
+systemctl status polybot --no-pager
+curl -s http://127.0.0.1:8000/healthz      # {"status":"ok"}
+```
+
+Run exactly **one** uvicorn process (no `--workers`): the bot keeps its state in memory. After a crash, `systemctl restart` or a reboot the bot comes back **STOPPED** (by design), so open the dashboard and press Start again. While it is stopped, take-profit and stop-loss do not run (see [Live trading](#live-trading)).
+
+### 7. Open the dashboard
+
+Pick one.
+
+**A. SSH tunnel (no domain, nothing exposed, simplest).** On your PC (or in Termux on your phone):
+
+```bash
+ssh -L 8000:127.0.0.1:8000 root@YOUR_VPS_IP
+```
+
+Keep it open and browse to `http://127.0.0.1:8000`; log in with `ADMIN_USERNAME` / `ADMIN_PASSWORD`.
+
+**B. Your own domain with HTTPS (step 8).** Needed if the Android app should reach the bot from anywhere.
+
+### 8. HTTPS with nginx + Let's Encrypt (root, optional)
+
+Point a DNS `A` record (for example `bot.example.com`) at the VPS IP first, then:
+
+```bash
+apt install -y nginx certbot python3-certbot-nginx
+
+cat > /etc/nginx/sites-available/polybot <<'EOF'
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+server {
+    listen 80;
+    server_name bot.example.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+    }
+}
+EOF
+
+sed -i 's/bot.example.com/YOUR.DOMAIN/' /etc/nginx/sites-available/polybot     # put your real domain here
+ln -sf /etc/nginx/sites-available/polybot /etc/nginx/sites-enabled/polybot
+rm -f /etc/nginx/sites-enabled/default
+nginx -t && systemctl reload nginx
+certbot --nginx -d YOUR.DOMAIN --redirect -m you@example.com --agree-tos -n
+```
+
+Open `https://YOUR.DOMAIN`. The `Host`, `X-Forwarded-Proto` and `Upgrade` headers matter: without `Host` the server answers `403 Cross-site request blocked`, without `Upgrade` the live WebSocket does not connect.
+
+**Android app:** enter `https://YOUR.DOMAIN` and the `API_TOKEN` from `.env`, tap *Test connection*, then *Save*. No Gist is needed on a VPS.
+
+### 9. Firewall (root)
+
+```bash
+ufw allow OpenSSH            # assumes SSH on port 22; adjust if you changed it
+ufw allow 'Nginx Full'       # only if you did step 8 (ports 80 and 443)
+ufw --force enable
+ufw status
+```
+
+Port 8000 stays closed to the internet because the bot only listens on `127.0.0.1`. Do not change `--host` to `0.0.0.0`: the login and the token would travel over plain HTTP.
+
+### Daily use
+
+```bash
+systemctl status polybot --no-pager         # is it running
+systemctl restart polybot                   # after editing .env (bot comes back STOPPED)
+systemctl stop polybot                      # stop everything
+journalctl -u polybot -f                    # live service log
+tail -f /home/polybot/polybot-btc-5m/logs/backend.log
+```
+
+### Update to the latest version (root)
+
+```bash
+su - polybot -c 'cd polybot-btc-5m && git checkout -- backend/app/static && git clean -fdq backend/app/static && git pull && .venv/bin/pip install -r backend/requirements.txt && (cd frontend && npm ci --no-fund --no-audit && npm run build) && rm -rf backend/app/static/* && cp -r frontend/dist/. backend/app/static/'
+systemctl restart polybot
+```
+
+The first two `git` commands drop the previously built dashboard so `git pull` never conflicts; the build and copy at the end recreate it. `.env`, `data/` and `logs/` are git-ignored and untouched.
+
+### Backup (root)
+
+The database holds orders, positions and settings. Use SQLite's own backup (a plain `cp` can miss recent writes):
+
+```bash
+mkdir -p /root/polybot-backups
+sqlite3 /home/polybot/polybot-btc-5m/data/polymarket_bot.db ".backup '/root/polybot-backups/polymarket_bot-$(date +%F).db'"
+cp /home/polybot/polybot-btc-5m/.env /root/polybot-backups/env-$(date +%F) && chmod 600 /root/polybot-backups/env-*
+```
+
+### VPS troubleshooting
+
+- **Service does not start** - `journalctl -u polybot -n 50 --no-pager` and `tail -n 50 /home/polybot/polybot-btc-5m/logs/backend.log`. Port in use: `ss -ltnp | grep 8000`.
+- **nginx `502 Bad Gateway`** - the service is not running (`systemctl status polybot`).
+- **`403 Cross-site request blocked` on login or buttons** - nginx is not forwarding `Host` (see step 8), or you open the dashboard from an address that is neither the server itself nor listed in `CORS_ORIGINS`.
+- **Dashboard shows an old or blank UI** - the build was not copied: repeat the dashboard build and `cp` in step 4, then `systemctl restart polybot`.
+- **No BTC price / books look stale** - run `scripts/check_btc_feed.py` (step 5) and `chronyc tracking` (clock). Do not raise `STALE_DATA_MAX_AGE_MS`.
+- **Locked out of the login** - 5 wrong passwords lock the IP for 30 s and longer; wait, or check `ADMIN_PASSWORD` in `.env`.
+- **Live wallet check** - `.venv/bin/python scripts/check_wallet.py` (as `polybot`, read-only).
 
 ## How it works
 
