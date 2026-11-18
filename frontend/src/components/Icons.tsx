@@ -286,3 +286,19 @@ export function IconLogout({ size, className }: IconProps) {
     </svg>
   );
 }
+
+export function IconChevronsLeft({ size, className }: IconProps) {
+  return (
+    <svg {...svgProps(size)} className={className}>
+      <path d="M11 17l-5-5 5-5M18 17l-5-5 5-5" />
+    </svg>
+  );
+}
+
+export function IconChevronsRight({ size, className }: IconProps) {
+  return (
+    <svg {...svgProps(size)} className={className}>
+      <path d="M13 17l5-5-5-5M6 17l5-5-5-5" />
+    </svg>
+  );
+}
