@@ -23,9 +23,9 @@ const EMPTY: Level = [null, null];
 function LevelRow({ price, size, maxSize, tone }: { price: number | null; size: number | null; maxSize: number; tone: "ask" | "bid" }) {
   const width = isNum(size) && maxSize > 0 ? clamp01(size / maxSize) * 100 : 0;
   return (
-    <div className="grid grid-cols-[3.4rem_1fr] items-center gap-2 text-[12.5px]">
+    <div className="lvl grid grid-cols-[3.4rem_1fr] items-center gap-2 text-[12.5px]">
       <span className={cx("font-semibold", tone === "ask" ? "text-down" : "text-up")}>{fmtPx(price)}</span>
-      <div className="relative h-6 overflow-hidden rounded-md bg-white/[0.03]">
+      <div className="lvl-bar relative h-6 overflow-hidden rounded-md bg-white/[0.03]">
         <div
           className={cx("absolute inset-y-0 right-0 rounded-md", tone === "ask" ? "bg-down/25" : "bg-up/25")}
           style={{ width: `${Math.max(width, isNum(size) && size > 0 ? 6 : 0)}%` }}
@@ -61,7 +61,7 @@ export function BookLadder({ side, book, maxSize, history, staleAfterMs, compact
 
   return (
     <div className="min-w-0">
-      <div className="mb-1.5 flex items-baseline justify-between">
+      <div className="lvl-head mb-1.5 flex items-baseline justify-between">
         <span className={cx("text-[15px] font-semibold", up ? "text-up" : "text-down")}>{up ? "Up" : "Down"}</span>
         <span className={cx("text-[15px] font-semibold", up ? "text-up" : "text-down")}>{fmtPx(ask)}</span>
       </div>
@@ -69,7 +69,7 @@ export function BookLadder({ side, book, maxSize, history, staleAfterMs, compact
         {askLevels.map(([price, size], i) => (
           <LevelRow key={`a${i}-${price}`} price={price} size={size} maxSize={maxSize} tone="ask" />
         ))}
-        <div className="flex items-center justify-between border-y border-dashed border-white/10 py-1 text-[12.5px] text-slate-500">
+        <div className="lvl-spread flex items-center justify-between border-y border-dashed border-white/10 py-1 text-[12.5px] text-slate-500">
           <span>Spread</span>
           <span className="text-slate-300">{fmtPx(spread)}</span>
         </div>
@@ -78,7 +78,7 @@ export function BookLadder({ side, book, maxSize, history, staleAfterMs, compact
         ))}
       </div>
       {compact ? (
-        <div className={cx("mt-1.5 text-[11.5px]", stale ? "text-amber" : "text-slate-500")}>
+        <div className={cx("lvl-foot mt-1.5 text-[11.5px]", stale ? "text-amber" : "text-slate-500")}>
           {book ? (stale ? "Stale quote" : "Fresh quote") : "No book"}
         </div>
       ) : (

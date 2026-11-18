@@ -65,6 +65,8 @@ export function BtcTapeCard({ orders, className }: { orders: OrderRow[]; classNa
       className={cx("cq", className)}
       right={<span>5 second candles, Chainlink</span>}
     >
+      <div className="tape-body">
+        <div className="tape-main min-w-0">
       <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1.5">
         <div className={cx("hero-num text-[34px]", btc?.stale && "!text-slate-500")}>
           {parts ? (
@@ -99,8 +101,6 @@ export function BtcTapeCard({ orders, className }: { orders: OrderRow[]; classNa
           </span>
         ) : null}
       </div>
-
-      <div className="tape-body">
         <div className="tape-chart min-w-0">
           <div className="chart-fill relative min-h-[220px]">
           <CandleChart
@@ -127,8 +127,9 @@ export function BtcTapeCard({ orders, className }: { orders: OrderRow[]; classNa
             </span>
           </div>
         </div>
+        </div>
 
-        <div className="grid min-w-0 grid-cols-2 gap-x-3 gap-y-2 self-start">
+        <div className="tape-book grid min-w-0 grid-cols-2 gap-x-3 gap-y-2 self-start">
           <BookLadder compact side="UP" book={snapshot.books.up} maxSize={maxSize} history={history.up} staleAfterMs={stale} />
           <BookLadder compact side="DOWN" book={snapshot.books.down} maxSize={maxSize} history={history.down} staleAfterMs={stale} />
         </div>

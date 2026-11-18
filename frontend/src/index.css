@@ -362,7 +362,8 @@ select:focus-visible,
  */
 .ov-screen {
   --gap: 14px;
-  grid-template-rows: minmax(0, 1.1fr) minmax(0, 1fr);
+  /* the top row (round clock, BTC tape) is about a third of the screen; the lower cards get the rest */
+  grid-template-rows: minmax(0, 0.55fr) minmax(0, 1fr);
 }
 .ov-screen > * {
   min-height: 0;
@@ -421,11 +422,37 @@ select:focus-visible,
 }
 .ov-screen .rc-ring > svg { height: 100%; }
 .ov-screen .rc-side { flex: 1; align-self: center; gap: 10px; }
-.ov-screen .rc-stages { grid-template-columns: minmax(0, 1fr); row-gap: 7px; }
 .ov-screen .rc-tiles { gap: 10px; }
-.ov-screen .tape-body { flex: 1; min-height: 0; grid-template-columns: minmax(0, 1fr) 236px; }
-.ov-screen .tape-chart { display: flex; min-height: 0; flex-direction: column; }
+.ov-screen .tape-body { flex: 1; min-height: 0; grid-template-columns: minmax(0, 1fr) 236px; gap: 14px; }
+.ov-screen .tape-main { display: flex; min-height: 0; flex-direction: column; }
+.ov-screen .tape-main > div:first-child { margin-bottom: 6px; }
+.ov-screen .tape-main .hero-num { font-size: 28px; }
+.ov-screen .tape-chart { display: flex; min-height: 0; flex: 1; flex-direction: column; }
 .ov-screen .tape-chart > .chart-fill { flex: 1; min-height: 0; }
+.ov-screen .tape-chart .chart-fill { min-height: 0; }
+.ov-screen .tape-book { align-self: stretch; row-gap: 0; }
+/* the ladder: 4 asks, spread, 4 bids and a header have to fit the short top card */
+.ov-screen .tape-book .lvl { font-size: 11px; gap: 6px; }
+.ov-screen .tape-book .lvl-bar { height: 15px; border-radius: 4px; }
+.ov-screen .tape-book .lvl-bar > span { padding-right: 6px; line-height: 1; }
+.ov-screen .tape-book > div > .space-y-1 > * + * { margin-top: 2px; }
+.ov-screen .tape-book .lvl-spread { line-height: 1.25; }
+.ov-screen .tape-book .lvl-spread { padding: 0; font-size: 10.5px; }
+.ov-screen .tape-book .lvl-head { margin-bottom: 3px; }
+.ov-screen .tape-book .lvl-head span { font-size: 13px; line-height: 1.2; }
+.ov-screen .tape-book .lvl-foot { margin-top: 3px; font-size: 10.5px; line-height: 1.2; }
+
+/* round clock: stages in two columns, tiles in one compact row so the ring can sit in the short card */
+.ov-screen .rc-stages { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 22px; row-gap: 6px; }
+.ov-screen .rc-stages li { font-size: 12.5px; }
+.ov-screen .rc-side { gap: 8px; }
+.ov-screen .rc-tiles .tile { padding: 7px 12px; }
+.ov-screen .rc-tiles .hero-num { margin-top: 2px; font-size: 22px; }
+.ov-screen .rc-tiles .tile > div:last-child { margin-top: 2px; font-size: 11px; }
+.ov-screen .rc-gap { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; align-items: center; padding: 7px 12px; }
+.ov-screen .rc-gap > :nth-child(1) { grid-column: 1; grid-row: 1; }
+.ov-screen .rc-gap > :nth-child(3) { grid-column: 1; grid-row: 2; margin-top: 2px; font-size: 11px; }
+.ov-screen .rc-gap > :nth-child(2) { grid-column: 2; grid-row: 1 / span 2; margin-top: 0; font-size: 22px; }
 @container (min-width: 640px) {
   .tape-body { grid-template-columns: minmax(0, 1fr) 248px; }
 }
