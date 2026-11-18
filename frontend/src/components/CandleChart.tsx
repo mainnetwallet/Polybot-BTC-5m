@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type { Candle } from "../hooks/BtcTape";
 import { fmtGapUsd, isNum } from "../lib/format";
 import { STAGE_VAR, type StageId } from "../lib/stages";
@@ -11,13 +11,12 @@ export interface BuyMarker {
 }
 
 interface CandleChartProps {
+  /** every candle there is, oldest first; the chart shows as many as fit and scrolls back through the rest */
   candles: Candle[];
   /** length of one candle in ms (5 s, 1 min or 5 min) */
   candleMs: number;
-  /** left edge of the chart: the oldest round shown */
-  startMs: number | null;
-  /** right edge of the chart: the end of the current round */
-  endMs: number | null;
+  /** width of one candle slot in px: candles keep this size however many there are */
+  slotPx?: number;
   /** start of the current round, where its price to beat applies from */
   roundStartMs: number | null;
   priceToBeat: number | null;
@@ -33,6 +32,8 @@ const ROUND_MS = 300_000;
 const AXIS_W = 66;
 const AXIS_H = 26;
 const PAD_T = 10;
+const RIGHT_SLOTS = 6; // empty room right of the newest candle, like on an exchange chart
+const MIN_VISIBLE_SLOTS = 6; // scrolling back stops with this many candles still in view
 const LABEL_STEPS = [10_000, 30_000, 60_000, 300_000, 600_000, 900_000, 1_800_000, 3_600_000, 7_200_000];
 
 function useWidth() {
@@ -79,14 +80,15 @@ function price2(value: number): string {
 }
 
 /**
- * Exchange-style candles (solid bodies, thin wicks) over the last few rounds, with the dashed price to beat
- * line of the current round, round boundaries, a hover read-out and a marker for every buy.
+ * Exchange-style candles (solid bodies, thin wicks) that keep a fixed size. The newest candle is on the right;
+ * drag the chart (or use the horizontal wheel / shift + wheel) to scroll back through the history, and press
+ * "Latest" to return. The current round's dashed price to beat line, round boundaries, a hover read-out and a
+ * marker for every buy are drawn on top.
  */
 export function CandleChart({
   candles,
   candleMs,
-  startMs,
-  endMs,
+  slotPx = 10,
   roundStartMs,
   priceToBeat,
   price,
@@ -96,20 +98,68 @@ export function CandleChart({
 }: CandleChartProps) {
   const { ref, width, measuredHeight } = useWidth();
   const [hover, setHover] = useState<number | null>(null);
+  /** right edge of the view when scrolled back (absolute time); null = following the newest candle */
+  const [pinnedEnd, setPinnedEnd] = useState<number | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const drag = useRef<{ x: number; end: number } | null>(null);
   const height = fill ? Math.max(150, measuredHeight) : fixedHeight;
   const plotW = Math.max(120, width - AXIS_W);
   const plotH = height - AXIS_H - PAD_T;
 
-  const empty = candles.length === 0 || startMs === null || endMs === null;
+  const empty = candles.length === 0;
+  const first = candles[0];
+  const last = candles[candles.length - 1];
+  const span = (plotW / slotPx) * candleMs;
+  const liveEnd = last ? last.t + candleMs * (1 + RIGHT_SLOTS) : 0;
+  const minEnd = first ? first.t + candleMs * MIN_VISIBLE_SLOTS : 0;
+  const clampEnd = (end: number) => Math.min(liveEnd, Math.max(minEnd, end));
+  const viewEnd = pinnedEnd === null ? liveEnd : clampEnd(pinnedEnd);
+  const viewStart = viewEnd - span;
+  const live = pinnedEnd === null || viewEnd >= liveEnd - candleMs / 2;
+
+  // a new window width or candle size must not leave the view pinned past the data
+  useEffect(() => {
+    setPinnedEnd((prev) => (prev !== null && prev >= liveEnd - candleMs / 2 ? null : prev));
+  }, [liveEnd, candleMs]);
+
+  const scrollBy = (deltaMs: number) => {
+    // positive = back in time
+    const next = clampEnd(viewEnd - deltaMs);
+    setPinnedEnd(next >= liveEnd - candleMs / 2 ? null : next);
+  };
+
+  // horizontal wheel or shift + wheel scrolls the chart; a plain vertical wheel keeps scrolling the page
+  const wheelHost = useRef<HTMLDivElement | null>(null);
+  const latest = useRef({ scrollBy, slotPx, candleMs });
+  latest.current = { scrollBy, slotPx, candleMs };
+  useEffect(() => {
+    const node = wheelHost.current;
+    if (!node) return;
+    const onWheel = (event: WheelEvent) => {
+      const horizontal = Math.abs(event.deltaX) > Math.abs(event.deltaY) || event.shiftKey;
+      if (!horizontal) return;
+      event.preventDefault();
+      const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+      const { scrollBy: by, slotPx: slot, candleMs: ms } = latest.current;
+      by((-delta / slot) * ms);
+    };
+    node.addEventListener("wheel", onWheel, { passive: false });
+    return () => node.removeEventListener("wheel", onWheel);
+  }, []);
+
   let body = null;
 
-  if (!empty && startMs !== null && endMs !== null) {
-    const span = endMs - startMs;
-    const beat = isNum(priceToBeat) && roundStartMs !== null ? priceToBeat : null;
+  if (!empty) {
+    const roundVisible = roundStartMs !== null && roundStartMs < viewEnd;
+    const beat = isNum(priceToBeat) && roundVisible ? priceToBeat : null;
+    const newestVisible = last.t < viewEnd;
+    const shown = candles.filter((c) => c.t + candleMs > viewStart && c.t < viewEnd);
+
     const values: number[] = [];
-    for (const c of candles) values.push(c.h, c.l);
+    for (const c of shown) values.push(c.h, c.l);
     if (beat !== null) values.push(beat);
-    if (isNum(price)) values.push(price);
+    if (isNum(price) && newestVisible) values.push(price);
+    if (values.length === 0) values.push(last.c);
     let lo = Math.min(...values);
     let hi = Math.max(...values);
     const minRange = 24; // dollars: keeps a quiet minute from looking like a crash
@@ -122,33 +172,29 @@ export function CandleChart({
     lo -= pad;
     hi += pad;
 
-    const x = (t: number) => ((t - startMs) / span) * plotW;
+    const x = (t: number) => ((t - viewStart) / span) * plotW;
     const y = (p: number) => PAD_T + (1 - (p - lo) / (hi - lo)) * plotH;
+    const inPlot = (yy: number) => yy >= PAD_T && yy <= PAD_T + plotH;
     const step = niceStep(hi - lo, 5);
     const grid: number[] = [];
     for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) grid.push(v);
 
     // time labels: the smallest nice step that keeps them at least 84 px apart
-    const labelStep = LABEL_STEPS.find((s) => (s / span) * plotW >= 84) ?? LABEL_STEPS[LABEL_STEPS.length - 1];
+    const labelStep = LABEL_STEPS.find((s) => (s / candleMs) * slotPx >= 84) ?? LABEL_STEPS[LABEL_STEPS.length - 1];
     const labels: number[] = [];
-    for (let t = Math.ceil(startMs / labelStep) * labelStep; t <= endMs; t += labelStep) labels.push(t);
+    for (let t = Math.ceil(viewStart / labelStep) * labelStep; t <= viewEnd; t += labelStep) labels.push(t);
     const showSeconds = labelStep < 60_000;
 
-    // round boundaries (every 5 minutes, aligned to the current round)
-    const anchor = roundStartMs ?? endMs - ROUND_MS;
+    // round boundaries: every 5 minutes, aligned to the market windows
     const boundaries: number[] = [];
-    for (let t = anchor - Math.floor((anchor - startMs) / ROUND_MS) * ROUND_MS; t < endMs; t += ROUND_MS) {
-      if (t > startMs) boundaries.push(t);
-    }
+    for (let t = Math.ceil(viewStart / ROUND_MS) * ROUND_MS; t < viewEnd; t += ROUND_MS) boundaries.push(t);
 
-    const slotW = (candleMs / span) * plotW;
-    const barW = Math.max(1, Math.min(22, slotW * 0.72));
-    const last = candles[candles.length - 1];
+    const barW = Math.max(1, Math.min(22, slotPx * 0.7));
     const lastX = x(last.t + candleMs / 2);
     const diff = isNum(price) && beat !== null ? price - beat : null;
     const above = diff === null ? true : diff >= 0;
     const tagColor = above ? "var(--up)" : "var(--down)";
-    const firstX = x(candles[0].t);
+    const firstX = x(first.t);
     const roundX = roundStartMs !== null ? Math.max(0, x(roundStartMs)) : null;
 
     const tag = (yy: number, text: string, bg: string, textColor: string) => (
@@ -164,9 +210,11 @@ export function CandleChart({
 
     body = (
       <>
-        {/* the current round is tinted, and the part of the chart this browser has no prices for is shaded */}
-        {roundX !== null ? <rect x={roundX} y={PAD_T} width={Math.max(0, plotW - roundX)} height={plotH} fill="rgba(255,255,255,0.022)" /> : null}
-        {firstX > 6 ? <rect x="0" y={PAD_T} width={firstX} height={plotH} fill="rgba(255,255,255,0.025)" /> : null}
+        {/* the current round is tinted, and time before the first saved price is shaded */}
+        {roundVisible && roundX !== null && roundX < plotW ? (
+          <rect x={roundX} y={PAD_T} width={Math.max(0, plotW - roundX)} height={plotH} fill="rgba(255,255,255,0.022)" />
+        ) : null}
+        {firstX > 0 ? <rect x="0" y={PAD_T} width={Math.min(plotW, firstX)} height={plotH} fill="rgba(255,255,255,0.025)" /> : null}
 
         {grid.map((v) => (
           <g key={v}>
@@ -184,7 +232,7 @@ export function CandleChart({
           <line key={`b${t}`} x1={x(t)} x2={x(t)} y1={PAD_T} y2={PAD_T + plotH} stroke="rgba(255,255,255,0.16)" strokeDasharray="2 4" />
         ))}
 
-        {candles.map((c) => {
+        {shown.map((c) => {
           const cx = Math.round(x(c.t + candleMs / 2)) + 0.5;
           const rising = c.c >= c.o;
           const color = rising ? "var(--up)" : "var(--down)";
@@ -198,21 +246,21 @@ export function CandleChart({
           );
         })}
 
-        {beat !== null && roundStartMs !== null ? (
+        {beat !== null && roundStartMs !== null && inPlot(y(beat)) ? (
           <>
             <line x1={Math.max(0, x(roundStartMs))} x2={plotW} y1={y(beat)} y2={y(beat)} stroke="var(--amber)" strokeWidth="1.5" strokeDasharray="6 5" />
             {tag(y(beat), axisPrice(beat), "var(--amber)", "#1c1503")}
           </>
         ) : null}
 
-        {isNum(price) ? (
+        {isNum(price) && newestVisible && inPlot(y(price)) ? (
           <>
             <line x1="0" x2={plotW} y1={y(price)} y2={y(price)} stroke={tagColor} strokeOpacity="0.55" strokeWidth="1" strokeDasharray="1 3" />
             {tag(y(price), axisPrice(price), tagColor, "#04140d")}
           </>
         ) : null}
 
-        {diff !== null && beat !== null && isNum(price) ? (
+        {diff !== null && beat !== null && isNum(price) && newestVisible && inPlot(y(beat)) && inPlot(y(price)) ? (
           <g>
             <line x1={lastX + 6} x2={lastX + 6} y1={y(beat)} y2={y(price)} stroke="rgba(255,255,255,0.45)" strokeWidth="1.5" />
             <g transform={`translate(${Math.max(86, Math.min(plotW - 8, lastX - 12))} ${(y(beat) + y(price)) / 2})`}>
@@ -225,7 +273,7 @@ export function CandleChart({
         ) : null}
 
         {buys.map((buy) => {
-          if (buy.t < startMs || buy.t > endMs) return null;
+          if (buy.t < viewStart || buy.t > viewEnd) return null;
           const bucket = Math.floor(buy.t / candleMs) * candleMs;
           const candle = candles.find((c) => c.t === bucket);
           const bx = x(buy.t);
@@ -239,28 +287,14 @@ export function CandleChart({
         })}
 
         {labels.map((t, i) => (
-          <text
-            key={t}
-            x={x(t)}
-            y={PAD_T + plotH + 18}
-            textAnchor={i === 0 && x(t) < 24 ? "start" : "middle"}
-            fontSize="11.5"
-            fill="#738990"
-          >
+          <text key={t} x={x(t)} y={PAD_T + plotH + 18} textAnchor={i === 0 && x(t) < 24 ? "start" : "middle"} fontSize="11.5" fill="#738990">
             {clock(t, showSeconds)}
           </text>
         ))}
 
-        {hovered ? (
+        {hovered && !dragging ? (
           <g pointerEvents="none">
-            <line
-              x1={x(hovered.t + candleMs / 2)}
-              x2={x(hovered.t + candleMs / 2)}
-              y1={PAD_T}
-              y2={PAD_T + plotH}
-              stroke="rgba(255,255,255,0.28)"
-              strokeDasharray="3 3"
-            />
+            <line x1={x(hovered.t + candleMs / 2)} x2={x(hovered.t + candleMs / 2)} y1={PAD_T} y2={PAD_T + plotH} stroke="rgba(255,255,255,0.28)" strokeDasharray="3 3" />
             <text x="8" y={PAD_T + 12} fontSize="11.5" fill="#c6d4d8">
               <tspan fontWeight="650">{clock(hovered.t, candleMs < 60_000)}</tspan>
               <tspan dx="10" fill="#738990">O </tspan>
@@ -278,23 +312,52 @@ export function CandleChart({
     );
   }
 
-  const onMove = (event: React.MouseEvent<SVGSVGElement>) => {
-    if (empty || startMs === null || endMs === null) return;
+  // the chart can sit inside a scaled container, so pointer distances are converted from screen px to layout px
+  const layoutScale = (el: Element) => {
+    const rect = el.getBoundingClientRect();
+    return rect.width > 0 ? width / rect.width : 1;
+  };
+
+  const onPointerDown = (event: ReactPointerEvent<SVGSVGElement>) => {
+    if (empty || event.button !== 0) return;
+    drag.current = { x: event.clientX, end: viewEnd };
+    setDragging(true);
+    setHover(null);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const onPointerMove = (event: ReactPointerEvent<SVGSVGElement>) => {
+    if (empty) return;
+    const scale = layoutScale(event.currentTarget);
+    if (drag.current) {
+      const dx = (event.clientX - drag.current.x) * scale;
+      const next = clampEnd(drag.current.end - (dx / slotPx) * candleMs);
+      setPinnedEnd(next >= liveEnd - candleMs / 2 ? null : next);
+      return;
+    }
     const rect = event.currentTarget.getBoundingClientRect();
-    const px = ((event.clientX - rect.left) / rect.width) * width;
+    const px = (event.clientX - rect.left) * scale;
     if (px < 0 || px > plotW) {
       setHover(null);
       return;
     }
-    const t = startMs + (px / plotW) * (endMs - startMs);
-    const bucket = Math.floor(t / candleMs) * candleMs;
+    const bucket = Math.floor((viewStart + (px / plotW) * span) / candleMs) * candleMs;
     const index = candles.findIndex((c) => c.t === bucket);
     setHover(index >= 0 ? index : null);
   };
 
+  const endDrag = (event: ReactPointerEvent<SVGSVGElement>) => {
+    drag.current = null;
+    setDragging(false);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+  };
+
   return (
     <div
-      ref={ref}
+      ref={(node) => {
+        ref.current = node;
+        wheelHost.current = node;
+      }}
       className={`${fill ? "absolute inset-0" : "relative w-full"} overflow-hidden rounded-[var(--radius-tile)] border hairline`}
       style={fill ? undefined : { height }}
     >
@@ -305,14 +368,27 @@ export function CandleChart({
       <svg
         width={width}
         height={height}
-        className="relative block"
+        className="relative block touch-pan-y select-none"
+        style={{ cursor: empty ? "default" : dragging ? "grabbing" : "grab" }}
         role="img"
-        aria-label="BTC price candles for the last rounds, with the price to beat line of the current round"
-        onMouseMove={onMove}
+        aria-label="BTC price candles; drag sideways to scroll back through earlier candles"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
         onMouseLeave={() => setHover(null)}
       >
         {body}
       </svg>
+      {!empty && !live ? (
+        <button
+          type="button"
+          onClick={() => setPinnedEnd(null)}
+          className="absolute right-[74px] top-2 rounded-md border border-white/15 bg-[#0c1c24]/90 px-2.5 py-1 text-[12px] font-semibold text-slate-100 hover:bg-[#12303a]"
+        >
+          Latest ›
+        </button>
+      ) : null}
       {empty ? (
         <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
           <div className="text-[14px] font-medium text-slate-300">No BTC prices yet</div>

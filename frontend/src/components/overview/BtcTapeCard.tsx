@@ -12,12 +12,14 @@ import type { StageId } from "../../lib/stages";
 const ROUND_MS = 300_000;
 const TF_KEY = "polybot.tape.timeframe";
 
-/** How the tape is drawn: candle length, and how many rounds (5 minutes each) of history are shown. */
+/** How the tape is drawn: candle length and the width of one candle slot (candles keep this size and the chart scrolls). */
 const TIMEFRAMES = [
-  { id: "5s", label: "5s", candleMs: 5_000, rounds: 3, span: "last 15 min" },
-  { id: "1m", label: "1m", candleMs: 60_000, rounds: 6, span: "last 30 min" },
-  { id: "5m", label: "5m", candleMs: 300_000, rounds: 24, span: "last 2 hours" },
+  { id: "5s", label: "5s", candleMs: 5_000, slotPx: 10 },
+  { id: "1m", label: "1m", candleMs: 60_000, slotPx: 16 },
+  { id: "5m", label: "5m", candleMs: 300_000, slotPx: 22 },
 ] as const;
+/** the server keeps about 2 hours of ticks, so history is asked for 24 rounds back */
+const HISTORY_ROUNDS = 24;
 type TimeframeId = (typeof TIMEFRAMES)[number]["id"];
 
 function readTimeframe(): TimeframeId {
@@ -39,8 +41,8 @@ export function BtcTapeCard({ orders, className }: { orders: OrderRow[]; classNa
   const end = Number.isFinite(endMs) ? endMs : null;
   const [tfId, setTfId] = useState<TimeframeId>(readTimeframe);
   const tf = TIMEFRAMES.find((item) => item.id === tfId) ?? TIMEFRAMES[0];
-  const viewStart = start !== null ? start - (tf.rounds - 1) * ROUND_MS : null;
-  const tape = useBtcCandles(viewStart, end, tf.candleMs);
+  const historyStart = start !== null ? start - HISTORY_ROUNDS * ROUND_MS : null;
+  const tape = useBtcCandles(historyStart, end, tf.candleMs);
   const historyState = useBtcHistoryState();
 
   const pickTimeframe = (id: TimeframeId) => {
@@ -88,8 +90,7 @@ export function BtcTapeCard({ orders, className }: { orders: OrderRow[]; classNa
   ];
   const maxSize = Math.max(0, ...[...levelSizes(snapshot.books.up), ...levelSizes(snapshot.books.down)].filter(isNum));
 
-  const lateStart =
-    viewStart !== null && tape.firstTickMs !== null && tape.firstTickMs - viewStart > 12_000 ? tape.firstTickMs : null;
+  const firstTick = tape.firstTickMs;
 
   return (
     <Card
@@ -158,8 +159,7 @@ export function BtcTapeCard({ orders, className }: { orders: OrderRow[]; classNa
           <CandleChart
             candles={tape.candles}
             candleMs={tf.candleMs}
-            startMs={viewStart}
-            endMs={end}
+            slotPx={tf.slotPx}
             roundStartMs={start}
             priceToBeat={beat}
             price={price}
@@ -170,11 +170,9 @@ export function BtcTapeCard({ orders, className }: { orders: OrderRow[]; classNa
           <div className="mt-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-[12px] text-slate-500">
             <span>
               {tape.candles.length > 0
-                ? lateStart !== null
-                  ? historyState === "unavailable"
-                    ? `Server history not loaded (restart the backend). Candles start at ${fmtHms(lateStart)}`
-                    : `History starts at ${fmtHms(lateStart)}, the first price the server has saved`
-                  : `${tape.candles.length} candles, ${tf.span}`
+                ? historyState === "unavailable"
+                  ? `Server history not loaded (restart the backend). Candles start at ${fmtHms(firstTick)}`
+                  : `${tape.candles.length} candles from ${fmtHms(firstTick)}. Drag the chart to see older ones`
                 : "Waiting for the first price"}
             </span>
             <span className="flex items-center gap-1.5">
