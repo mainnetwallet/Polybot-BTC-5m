@@ -37,7 +37,7 @@ export function ToastStack() {
             <div className="min-w-0 flex-1">
               <div className="text-[12.5px] font-semibold text-slate-100">{toast.title}</div>
               {toast.message ? (
-                <div className="mt-0.5 break-words text-[11.5px] leading-relaxed text-slate-400">{toast.message}</div>
+                <div className="mt-0.5 break-words text-[12.5px] leading-relaxed text-slate-400">{toast.message}</div>
               ) : null}
             </div>
             <button

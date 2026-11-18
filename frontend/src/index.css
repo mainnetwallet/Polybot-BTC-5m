@@ -177,6 +177,7 @@ body {
   color: var(--muted);
 }
 
+@layer components {
 .input {
   width: 100%;
   border-radius: 10px;
@@ -195,6 +196,8 @@ body {
 
 .input.mono {
   font-family: var(--font-sans);
+}
+
 }
 
 .chip {
@@ -324,10 +327,12 @@ select:focus-visible,
   border-radius: 10px;
 }
 
+@layer components {
 .input-sm {
   padding: 6px 10px;
   font-size: 12.5px;
   border-radius: 8px;
+}
 }
 
 /* ---- Overview layout ---- */

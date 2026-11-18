@@ -1,5 +1,6 @@
 import type { Mode, Side } from "../api/types";
-import { cx } from "../lib/format";
+import { cx, sentence } from "../lib/format";
+import { STAGE_VAR, type StageId } from "../lib/stages";
 import { IconArrowDown, IconArrowUp, IconLock, IconZap } from "./Icons";
 
 export function StatusPill({ running, killSwitch }: { running: boolean | null; killSwitch: boolean | null }) {
@@ -36,7 +37,7 @@ export function ModeBadge({ mode, size = "md" }: { mode: Mode; size?: "sm" | "md
     <span
       className={cx(
         "chip",
-        size === "sm" ? "px-2 py-0.5 text-[9px]" : "",
+        size === "sm" ? "px-2 py-0.5 text-[12.5px]" : "",
         live ? "border-down/35 bg-down/10 text-down" : "border-sky/25 bg-sky/10 text-sky",
       )}
       title={live ? "Live execution with real funds" : "Paper execution on live market data"}
@@ -53,7 +54,7 @@ export function SideBadge({ side, size = "md" }: { side: Side; size?: "sm" | "md
     <span
       className={cx(
         "chip",
-        size === "sm" ? "px-2 py-0.5 text-[9px]" : "",
+        size === "sm" ? "px-2 py-0.5 text-[12.5px]" : "",
         up ? "border-up/30 bg-up/10 text-up" : "border-down/30 bg-down/10 text-down",
       )}
     >
@@ -111,21 +112,21 @@ export function StatusChip({
   action?: string | null;
   reason?: string | null;
 }) {
-  const label = status.replace(/_/g, " ");
-  // Orders: tag the status with what kind of order it is (BUY / STOP LOSS / TAKE PROFIT).
+  const label = sentence(status);
+  // Orders: tag the status with what kind of order it is (buy, stop loss, take profit).
   let kind: string | null = null;
   let exitTone: string | null = null;
   if (action === "BUY") {
-    kind = "BUY";
+    kind = "Buy";
   } else if (action === "SELL") {
     if (reason?.endsWith("_stop_loss")) {
-      kind = "STOP LOSS";
+      kind = "Stop loss";
       exitTone = "border-rose-400/40 bg-rose-400/15 text-rose-300"; // red
     } else if (reason?.endsWith("_manual")) {
-      kind = "MANUAL SELL";
+      kind = "Manual sell";
       exitTone = "border-amber/40 bg-amber/15 text-amber"; // amber
     } else if (reason?.endsWith("_take_profit")) {
-      kind = "TAKE PROFIT";
+      kind = "Take profit";
       exitTone = "border-cyan-400/45 bg-cyan-400/15 text-cyan-300"; // cyan
     }
   }
@@ -133,27 +134,22 @@ export function StatusChip({
   const tone = status === "FILLED" && exitTone ? exitTone : statusTone(status);
   return (
     <span className={cx("chip", tone)}>
-      {kind ? `${kind} ${label}` : label}
+      {kind ? `${kind} ${label.toLowerCase()}` : label}
     </span>
   );
 }
 
 export function StageChip({ stage, action }: { stage?: number | null; action?: string | null }) {
   if (stage == null) return <span className="text-slate-600">—</span>;
-  const tone =
-    stage === 0
-      ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300"
-      : stage === 1
-      ? "border-sky-400/30 bg-sky-400/10 text-sky-300"
-      : stage === 2
-        ? "border-amber/30 bg-amber/10 text-amber"
-        : "border-violet-400/30 bg-violet-400/10 text-violet-300";
+  const id = Math.min(3, Math.max(0, stage)) as StageId;
+  const color = STAGE_VAR[id];
   return (
     <span
-      className={cx("chip", tone)}
-      title={action === "SELL" ? `Stage ${stage} exit sale (take-profit or stop-loss)` : `Entry stage ${stage}`}
+      className="chip"
+      style={{ color, background: `color-mix(in srgb, ${color} 14%, transparent)`, borderColor: `color-mix(in srgb, ${color} 38%, transparent)` }}
+      title={action === "SELL" ? `Stage ${stage} exit sale (take profit or stop loss)` : `Entry stage ${stage}`}
     >
-      S{stage}
+      Stage {stage}
     </span>
   );
 }
@@ -168,11 +164,11 @@ export function ResultChip({ result, pnl }: { result?: string | null; pnl?: numb
         : result === "BUY"
           ? "border-sky/30 bg-sky/10 text-sky"
           : "border-amber/30 bg-amber/10 text-amber";
-  const label = result === "OPEN" ? "PENDING" : result;
+  const label = result === "OPEN" ? "Pending" : sentence(result);
   const sign = pnl != null && pnl > 0 ? "+" : "";
   const title =
     result === "BUY"
-      ? "Entry filled. The WIN/LOSS result is shown on the SELL row."
+      ? "Entry filled. The win or loss is shown on the sell row."
       : pnl != null
         ? `Realized P&L ${sign}$${pnl.toFixed(2)}`
         : "Waiting for market settlement";
@@ -191,5 +187,5 @@ export function LevelChip({ level }: { level: string }) {
       : level === "WARNING"
         ? "border-amber/30 bg-amber/10 text-amber"
         : "border-sky/25 bg-sky/10 text-sky";
-  return <span className={cx("chip font-mono", tone)}>{level}</span>;
+  return <span className={cx("chip", tone)}>{sentence(level)}</span>;
 }

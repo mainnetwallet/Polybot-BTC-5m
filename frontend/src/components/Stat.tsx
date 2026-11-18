@@ -30,7 +30,7 @@ export function Stat({ label, value, hint, tone = "default", icon, className }: 
       <div className={cx("mt-1.5 truncate font-mono text-[22px] font-semibold leading-none tracking-tight", TONE_TEXT[tone])}>
         {value}
       </div>
-      {hint ? <div className="mt-1.5 truncate text-[11px] text-muted">{hint}</div> : null}
+      {hint ? <div className="mt-1.5 truncate text-[12.5px] text-muted">{hint}</div> : null}
     </div>
   );
 }

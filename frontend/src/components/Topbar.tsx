@@ -107,11 +107,11 @@ export function Topbar({ page, onNavigate, onOpenMode, onStartLive, onOpenKill }
 
   return (
     <header className="sticky top-0 z-30 border-b hairline bg-[var(--bg)]/85 backdrop-blur-xl">
-      <div className="flex min-h-[var(--topbar-h)] flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 sm:px-6">
-        <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
-          <h1 className="text-[26px] font-semibold leading-none tracking-tight text-slate-100">{meta.title}</h1>
-          <span className="hidden text-[15px] text-slate-500 sm:inline">{subtitle}</span>
-          {modeButton}
+      <div className="flex min-h-[var(--topbar-h)] flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 sm:px-6 xl:flex-nowrap">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 xl:flex-1 xl:flex-nowrap">
+          <h1 className="shrink-0 whitespace-nowrap text-[26px] font-semibold leading-none tracking-tight text-slate-100">{meta.title}</h1>
+          <span className="hidden min-w-0 truncate text-[15px] text-slate-500 sm:inline" title={subtitle}>{subtitle}</span>
+          <span className="shrink-0">{modeButton}</span>
           {bot?.risk_halt ? (
             <span className="chip border-amber/30 bg-amber/10 text-amber" title="Risk engine halt reason">
               <IconAlert size={11} />
@@ -120,8 +120,8 @@ export function Topbar({ page, onNavigate, onOpenMode, onStartLive, onOpenKill }
           ) : null}
         </div>
 
-        <div className="flex w-full flex-wrap items-center gap-2 xl:ml-auto xl:w-auto">
-          <div className="flex w-full flex-wrap items-center gap-2 xl:w-auto">{pills}</div>
+        <div className="flex w-full flex-wrap items-center gap-2 xl:ml-auto xl:w-auto xl:shrink-0 xl:flex-nowrap">
+          <div className="flex w-full flex-wrap items-center gap-2 xl:w-auto xl:flex-nowrap">{pills}</div>
 
           {killActive ? (
             <span className="chip border-down/35 bg-down/10 text-down">

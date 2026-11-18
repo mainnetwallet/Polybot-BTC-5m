@@ -16,14 +16,14 @@ function ReadinessRow({ ok, label }: { ok: boolean; label: string }) {
       >
         {ok ? <IconCheck size={10} /> : <IconClose size={10} />}
       </span>
-      <span className={cx("text-[11.5px]", ok ? "text-slate-300" : "text-slate-500")}>{label}</span>
+      <span className={cx("text-[12.5px]", ok ? "text-slate-300" : "text-slate-500")}>{label}</span>
     </div>
   );
 }
 
 function Warning({ children }: { children: ReactNode }) {
   return (
-    <div className="flex gap-2.5 rounded-lg border border-amber/25 bg-amber/[0.07] px-3 py-2.5 text-[11.5px] leading-relaxed text-amber/90">
+    <div className="flex gap-2.5 rounded-lg border border-amber/25 bg-amber/[0.07] px-3 py-2.5 text-[12.5px] leading-relaxed text-amber/90">
       <IconAlert size={14} className="mt-0.5 shrink-0" />
       <div>{children}</div>
     </div>
@@ -111,10 +111,10 @@ export function ModeSwitchModal({
             </div>
             {!readiness?.ready ? (
               <div className="rounded-lg border border-down/20 bg-down/[0.06] px-3 py-2.5">
-                <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-down/80">
+                <div className="text-[12px] font-semibold text-down/80">
                   Live gate blocked
                 </div>
-                <ul className="mt-1.5 list-disc space-y-1 pl-4 text-[11.5px] text-slate-400">
+                <ul className="mt-1.5 list-disc space-y-1 pl-4 text-[12.5px] text-slate-400">
                   {(readiness?.reasons.length ? readiness.reasons : ["Live readiness has not been confirmed."]).map(
                     (reason) => (
                       <li key={reason}>{reason}</li>
@@ -139,7 +139,7 @@ export function ModeSwitchModal({
             </div>
           </>
         ) : (
-          <div className="flex gap-2.5 rounded-lg border border-sky/20 bg-sky/[0.06] px-3 py-2.5 text-[11.5px] leading-relaxed text-sky/90">
+          <div className="flex gap-2.5 rounded-lg border border-sky/20 bg-sky/[0.06] px-3 py-2.5 text-[12.5px] leading-relaxed text-sky/90">
             <IconLock size={14} className="mt-0.5 shrink-0" />
             <div>
               Paper execution is completely isolated from live balances and statistics. Existing paper orders and
@@ -158,7 +158,7 @@ export function ModeSwitchModal({
         ) : null}
 
         {error ? (
-          <div className="rounded-lg border border-down/30 bg-down/10 px-3 py-2 text-[11.5px] text-down">{error}</div>
+          <div className="rounded-lg border border-down/30 bg-down/10 px-3 py-2 text-[12.5px] text-down">{error}</div>
         ) : null}
       </div>
     </Modal>
@@ -216,7 +216,7 @@ export function StartLiveModal({ open, onClose }: { open: boolean; onClose: () =
           kill switch stops execution immediately.
         </Warning>
         <div className="flex items-center justify-between rounded-lg border hairline bg-black/20 px-3 py-2.5">
-          <span className="flex items-center gap-2 text-[11.5px] text-slate-400">
+          <span className="flex items-center gap-2 text-[12.5px] text-slate-400">
             <IconShield size={13} className="text-slate-500" />
             On-chain collateral available
           </span>
@@ -239,7 +239,7 @@ export function StartLiveModal({ open, onClose }: { open: boolean; onClose: () =
           />
         </div>
         {!readiness?.ready ? (
-          <div className="rounded-lg border border-down/20 bg-down/[0.06] px-3 py-2.5 text-[11.5px] text-slate-400">
+          <div className="rounded-lg border border-down/20 bg-down/[0.06] px-3 py-2.5 text-[12.5px] text-slate-400">
             <span className="flex items-center gap-1.5 font-semibold text-down">
               <IconZap size={11} />
               Live gate not satisfied
@@ -252,7 +252,7 @@ export function StartLiveModal({ open, onClose }: { open: boolean; onClose: () =
           </div>
         ) : null}
         {error ? (
-          <div className="rounded-lg border border-down/30 bg-down/10 px-3 py-2 text-[11.5px] text-down">{error}</div>
+          <div className="rounded-lg border border-down/30 bg-down/10 px-3 py-2 text-[12.5px] text-down">{error}</div>
         ) : null}
       </div>
     </Modal>
@@ -298,7 +298,7 @@ export function KillSwitchModal({ open, onClose }: { open: boolean; onClose: () 
           The kill switch is a hard halt: the engine stops, no new orders are submitted, and a risk halt reason is
           persisted. Paper and live positions remain in the database for reconciliation.
         </Warning>
-        <div className="text-[11.5px] leading-relaxed text-slate-500">
+        <div className="text-[12.5px] leading-relaxed text-slate-500">
           Clear the switch from the same header control when you are ready to resume. Starting the bot while the
           switch is active is rejected by the backend.
         </div>
