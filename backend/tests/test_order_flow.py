@@ -719,3 +719,32 @@ async def test_partial_pending_flag_follows_the_partly_filled_buy():
     manager._retry_after.clear()
     await _later_event(stack, later, books, make_ctx(remaining=60, btc_price=100050, price_to_beat=100000, balance=10))
     assert not manager.has_partial_pending("paper", market.market_id)  # nothing left to top up
+
+
+@pytest.mark.parametrize("offset_ms", [-3000.0, 0.0, 3000.0, 45_000.0])
+async def test_latency_ignores_the_synced_clock_offset(offset_ms):
+    """Decision time comes from the corrected clock, so latency must be measured on the same clock:
+    a +/- offset between this machine and Polymarket must not show up as negative/huge latency."""
+    from app import clock
+    from app.config.settings import Settings
+    from app.execution.base import OrderRequest, SellRequest
+    from app.market_data.book import OrderBook
+    from app.paper_trading.engine import PaperExecutionEngine
+
+    clock.set_offset_ms(offset_ms)
+    try:
+        book = OrderBook(
+            token_id="t", market_id="m", side="UP", bids={0.60: 100.0}, asks={0.62: 100.0}
+        )
+        engine = PaperExecutionEngine(Settings(_env_file=None), lambda side: book)
+        buy = await engine.place_buy(
+            OrderRequest("k", "c", "m", "UP", "t", 5.0, 0.70, clock.now_ms())
+        )
+        sell = await engine.place_sell(
+            SellRequest("k", "c", "m", "UP", "t", 5.0, 0.50, clock.now_ms())
+        )
+    finally:
+        clock.reset()
+    for report in (buy, sell):
+        assert report.latency_ms is not None
+        assert 0 <= report.latency_ms < 1000

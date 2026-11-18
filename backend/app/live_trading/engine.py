@@ -23,6 +23,7 @@ import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 
+from app import clock
 from app.config.settings import Settings
 from app.execution.base import ExecutionEngine, ExecutionReport, FillPart, OrderRequest, SellRequest
 
@@ -451,7 +452,7 @@ class LiveExecutionEngine(ExecutionEngine):
             if not self._orders_allowed:
                 return ExecutionReport(status="REJECTED", error="new live orders are blocked")
             report = await self._place_buy_locked(request)
-            report.latency_ms = float(max(0, int(time.time() * 1000) - request.observed_at_ms))
+            report.latency_ms = float(max(0, clock.now_ms() - request.observed_at_ms))
             return report
 
     async def place_sell(self, request: SellRequest) -> ExecutionReport:
@@ -473,7 +474,7 @@ class LiveExecutionEngine(ExecutionEngine):
                 status="SUBMITTED",
                 error="sell submission outcome is unknown; reconcile before retrying",
             )
-        report.latency_ms = float(max(0, int(time.time() * 1000) - request.observed_at_ms))
+        report.latency_ms = float(max(0, clock.now_ms() - request.observed_at_ms))
         return report
 
     def _ensure_conditional_allowance(self, client, token_id: str) -> None:

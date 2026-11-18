@@ -6,10 +6,10 @@ spread and slippage are represented; depth caps produce partial fills.
 
 from __future__ import annotations
 
-import time
 import uuid
 from collections.abc import Callable
 
+from app import clock
 from app.config.settings import Settings
 from app.execution.base import ExecutionEngine, ExecutionReport, FillPart, OrderRequest, SellRequest
 from app.market_data.book import OrderBook
@@ -30,7 +30,7 @@ class PaperExecutionEngine(ExecutionEngine):
         return round(shares * rate, 8)
 
     async def place_buy(self, request: OrderRequest) -> ExecutionReport:
-        started_ms = int(time.time() * 1000)
+        started_ms = clock.now_ms()
         book = self._book_provider(request.side)
         if book is None or book.best_ask is None:
             return ExecutionReport(
@@ -78,7 +78,7 @@ class PaperExecutionEngine(ExecutionEngine):
         cost = sum(f.price * f.size for f in fills)
         fee = round(sum(f.fee for f in fills), 8)
         avg_price = round(cost / filled_size, 6) if filled_size > 0 else None
-        latency_ms = float(int(time.time() * 1000) - request.observed_at_ms)
+        latency_ms = float(clock.now_ms() - request.observed_at_ms)
 
         if not fills:
             return ExecutionReport(
@@ -102,7 +102,7 @@ class PaperExecutionEngine(ExecutionEngine):
 
     async def place_sell(self, request: SellRequest) -> ExecutionReport:
         """Immediate-or-cancel SELL: walks the real bid levels at or above ``min_price``."""
-        started_ms = int(time.time() * 1000)
+        started_ms = clock.now_ms()
         book = self._book_provider(request.side)
         if book is None or book.best_bid is None:
             return ExecutionReport(
@@ -141,7 +141,7 @@ class PaperExecutionEngine(ExecutionEngine):
             )
             remaining -= shares
 
-        latency_ms = float(int(time.time() * 1000) - request.observed_at_ms)
+        latency_ms = float(clock.now_ms() - request.observed_at_ms)
         if not fills:
             return ExecutionReport(
                 status="CANCELED",
