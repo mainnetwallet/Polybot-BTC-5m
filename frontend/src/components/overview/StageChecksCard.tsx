@@ -23,6 +23,12 @@ const CHIP_TONE: Record<CheckTone, string> = {
   neutral: "border-white/8 bg-white/[0.04] text-slate-400",
 };
 
+/** "Take profit +8%" -> ["Take profit", "+8%"]; "Ask 0.70 to 0.85" -> ["Ask", "0.70 to 0.85"] */
+function splitChip(label: string): [string, string] {
+  const m = label.match(/^(Take profit|Ask|Gap|Spread|Above)\s+(.*)$/);
+  return m ? [m[1], m[2]] : ["", label];
+}
+
 export function StageChecksCard({ orders, className }: { orders: OrderRow[]; className?: string }) {
   const { snapshot } = useBot();
   const remaining = useRemainingSeconds();
@@ -87,8 +93,8 @@ export function StageChecksCard({ orders, className }: { orders: OrderRow[]; cla
                 <div className="sc-chips mt-1.5 flex flex-wrap gap-1">
                   {chips.map((chip) => (
                     <span key={chip.key} className={cx("chip sc-chip", CHIP_TONE[chip.tone])}>
-                      <span className="sc-chip-k">{chip.label.split(" ")[0]}</span>
-                      <span className="sc-chip-v">{chip.label.split(" ").slice(1).join(" ")}</span>
+                      <span className="sc-chip-k">{splitChip(chip.label)[0]}</span>
+                      <span className="sc-chip-v">{splitChip(chip.label)[1]}</span>
                     </span>
                   ))}
                 </div>
