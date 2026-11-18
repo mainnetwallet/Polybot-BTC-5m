@@ -44,7 +44,7 @@ STALE_AFTER_MS = 10_000
 FIRST_TICK_TIMEOUT_SECONDS = 8.0  # no BTC tick this long after subscribing -> try the next subscription form
 TICK_SILENCE_RECONNECT_SECONDS = 15.0  # stream was alive but went quiet -> reconnect
 RTDS_OPEN_TOLERANCE_MS = 1_000  # max distance between the window start and the RTDS tick used as its open
-TICK_HISTORY = 2_400  # ~40 minutes of one-per-second TWAP ticks kept to look up window-start values
+TICK_HISTORY = 7_300  # ~2 hours of one-per-second TWAP ticks: window-start lookups and the dashboard candle history
 OPEN_LOOKUP_RETRY_SECONDS = 1.0  # keeps asking until the official value is published
 BROWSER_HEADERS = {
     "User-Agent": (
@@ -164,6 +164,19 @@ class BtcPriceFeed:
         if beat is None:
             return latest[1], None, "price to beat is not available yet"
         return latest[1], beat[0], ""
+
+    def recent_ticks(self, since_ms: int | None = None, limit: int = TICK_HISTORY) -> list[tuple[int, float]]:
+        """Recent official TWAP60 ticks (ts_ms, price), oldest first, one per timestamp.
+
+        Feeds the dashboard's candle chart so it shows history from before the page was opened.
+        """
+        seen: dict[int, float] = {}
+        for ts_ms, price in self._ticks:
+            if since_ms is not None and ts_ms < since_ms:
+                continue
+            seen[ts_ms] = price  # a repeated timestamp keeps the latest value
+        rows = sorted(seen.items())
+        return rows[-limit:] if limit > 0 else []
 
     def _rtds_open(self, market: MarketInfo) -> tuple[float, str] | None:
         """TWAP60 tick stamped at the window start (== Polymarket's price to beat), if we saw it."""

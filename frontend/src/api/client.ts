@@ -67,6 +67,8 @@ export const api = {
 
   state: () => request<Snapshot>("/api/state"),
   health: () => request<Record<string, unknown>>("/api/health"),
+  /** Recent Chainlink BTC ticks the server has seen, [timestamp ms, price] oldest first (about 2 hours). */
+  btcTicks: () => request<{ ticks: [number, number][] }>("/api/btc/ticks"),
 
   start: (confirmLive = false, phrase = "") =>
     request<Snapshot>("/api/bot/start", {

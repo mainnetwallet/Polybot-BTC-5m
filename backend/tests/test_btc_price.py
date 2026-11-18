@@ -241,3 +241,14 @@ def test_gap_inputs_explain_why_data_is_unusable():
     started_earlier = _market(start - timedelta(seconds=120))  # window-start tick was never seen
     price, beat, issue = no_beat.gap_inputs(started_earlier)
     assert price == 71_000.0 and beat is None and "price to beat" in issue
+
+
+def test_recent_ticks_are_sorted_deduplicated_and_filtered():
+    feed = BtcPriceFeed(Settings())
+    feed.handle_message(_frame(3_000, 71_030.0))
+    feed.handle_message(_frame(1_000, 71_010.0))  # out of order, still kept for history
+    feed.handle_message(_frame(2_000, 71_020.0))
+    feed.handle_message(_frame(2_000, 71_021.0))  # same timestamp: latest value wins
+    assert feed.recent_ticks() == [(1_000, 71_010.0), (2_000, 71_021.0), (3_000, 71_030.0)]
+    assert feed.recent_ticks(since_ms=2_000) == [(2_000, 71_021.0), (3_000, 71_030.0)]
+    assert feed.recent_ticks(limit=1) == [(3_000, 71_030.0)]

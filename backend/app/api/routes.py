@@ -146,6 +146,15 @@ def build_router(
     async def reset_settings_route() -> dict:
         return await bot.reset_settings()
 
+    @router.get("/btc/ticks")
+    async def btc_ticks(
+        since_ms: int | None = Query(default=None, ge=0),
+        limit: int = Query(default=7300, ge=1, le=7300),
+    ) -> dict:
+        """Recent Chainlink BTC/USD ticks the server has seen, so the dashboard can draw candles of past rounds."""
+        rows = bot.btc.recent_ticks(since_ms, limit)
+        return {"ticks": [[ts_ms, price] for ts_ms, price in rows]}
+
     @router.get("/orders")
     async def orders(
         mode: str | None = Query(default=None),

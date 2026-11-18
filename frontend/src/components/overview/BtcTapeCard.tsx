@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { OrderRow } from "../../api/types";
 import { Card } from "../Card";
 import { BookLadder } from "../BookLadder";
@@ -9,6 +9,27 @@ import { useBtcCandles } from "../../hooks/BtcTape";
 import { cx, fmtPx, fmtSignedPct, fmtHms, isNum, usdParts } from "../../lib/format";
 import type { StageId } from "../../lib/stages";
 
+const ROUND_MS = 300_000;
+const TF_KEY = "polybot.tape.timeframe";
+
+/** How the tape is drawn: candle length, and how many rounds (5 minutes each) of history are shown. */
+const TIMEFRAMES = [
+  { id: "5s", label: "5s", candleMs: 5_000, rounds: 3, span: "last 15 min" },
+  { id: "1m", label: "1m", candleMs: 60_000, rounds: 6, span: "last 30 min" },
+  { id: "5m", label: "5m", candleMs: 300_000, rounds: 24, span: "last 2 hours" },
+] as const;
+type TimeframeId = (typeof TIMEFRAMES)[number]["id"];
+
+function readTimeframe(): TimeframeId {
+  try {
+    const saved = window.localStorage.getItem(TF_KEY);
+    if (saved === "5s" || saved === "1m" || saved === "5m") return saved;
+  } catch {
+    /* storage blocked: use the default */
+  }
+  return "5s";
+}
+
 export function BtcTapeCard({ orders, className }: { orders: OrderRow[]; className?: string }) {
   const { snapshot, history } = useBot();
   const market = snapshot?.market ?? null;
@@ -16,14 +37,24 @@ export function BtcTapeCard({ orders, className }: { orders: OrderRow[]; classNa
   const endMs = market ? Date.parse(market.window_end) : NaN;
   const start = Number.isFinite(startMs) ? startMs : null;
   const end = Number.isFinite(endMs) ? endMs : null;
-  const tape = useBtcCandles(start, end);
+  const [tfId, setTfId] = useState<TimeframeId>(readTimeframe);
+  const tf = TIMEFRAMES.find((item) => item.id === tfId) ?? TIMEFRAMES[0];
+  const viewStart = start !== null ? start - (tf.rounds - 1) * ROUND_MS : null;
+  const tape = useBtcCandles(viewStart, end, tf.candleMs);
 
-  const marketId = market?.market_id ?? null;
+  const pickTimeframe = (id: TimeframeId) => {
+    setTfId(id);
+    try {
+      window.localStorage.setItem(TF_KEY, id);
+    } catch {
+      /* storage blocked: the choice just is not remembered */
+    }
+  };
+
   const buys = useMemo<BuyMarker[]>(() => {
-    if (!marketId) return [];
     const out: BuyMarker[] = [];
     for (const order of orders) {
-      if (order.market_id !== marketId || order.action !== "BUY" || !(order.filled_size > 0)) continue;
+      if (order.action !== "BUY" || !(order.filled_size > 0)) continue;
       const t = Date.parse(order.created_at);
       if (!Number.isFinite(t)) continue;
       const stage = Math.min(3, Math.max(0, order.stage ?? 1)) as StageId;
@@ -36,7 +67,7 @@ export function BtcTapeCard({ orders, className }: { orders: OrderRow[]; classNa
       });
     }
     return out;
-  }, [orders, marketId]);
+  }, [orders]);
 
   if (!snapshot) return <LoadingPanel className={className} />;
 
@@ -57,13 +88,33 @@ export function BtcTapeCard({ orders, className }: { orders: OrderRow[]; classNa
   const maxSize = Math.max(0, ...[...levelSizes(snapshot.books.up), ...levelSizes(snapshot.books.down)].filter(isNum));
 
   const lateStart =
-    start !== null && tape.firstTickMs !== null && tape.firstTickMs - start > 12_000 ? tape.firstTickMs : null;
+    viewStart !== null && tape.firstTickMs !== null && tape.firstTickMs - viewStart > 12_000 ? tape.firstTickMs : null;
 
   return (
     <Card
       title="BTC tape"
       className={cx("cq", className)}
-      right={<span>5 second candles, Chainlink</span>}
+      right={
+        <span className="flex items-center gap-2">
+          <span className="inline-flex gap-0.5 rounded-lg border hairline bg-black/15 p-0.5" role="group" aria-label="Candle length">
+            {TIMEFRAMES.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => pickTimeframe(item.id)}
+                aria-pressed={item.id === tfId}
+                className={cx(
+                  "rounded-md px-2 py-0.5 text-[12px] font-semibold transition-colors",
+                  item.id === tfId ? "bg-white/[0.1] text-slate-100" : "text-slate-500 hover:text-slate-200",
+                )}
+              >
+                {item.label}
+              </button>
+            ))}
+          </span>
+          <span>candles, Chainlink</span>
+        </span>
+      }
     >
       <div className="tape-body">
         <div className="tape-main min-w-0">
@@ -105,8 +156,10 @@ export function BtcTapeCard({ orders, className }: { orders: OrderRow[]; classNa
           <div className="chart-fill relative min-h-[220px]">
           <CandleChart
             candles={tape.candles}
-            startMs={start}
+            candleMs={tf.candleMs}
+            startMs={viewStart}
             endMs={end}
+            roundStartMs={start}
             priceToBeat={beat}
             price={price}
             buys={buys}
@@ -117,8 +170,8 @@ export function BtcTapeCard({ orders, className }: { orders: OrderRow[]; classNa
             <span>
               {tape.candles.length > 0
                 ? lateStart !== null
-                  ? `Candles start at ${fmtHms(lateStart)}, when this browser received its first price`
-                  : `${tape.candles.length} candles this round`
+                  ? `History starts at ${fmtHms(lateStart)}, the first price received`
+                  : `${tape.candles.length} candles, ${tf.span}`
                 : "Waiting for the first price"}
             </span>
             <span className="flex items-center gap-1.5">
