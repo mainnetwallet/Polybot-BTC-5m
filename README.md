@@ -165,10 +165,11 @@ The same bot runs on a Linux server with the same one-command workflow as `start
 ```bash
 git clone https://github.com/mainnetwallet/Polybot-BTC-5m.git
 cd Polybot-BTC-5m
-./start.sh
+./setup.sh       # once: .venv, packages, .env from .env.example, data/ and logs/, database
+./start.sh       # every time: git pull + restart API and dashboard
 ```
 
-`./start.sh` is the only command you need, the first time and for every update. It stops the running copy, runs `git pull`, installs packages only when `requirements.txt` / `package-lock.json` changed (the first run also creates `.venv`, `.env` and the database), then starts the API and the dashboard in the background and gives the prompt back.
+`./setup.sh` is optional: `./start.sh` runs it by itself when `.venv`, `frontend/node_modules` or `.env` is missing. After that `./start.sh` is the only command you need, also for every update. It stops the running copy, runs `git pull`, installs packages only when `requirements.txt` / `package-lock.json` changed, then starts the API and the dashboard in the background and gives the prompt back.
 
 ```bash
 nano .env        # settings are read only at startup: edit, then ./start.sh again
