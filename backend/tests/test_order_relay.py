@@ -134,3 +134,75 @@ def test_ping_relay_is_a_get_time_through_the_relay(http):
     seen, _ = http
     _client(f"{RELAY}/{HOST}").ping_relay()
     assert seen == [f"{RELAY}/{HOST}/time"]
+
+
+def _engine_and_client(relay_on: bool):
+    """Real LiveExecutionEngine buy/sell code paths; only the SDK signing step is faked."""
+    from app.live_trading.engine import LiveExecutionEngine
+
+    engine = LiveExecutionEngine(
+        _settings(order_proxy_enabled=relay_on, order_proxy_url=RELAY)
+    )
+    engine._ensure_conditional_allowance = lambda client, token_id: None
+    base = _make_client_class(order_relay_url(engine._settings))
+
+    class FakeSigningClient(base):
+        def get_tick_size(self, token_id):
+            return "0.01"
+
+        def create_and_post_market_order(self, args, options, order_type, defer_exec):
+            return self._post(f"{HOST}/order", headers={}, data="{}")
+
+    return engine, FakeSigningClient(host=HOST, chain_id=137)
+
+
+def _buy_request():
+    from app.execution.base import OrderRequest
+
+    return OrderRequest("k", "c", "m", "BUY", "123", 5.0, 0.6, 0)
+
+
+def _sell_request():
+    from app.execution.base import SellRequest
+
+    return SellRequest("k", "c", "m", "SELL", "123", 5.0, 0.4, 0)
+
+
+def test_engine_buy_is_relayed_and_sell_is_direct(http):
+    seen, _ = http
+    engine, client = _engine_and_client(relay_on=True)
+    engine._place_sync(client, _buy_request())
+    engine._place_sell_sync(client, _sell_request())
+    assert seen == [f"{RELAY}/{HOST}/order", f"{HOST}/order"]
+
+
+def test_engine_everything_direct_when_switch_off(http):
+    seen, _ = http
+    engine, client = _engine_and_client(relay_on=False)
+    engine._place_sync(client, _buy_request())
+    engine._place_sell_sync(client, _sell_request())
+    assert seen == [f"{HOST}/order", f"{HOST}/order"]
+
+
+def test_engine_relay_down_refuses_buy_but_sell_still_goes_direct(http):
+    seen, state = http
+    state["fail_relay"] = httpx.ConnectError("refused")
+    engine, client = _engine_and_client(relay_on=True)
+    assert engine._place_sync(client, _buy_request()).status == "REJECTED"
+    engine._place_sell_sync(client, _sell_request())
+    assert seen == [f"{RELAY}/{HOST}/order", f"{HOST}/order"]
+
+
+def test_concurrent_buy_and_sell_do_not_mix_routes(http):
+    """A buy and sells running at the same time on different threads keep their own route."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    seen, _ = http
+    engine, client = _engine_and_client(relay_on=True)
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        futures = [pool.submit(engine._place_sync, client, _buy_request()) for _ in range(20)]
+        futures += [pool.submit(engine._place_sell_sync, client, _sell_request()) for _ in range(20)]
+        for f in futures:
+            f.result()
+    assert seen.count(f"{RELAY}/{HOST}/order") == 20
+    assert seen.count(f"{HOST}/order") == 20
