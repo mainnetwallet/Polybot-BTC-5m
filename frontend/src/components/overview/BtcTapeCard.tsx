@@ -62,8 +62,8 @@ export function BtcTapeCard({ orders, className }: { orders: OrderRow[]; classNa
       className={cx("cq", className)}
       right={<span>5 second candles, Chainlink</span>}
     >
-      <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2">
-        <div className={cx("hero-num text-[40px]", btc?.stale && "!text-slate-500")}>
+      <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <div className={cx("hero-num text-[34px]", btc?.stale && "!text-slate-500")}>
           {parts ? (
             <>
               ${parts.whole}
@@ -98,7 +98,8 @@ export function BtcTapeCard({ orders, className }: { orders: OrderRow[]; classNa
       </div>
 
       <div className="tape-body">
-        <div className="min-w-0">
+        <div className="tape-chart min-w-0">
+          <div className="chart-fill relative min-h-[220px]">
           <CandleChart
             candles={tape.candles}
             startMs={start}
@@ -106,9 +107,10 @@ export function BtcTapeCard({ orders, className }: { orders: OrderRow[]; classNa
             priceToBeat={beat}
             price={price}
             buys={buys}
-            height={310}
+            fill
           />
-          <div className="mt-2.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-[12.5px] text-slate-500">
+          </div>
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-[12px] text-slate-500">
             <span>
               {tape.candles.length > 0
                 ? lateStart !== null
@@ -123,10 +125,10 @@ export function BtcTapeCard({ orders, className }: { orders: OrderRow[]; classNa
           </div>
         </div>
 
-        <div className="grid min-w-0 grid-cols-2 gap-3 self-start">
-          <BookLadder side="UP" book={snapshot.books.up} maxSize={maxSize} history={history.up} staleAfterMs={stale} />
-          <BookLadder side="DOWN" book={snapshot.books.down} maxSize={maxSize} history={history.down} staleAfterMs={stale} />
-          <p className="col-span-2 text-[12px] leading-snug text-slate-500">
+        <div className="grid min-w-0 grid-cols-2 gap-x-3 gap-y-2 self-start">
+          <BookLadder compact side="UP" book={snapshot.books.up} maxSize={maxSize} history={history.up} staleAfterMs={stale} />
+          <BookLadder compact side="DOWN" book={snapshot.books.down} maxSize={maxSize} history={history.down} staleAfterMs={stale} />
+          <p className="col-span-2 text-[11.5px] leading-snug text-slate-500">
             Best ask and best bid only. The feed does not send deeper levels, so none are drawn.
           </p>
         </div>

@@ -223,6 +223,7 @@ export function PositionsCard({ orders, className }: { orders: OrderRow[]; class
           </>
         }
       >
+        <div className="scrollbar min-h-0 flex-1 overflow-y-auto pr-1">
         {rows.length === 0 ? (
           <EmptyState
             icon={<IconLayers size={22} />}
@@ -230,16 +231,16 @@ export function PositionsCard({ orders, className }: { orders: OrderRow[]; class
             hint="Filled buys of the live market appear here, one row per stage, with their take profit and stop loss."
           />
         ) : (
-          <ul className="scrollbar max-h-[26rem] divide-y divide-white/[0.06] overflow-y-auto pr-1">
+          <ul className="divide-y divide-white/[0.06]">
             {rows.map((row) => {
               const stage = row.stage === null ? null : (Math.min(3, Math.max(0, row.stage)) as StageId);
               const tp = stage === null ? null : takeProfitPrice(stage, row.entry, strategy);
               const sl = stage === null ? null : stopLossPrice(stage, row.entry, strategy, remaining);
               const color = stage === null ? "var(--muted)" : STAGE_VAR[stage];
               return (
-                <li key={row.key} className="py-3.5 first:pt-0">
+                <li key={row.key} className="py-2 first:pt-0">
                   <div className="flex items-center justify-between gap-3">
-                    <div className="flex min-w-0 items-center gap-2.5 text-[14px]">
+                    <div className="flex min-w-0 items-center gap-2.5 text-[13.5px]">
                       <span
                         className={cx(
                           "chip !px-2 !py-0.5 !text-[11.5px] font-bold",
@@ -253,7 +254,7 @@ export function PositionsCard({ orders, className }: { orders: OrderRow[]; class
                       </span>
                     </div>
                     <div className="flex shrink-0 items-center gap-2.5">
-                      <span className={cx("text-[14px] font-semibold", row.pnl === null ? "text-slate-500" : row.pnl >= 0 ? "text-up" : "text-down")}>
+                      <span className={cx("text-[13.5px] font-semibold", row.pnl === null ? "text-slate-500" : row.pnl >= 0 ? "text-up" : "text-down")}>
                         {row.pnl === null ? "—" : fmtSignedUsd(row.pnl)}
                       </span>
                       {row.holding ? (
@@ -269,15 +270,15 @@ export function PositionsCard({ orders, className }: { orders: OrderRow[]; class
                       ) : null}
                     </div>
                   </div>
-                  <div className="mt-1.5 flex items-center gap-2 text-[12.5px] text-slate-500">
-                    <span className="inline-block h-2.5 w-2.5 rounded-[3px]" style={{ background: color }} aria-hidden="true" />
-                    {stage === null ? "Whole position" : `Stage ${stage}`} · bid {fmtPx(row.bid)}
-                  </div>
-                  <div className="mt-2.5">
+                  <div className="mt-1 flex items-center justify-between gap-3 text-[12px] text-slate-500">
+                    <span className="flex shrink-0 items-center gap-2">
+                      <span className="inline-block h-2.5 w-2.5 rounded-[3px]" style={{ background: color }} aria-hidden="true" />
+                      {stage === null ? "Whole position" : `Stage ${stage}`} · bid {fmtPx(row.bid)}
+                    </span>
                     {stage === null ? (
-                      <div className="text-[12.5px] text-slate-500">Exit levels are tracked per stage; none is recorded for this position</div>
+                      <span className="truncate">No exit levels recorded</span>
                     ) : (
-                      <ExitMeter entry={row.entry} bid={row.bid} stop={sl} takeProfit={tp} />
+                      <ExitMeter inline entry={row.entry} bid={row.bid} stop={sl} takeProfit={tp} />
                     )}
                   </div>
                 </li>
@@ -286,16 +287,16 @@ export function PositionsCard({ orders, className }: { orders: OrderRow[]; class
           </ul>
         )}
 
-        <div className="mt-5 border-t hairline pt-4">
-          <div className="mb-2.5 text-[13px] font-medium text-slate-400">Trigger log</div>
+        <div className="mt-3 border-t hairline pt-3">
+          <div className="mb-2 text-[12.5px] font-medium text-slate-400">Trigger log</div>
           {lines.length === 0 ? (
             <div className="text-[12.5px] text-slate-500">
               {triggers.data ? "No trigger, fill or settlement yet for this round." : "Loading the trigger log"}
             </div>
           ) : (
-            <ul className="space-y-2">
+            <ul className="space-y-1.5">
               {lines.map((line) => (
-                <li key={line.key} className="grid grid-cols-[4.2rem_1fr] gap-2 text-[13px] leading-snug">
+                <li key={line.key} className="grid grid-cols-[4.2rem_1fr] gap-2 text-[12.5px] leading-snug">
                   <span className="text-slate-500">{fmtHms(line.t)}</span>
                   <span className={cx("min-w-0 break-words text-slate-300", line.tone === "down" && "text-down", line.tone === "amber" && "text-amber")}>
                     {line.bold ? <b className={cx("font-semibold", line.tone === "up" ? "text-up" : "text-slate-100")}>{line.bold}</b> : null}
@@ -306,6 +307,7 @@ export function PositionsCard({ orders, className }: { orders: OrderRow[]; class
               ))}
             </ul>
           )}
+        </div>
         </div>
       </Card>
 

@@ -14,7 +14,7 @@ interface CardProps {
 export function Card({ title, right, className, children, bodyClassName }: CardProps) {
   return (
     <section className={cx("panel flex min-w-0 flex-col p-5", className)}>
-      <header className="mb-4 flex items-start justify-between gap-3">
+      <header className="card-head mb-4 flex items-start justify-between gap-3">
         <h2 className="card-title">{title}</h2>
         {right ? <div className="flex shrink-0 items-center gap-2 text-[13px] text-slate-500">{right}</div> : null}
       </header>

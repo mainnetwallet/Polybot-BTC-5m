@@ -60,7 +60,7 @@ export function RoundRing({ remaining, duration, windows, chip }: RoundRingProps
       : `Round clock, ${fmtClock(remaining)} left${active ? `, stage ${active.stage} watching` : ""}`;
 
   return (
-    <div className="relative mx-auto w-full max-w-[440px]" style={{ containerType: "inline-size" }}>
+    <div className="rc-ring relative mx-auto w-full max-w-[440px]" style={{ containerType: "inline-size" }}>
       <svg viewBox="-12 -12 464 464" className="block h-auto w-full" role="img" aria-label={summary}>
         <defs>
           <radialGradient id="ring-dial" cx="50%" cy="45%" r="60%">

@@ -1,4 +1,5 @@
 import { useEffect, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { cx } from "../lib/format";
 import { IconClose } from "./Icons";
 
@@ -36,7 +37,8 @@ export function Modal({
 
   if (!open) return null;
 
-  return (
+  // rendered on <body>, so a scaled or clipped parent (the Overview) cannot shift or cut the dialog
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <button
         type="button"
@@ -75,6 +77,7 @@ export function Modal({
           </div>
         ) : null}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
