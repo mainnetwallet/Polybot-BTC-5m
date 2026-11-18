@@ -66,7 +66,26 @@ export function Sidebar({ page, onNavigate }: SidebarProps) {
         {expanded ? <span className="whitespace-nowrap text-[16px] font-semibold tracking-tight text-slate-100">Polybot</span> : null}
       </div>
 
-      <nav className="mt-8 flex flex-col gap-2 px-[10px]">
+      <nav className="mt-6 flex flex-col gap-2 px-[10px]">
+        <button
+          type="button"
+          onClick={toggle}
+          aria-expanded={expanded}
+          aria-label={expanded ? "Collapse sidebar" : "Expand sidebar"}
+          className={cx(row, "border border-white/[0.06] text-slate-400 hover:bg-white/[0.05] hover:text-slate-100")}
+        >
+          <span className="flex h-full w-[42px] shrink-0 items-center justify-center">
+            {expanded ? <IconChevronsLeft size={18} /> : <IconChevronsRight size={18} />}
+          </span>
+          {expanded ? (
+            <span className="truncate pr-3 text-[14px] font-medium">Collapse</span>
+          ) : (
+            <span className="rail-tip" role="tooltip">
+              Expand
+            </span>
+          )}
+        </button>
+        <div className="mx-1 my-1 h-px bg-white/[0.06]" aria-hidden="true" />
         {NAV.map((item) => {
           const Icon = item.icon;
           const active = item.id === page;
@@ -142,25 +161,6 @@ export function Sidebar({ page, onNavigate }: SidebarProps) {
             {expanded ? <span className="truncate text-[13px]">Local session</span> : null}
           </div>
         )}
-
-        <button
-          type="button"
-          onClick={toggle}
-          aria-expanded={expanded}
-          aria-label={expanded ? "Collapse sidebar" : "Expand sidebar"}
-          className={cx(row, "border border-white/[0.06] text-slate-400 hover:bg-white/[0.05] hover:text-slate-100")}
-        >
-          <span className="flex h-full w-[42px] shrink-0 items-center justify-center">
-            {expanded ? <IconChevronsLeft size={18} /> : <IconChevronsRight size={18} />}
-          </span>
-          {expanded ? (
-            <span className="truncate pr-3 text-[14px] font-medium">Collapse</span>
-          ) : (
-            <span className="rail-tip" role="tooltip">
-              Expand
-            </span>
-          )}
-        </button>
       </div>
     </aside>
   );
