@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type { Candle } from "../hooks/BtcTape";
-import { fmtGapUsd, isNum } from "../lib/format";
+import { isNum } from "../lib/format";
 import { STAGE_VAR, type StageId } from "../lib/stages";
 
 export interface BuyMarker {
@@ -190,7 +190,6 @@ export function CandleChart({
     for (let t = Math.ceil(viewStart / ROUND_MS) * ROUND_MS; t < viewEnd; t += ROUND_MS) boundaries.push(t);
 
     const barW = Math.max(1, Math.min(22, slotPx * 0.7));
-    const lastX = x(last.t + candleMs / 2);
     const diff = isNum(price) && beat !== null ? price - beat : null;
     const above = diff === null ? true : diff >= 0;
     const tagColor = above ? "var(--up)" : "var(--down)";
@@ -258,18 +257,6 @@ export function CandleChart({
             <line x1="0" x2={plotW} y1={y(price)} y2={y(price)} stroke={tagColor} strokeOpacity="0.55" strokeWidth="1" strokeDasharray="1 3" />
             {tag(y(price), axisPrice(price), tagColor, "#04140d")}
           </>
-        ) : null}
-
-        {diff !== null && beat !== null && isNum(price) && newestVisible && inPlot(y(beat)) && inPlot(y(price)) ? (
-          <g>
-            <line x1={lastX + 6} x2={lastX + 6} y1={y(beat)} y2={y(price)} stroke="rgba(255,255,255,0.45)" strokeWidth="1.5" />
-            <g transform={`translate(${Math.max(86, Math.min(plotW - 8, lastX - 12))} ${(y(beat) + y(price)) / 2})`}>
-              <rect x="-78" y="-12" width="76" height="24" rx="8" fill="#0c1c24" stroke="rgba(255,255,255,0.16)" />
-              <text x="-40" y="0.5" textAnchor="middle" dominantBaseline="central" fontSize="12" fontWeight="650" fill={above ? "var(--up)" : "var(--down)"}>
-                {`${above ? "+" : "-"}${fmtGapUsd(diff)} gap`}
-              </text>
-            </g>
-          </g>
         ) : null}
 
         {buys.map((buy) => {
