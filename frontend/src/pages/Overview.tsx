@@ -62,6 +62,7 @@ export function Overview() {
 
         {/* below the first screen */}
         <div className="ov-grid ov-extra">
+          <RiskFeedCard className="ov-risk" />
           <Card
             title="Recent orders"
             className="ov-orders overflow-hidden"
@@ -74,7 +75,6 @@ export function Overview() {
               <LoadingPanel className="m-4" />
             )}
           </Card>
-          <RiskFeedCard className="ov-risk" />
         </div>
       </div>
     </div>

@@ -354,6 +354,8 @@ select:focus-visible,
 /* narrow windows and phones: every card stacks, the round clock stays first */
 @media (max-width: 899px) {
   .ov-grid > * { grid-column: span 12; }
+  /* Risk and feed sits left on desktop; on phones Recent orders stays first */
+  .ov-extra .ov-orders { order: -1; }
 }
 
 /*
