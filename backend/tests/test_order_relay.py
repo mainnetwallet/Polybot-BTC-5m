@@ -1,4 +1,4 @@
-"""Only the live order POST (/order) goes through the relay Worker; everything else stays direct."""
+"""Only the live BUY order POST (/order) goes through the relay Worker; sells and everything else stay direct."""
 
 from __future__ import annotations
 
@@ -51,12 +51,30 @@ def test_switch_off_means_direct_whatever_the_url():
     assert order_relay_url(_settings(order_proxy_url=RELAY)) == ""  # default is off
 
 
-def test_order_post_goes_through_relay_and_other_posts_stay_direct(http):
+def test_buy_order_post_goes_through_relay_and_other_posts_stay_direct(http):
     seen, _ = http
     client = _client(f"{RELAY}/{HOST}")
-    assert client._post(f"{HOST}/order", headers={}, data="{}") == {"ok": True}
-    client._post(f"{HOST}/auth/api-key", headers={})
+    with client.relay_for_buy():
+        assert client._post(f"{HOST}/order", headers={}, data="{}") == {"ok": True}
+        client._post(f"{HOST}/auth/api-key", headers={})
     assert seen == [f"{RELAY}/{HOST}/order", f"{HOST}/auth/api-key"]
+
+
+def test_sell_order_post_stays_direct_even_with_relay_on(http):
+    """Take-profit / stop-loss sells are posted outside relay_for_buy(): always direct."""
+    seen, _ = http
+    client = _client(f"{RELAY}/{HOST}")
+    client._post(f"{HOST}/order", headers={}, data="{}")
+    assert seen == [f"{HOST}/order"]
+
+
+def test_relay_flag_resets_after_the_buy(http):
+    seen, _ = http
+    client = _client(f"{RELAY}/{HOST}")
+    with client.relay_for_buy():
+        client._post(f"{HOST}/order", headers={}, data="{}")
+    client._post(f"{HOST}/order", headers={}, data="{}")  # a sell right after the buy
+    assert seen == [f"{RELAY}/{HOST}/order", f"{HOST}/order"]
 
 
 def test_gets_and_deletes_stay_direct(http):
@@ -69,17 +87,19 @@ def test_gets_and_deletes_stay_direct(http):
 
 def test_no_relay_means_direct(http):
     seen, _ = http
-    _client("")._post(f"{HOST}/order", headers={}, data="{}")
+    client = _client("")
+    with client.relay_for_buy():
+        client._post(f"{HOST}/order", headers={}, data="{}")
     assert seen == [f"{HOST}/order"]
 
 
 @pytest.mark.parametrize("exc", [httpx.ConnectError("refused"), httpx.ConnectTimeout("slow")])
 def test_unreachable_relay_never_goes_direct(http, exc):
-    """No fallback: with the relay on, an order only ever leaves through it."""
+    """No fallback: with the relay on, a buy only ever leaves through it."""
     seen, state = http
     state["fail_relay"] = exc
     client = _client(f"{RELAY}/{HOST}")
-    with pytest.raises(PolyException) as info:
+    with pytest.raises(PolyException) as info, client.relay_for_buy():
         client._post(f"{HOST}/order", headers={}, data="{}")
     assert not isinstance(info.value, PolyApiException)
     assert seen == [f"{RELAY}/{HOST}/order"]  # nothing was posted direct
@@ -93,7 +113,7 @@ def test_read_timeout_is_an_unknown_outcome(http):
     seen, state = http
     state["fail_relay"] = httpx.ReadTimeout("no answer")
     client = _client(f"{RELAY}/{HOST}")
-    with pytest.raises(PolyApiException) as info:
+    with pytest.raises(PolyApiException) as info, client.relay_for_buy():
         client._post(f"{HOST}/order", headers={}, data="{}")
     assert seen == [f"{RELAY}/{HOST}/order"]
     assert classify_post_exception(info.value).status == "SUBMITTED"
@@ -105,7 +125,7 @@ def test_relay_http_error_surfaces_status(http, monkeypatch):
 
     monkeypatch.setattr(helpers, "_http_client", httpx.Client(transport=httpx.MockTransport(handler)))
     client = _client(f"{RELAY}/{HOST}")
-    with pytest.raises(PolyApiException) as info:
+    with pytest.raises(PolyApiException) as info, client.relay_for_buy():
         client._post(f"{HOST}/order", headers={}, data="{}")
     assert info.value.status_code == 400
 

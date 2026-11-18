@@ -49,11 +49,11 @@ class Settings(BaseSettings):
     gamma_base_url: str = "https://gamma-api.polymarket.com"
     clob_base_url: str = "https://clob.polymarket.com"
     data_api_base_url: str = "https://data-api.polymarket.com"
-    # Relay (Cloudflare Worker) for the live order POST only (buy, take-profit sell, stop-loss sell).
-    # ORDER_PROXY_ENABLED=true: every order is posted to <ORDER_PROXY_URL>/<CLOB_BASE_URL>/order, always,
-    # with no direct fallback (if the relay is down the order is refused and retried like any failed order).
-    # false: orders go direct to Polymarket. Every other call (market data, balance, positions, cancel)
-    # is always direct.
+    # Relay (Cloudflare Worker) for the live BUY order POST only.
+    # ORDER_PROXY_ENABLED=true: every buy is posted to <ORDER_PROXY_URL>/<CLOB_BASE_URL>/order, always,
+    # with no direct fallback (if the relay is down the buy is refused and retried like any failed order).
+    # false: buys go direct to Polymarket. Take-profit / stop-loss sells and every other call (market
+    # data, balance, positions, cancel) are always direct.
     order_proxy_enabled: bool = False
     order_proxy_url: str = "https://polybot.akramhossain5010.workers.dev"
     clob_ws_url: str = "wss://ws-subscriptions-clob.polymarket.com/ws/market"

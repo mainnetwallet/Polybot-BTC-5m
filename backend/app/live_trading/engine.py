@@ -104,20 +104,38 @@ def _make_client_class(relay_url: str = ""):
     and the poll would hold the order lock, so it is skipped. If a future SDK renames the hook
     the override simply stops applying: orders still work, only slower.
 
-    With ``relay_url`` set, ONLY the order POST (``/order``: every buy, take-profit and stop-loss
-    sell) is sent through the relay. Signing is unchanged (the L2 signature covers the ``/order``
-    path, not the host), and every other request keeps going straight to the CLOB. There is no
-    direct fallback: with the relay on, an order never leaves except through it.
+    With ``relay_url`` set, ONLY the BUY order POST (``/order`` posted inside ``relay_for_buy()``) is
+    sent through the relay. Signing is unchanged (the L2 signature covers the ``/order`` path, not the
+    host). Take-profit and stop-loss sells, and every other request, keep going straight to the CLOB.
+    There is no direct fallback for a buy: with the relay on, a buy never leaves except through it.
     """
+    import threading
+    from contextlib import contextmanager
+
     from py_clob_client_v2 import ClobClient
     from py_clob_client_v2.endpoints import POST_ORDER
 
     class LiveClobClient(ClobClient):
+        _route = threading.local()
+
         def _resolve_transactions_hashes(self, response):
             return response
 
+        @contextmanager
+        def relay_for_buy(self):
+            """Mark the order POST made by this thread inside the block as a buy (relayed)."""
+            self._route.buy = True
+            try:
+                yield
+            finally:
+                self._route.buy = False
+
         def _post(self, endpoint, headers=None, data=None, params=None):
-            if relay_url and endpoint == f"{self.host}{POST_ORDER}":
+            if (
+                relay_url
+                and endpoint == f"{self.host}{POST_ORDER}"
+                and getattr(self._route, "buy", False)
+            ):
                 return self._post_order_via_relay(headers, data, params)
             return super()._post(endpoint, headers=headers, data=data, params=params)
 
@@ -623,7 +641,13 @@ class LiveExecutionEngine(ExecutionEngine):
         try:
             # deferExec stays at the documented default (false). The SDK's post-submit
             # settlement-hash polling is disabled by the client subclass instead.
-            response = client.create_and_post_market_order(args, None, OrderType.FOK, False)
+            # Only the buy goes through the order relay (when enabled); sells always go direct.
+            relay_for_buy = getattr(client, "relay_for_buy", None)
+            if callable(relay_for_buy):
+                with relay_for_buy():
+                    response = client.create_and_post_market_order(args, None, OrderType.FOK, False)
+            else:
+                response = client.create_and_post_market_order(args, None, OrderType.FOK, False)
         except Exception as exc:
             report = classify_post_exception(exc)
             if report.status == "SUBMITTED":
