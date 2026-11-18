@@ -430,7 +430,8 @@ select:focus-visible,
 .ov-screen .tape-chart { display: flex; min-height: 0; flex: 1; flex-direction: column; }
 .ov-screen .tape-chart > .chart-fill { flex: 1; min-height: 0; }
 .ov-screen .tape-chart .chart-fill { min-height: 0; }
-.ov-screen .tape-book { align-self: stretch; row-gap: 0; }
+/* pulled up into the card header gap so the Up / Down header sits higher and the ladder gains the room */
+.ov-screen .tape-book { align-self: stretch; row-gap: 0; margin-top: -9px; }
 /* the ladder: 4 asks, spread, 4 bids and a header have to fit the short top card */
 .ov-screen .tape-book .lvl { font-size: 11px; gap: 6px; }
 .ov-screen .tape-book .lvl-bar { height: 15px; border-radius: 4px; }
@@ -438,8 +439,8 @@ select:focus-visible,
 .ov-screen .tape-book > div > .space-y-1 > * + * { margin-top: 2px; }
 .ov-screen .tape-book .lvl-spread { line-height: 1.25; }
 .ov-screen .tape-book .lvl-spread { padding: 0; font-size: 10.5px; }
-.ov-screen .tape-book .lvl-head { margin-bottom: 3px; }
-.ov-screen .tape-book .lvl-head span { font-size: 13px; line-height: 1.2; }
+.ov-screen .tape-book .lvl-head { margin-bottom: 4px; }
+.ov-screen .tape-book .lvl-head span { font-size: 16px; line-height: 1.2; }
 .ov-screen .tape-book .lvl-foot { margin-top: 3px; font-size: 10.5px; line-height: 1.2; }
 
 /* round clock: stages in two columns, tiles in one compact row so the ring can sit in the short card */
