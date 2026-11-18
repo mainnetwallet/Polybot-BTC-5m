@@ -17,7 +17,10 @@ interface BookLadderProps {
 /** how many price levels are drawn on each side of the spread */
 const LEVELS = 4;
 
-function Level({ price, size, maxSize, tone }: { price: number | null; size: number | null; maxSize: number; tone: "ask" | "bid" }) {
+type Level = [number | null, number | null];
+const EMPTY: Level = [null, null];
+
+function LevelRow({ price, size, maxSize, tone }: { price: number | null; size: number | null; maxSize: number; tone: "ask" | "bid" }) {
   const width = isNum(size) && maxSize > 0 ? clamp01(size / maxSize) * 100 : 0;
   return (
     <div className="grid grid-cols-[3.4rem_1fr] items-center gap-2 text-[12.5px]">
@@ -47,14 +50,14 @@ export function BookLadder({ side, book, maxSize, history, staleAfterMs, compact
   const spread = isNum(ask) && isNum(bid) ? ask - bid : null;
   const stale = isNum(book?.age_ms) && isNum(staleAfterMs) ? book.age_ms > staleAfterMs : false;
 
-  // Deeper levels when the backend sends them, else fall back to the best ask and bid alone.
-  // Asks are drawn highest first so the best ask sits right above the spread, like a real ladder.
-  const askLevels: Array<[number | null, number | null]> = book?.asks?.length
-    ? [...book.asks].slice(0, LEVELS).reverse()
-    : [[ask, book?.ask_size ?? null]];
-  const bidLevels: Array<[number | null, number | null]> = book?.bids?.length
-    ? book.bids.slice(0, LEVELS)
-    : [[bid, book?.bid_size ?? null]];
+  // Always LEVELS rows on each side, so Up and Down line up and the spread sits at the same height.
+  // A side with fewer real levels (a one-sided book near the end of a round) is padded with empty rows:
+  // asks are drawn highest first, so the best ask sits right above the spread and the padding goes on top;
+  // bids are drawn best first, so the padding goes at the bottom.
+  const askRaw: Level[] = book?.asks?.length ? book.asks.slice(0, LEVELS) : isNum(ask) ? [[ask, book?.ask_size ?? 0]] : [];
+  const bidRaw: Level[] = book?.bids?.length ? book.bids.slice(0, LEVELS) : isNum(bid) ? [[bid, book?.bid_size ?? 0]] : [];
+  const askLevels: Level[] = [...Array<Level>(Math.max(0, LEVELS - askRaw.length)).fill(EMPTY), ...[...askRaw].reverse()];
+  const bidLevels: Level[] = [...bidRaw, ...Array<Level>(Math.max(0, LEVELS - bidRaw.length)).fill(EMPTY)];
 
   return (
     <div className="min-w-0">
@@ -64,14 +67,14 @@ export function BookLadder({ side, book, maxSize, history, staleAfterMs, compact
       </div>
       <div className={compact ? "space-y-1" : "space-y-1.5"}>
         {askLevels.map(([price, size], i) => (
-          <Level key={`a${i}-${price}`} price={price} size={size} maxSize={maxSize} tone="ask" />
+          <LevelRow key={`a${i}-${price}`} price={price} size={size} maxSize={maxSize} tone="ask" />
         ))}
         <div className="flex items-center justify-between border-y border-dashed border-white/10 py-1 text-[12.5px] text-slate-500">
           <span>Spread</span>
           <span className="text-slate-300">{fmtPx(spread)}</span>
         </div>
         {bidLevels.map(([price, size], i) => (
-          <Level key={`b${i}-${price}`} price={price} size={size} maxSize={maxSize} tone="bid" />
+          <LevelRow key={`b${i}-${price}`} price={price} size={size} maxSize={maxSize} tone="bid" />
         ))}
       </div>
       {compact ? (
