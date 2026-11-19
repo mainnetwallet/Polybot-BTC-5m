@@ -117,13 +117,16 @@ def _make_client_class(relay_url: str = ""):
                 self._route.buy = False
 
         def _post(self, endpoint, headers=None, data=None, params=None):
-            if (
-                relay_url
-                and endpoint == f"{self.host}{POST_ORDER}"
-                and getattr(self._route, "buy", False)
-            ):
-                return self._post_order_via_relay(headers, data, params)
-            return super()._post(endpoint, headers=headers, data=data, params=params)
+            is_order = endpoint == f"{self.host}{POST_ORDER}"
+            started = time.perf_counter()
+            try:
+                if relay_url and is_order and getattr(self._route, "buy", False):
+                    return self._post_order_via_relay(headers, data, params)
+                return super()._post(endpoint, headers=headers, data=data, params=params)
+            finally:
+                if is_order:
+                    # Round trip of the order POST alone (read by _log_call_timing).
+                    self._route.post_ms = (time.perf_counter() - started) * 1000.0
 
         def _post_order_via_relay(self, headers, data, params):
             import httpx
@@ -433,11 +436,23 @@ class LiveExecutionEngine(ExecutionEngine):
     async def place_buy(self, request: OrderRequest) -> ExecutionReport:
         if not self._orders_allowed:
             return ExecutionReport(status="REJECTED", error="new live orders are blocked")
+        entered_ms = clock.now_ms()
         async with self._order_lock:
             if not self._orders_allowed:
                 return ExecutionReport(status="REJECTED", error="new live orders are blocked")
+            locked_ms = clock.now_ms()
             report = await self._place_buy_locked(request)
-            report.latency_ms = float(max(0, clock.now_ms() - request.observed_at_ms))
+            done_ms = clock.now_ms()
+            report.latency_ms = float(max(0, done_ms - request.observed_at_ms))
+            # Where the reported latency went: work before place_buy (risk check, DB reservation),
+            # waiting for an earlier buy that is still in flight, then the exchange call itself.
+            logger.info(
+                "buy latency split: pre_send=%dms lock_wait=%dms exchange_call=%dms total=%dms",
+                max(0, entered_ms - request.observed_at_ms),
+                max(0, locked_ms - entered_ms),
+                max(0, done_ms - locked_ms),
+                max(0, done_ms - request.observed_at_ms),
+            )
             return report
 
     async def place_sell(self, request: SellRequest) -> ExecutionReport:
@@ -482,6 +497,25 @@ class LiveExecutionEngine(ExecutionEngine):
         except Exception as exc:
             logger.warning("conditional allowance sync failed (%s)", type(exc).__name__)
 
+    @staticmethod
+    def _log_call_timing(kind: str, client, started: float) -> None:
+        """One log line splitting an order call into build+sign and the order POST round trip."""
+        total_ms = (time.perf_counter() - started) * 1000.0
+        route = getattr(client, "_route", None)
+        post_ms = getattr(route, "post_ms", None)
+        if route is not None:
+            route.post_ms = None
+        if post_ms is None:
+            logger.info("%s timing: sdk_call=%.0fms (no order POST was made)", kind, total_ms)
+            return
+        logger.info(
+            "%s timing: build_sign=%.0fms post_roundtrip=%.0fms sdk_call=%.0fms",
+            kind,
+            max(0.0, total_ms - post_ms),
+            post_ms,
+            total_ms,
+        )
+
     def _place_sell_sync(self, client, request: SellRequest) -> ExecutionReport:
         from py_clob_client_v2 import MarketOrderArgs, OrderType, Side
 
@@ -503,6 +537,7 @@ class LiveExecutionEngine(ExecutionEngine):
             user_usdc_balance=0,
             position_id=request.token_id if request.asset_version == 2 else None,
         )
+        call_started = time.perf_counter()
         try:
             response = client.create_and_post_market_order(args, None, OrderType.FOK, False)
         except Exception as exc:
@@ -513,6 +548,8 @@ class LiveExecutionEngine(ExecutionEngine):
             else:
                 logger.warning("live sell not accepted (%s): %s", type(exc).__name__, report.error)
             return report
+        finally:
+            self._log_call_timing("sell", client, call_started)
         if not isinstance(response, dict):
             return ExecutionReport(status="REJECTED", error="unexpected CLOB response")
 
@@ -631,6 +668,7 @@ class LiveExecutionEngine(ExecutionEngine):
             user_usdc_balance=float(balance) if balance and balance > 0 else 0,
             position_id=request.token_id if request.asset_version == 2 else None,
         )
+        call_started = time.perf_counter()
         try:
             # deferExec stays at the documented default (false). The SDK's post-submit
             # settlement-hash polling is disabled by the client subclass instead.
@@ -652,6 +690,8 @@ class LiveExecutionEngine(ExecutionEngine):
                     "live order not accepted (%s): %s", type(exc).__name__, report.error
                 )
             return report
+        finally:
+            self._log_call_timing("buy", client, call_started)
         if not isinstance(response, dict):
             return ExecutionReport(status="REJECTED", error="unexpected CLOB response")
 
