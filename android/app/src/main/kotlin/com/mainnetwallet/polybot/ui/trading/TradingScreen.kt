@@ -574,6 +574,8 @@ private fun OrderRowItem(order: OrderRow, onClick: () -> Unit) {
                     if (order.stage != null) {
                         Text("S${order.stage}", style = Mono.small, color = scheme.onSurfaceVariant)
                     }
+                    // A buy that went through the order proxy gets a tag (direct / paper orders get none).
+                    if (order.route == "proxy") ToneChip("PROXY", Tone.Info)
                 }
                 Text(
                     "${Fmt.num(order.filledSize, 2)} sh @ ${Fmt.cents(order.avgFillPrice)}",
