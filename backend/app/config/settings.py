@@ -57,7 +57,7 @@ class Settings(BaseSettings):
     # false (default): buys go direct to Polymarket (paper: no relay call). Take-profit / stop-loss sells and every
     # other call (market data, balance, positions, cancel) are always direct.
     order_proxy_enabled: bool = False
-    order_proxy_url: str = "https://polybot.akramhossain5010.workers.dev"
+    order_proxy_url: str = ""  # empty = no relay; set your own relay URL only if you run one
     clob_ws_url: str = "wss://ws-subscriptions-clob.polymarket.com/ws/market"
     rtds_ws_url: str = "wss://ws-live-data.polymarket.com"
     # Since 2026-08-14 Polymarket's 5-minute crypto markets settle on the Chainlink 60-second TWAP (both
