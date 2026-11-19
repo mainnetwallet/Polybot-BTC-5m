@@ -50,13 +50,13 @@ class Settings(BaseSettings):
     clob_base_url: str = "https://clob.polymarket.com"
     data_api_base_url: str = "https://data-api.polymarket.com"
     # Relay (Cloudflare Worker) for the BUY order POST only, in live AND paper mode.
-    # ORDER_PROXY_ENABLED=true (default): every live buy is posted to <ORDER_PROXY_URL>/<CLOB_BASE_URL>/order,
+    # ORDER_PROXY_ENABLED=true (opt-in, off by default): every live buy is posted to <ORDER_PROXY_URL>/<CLOB_BASE_URL>/order,
     # always, with no direct fallback (if the relay is down the buy is refused and retried like any failed
     # order). A paper buy sends no order, but it makes the same round trip to the relay (GET /time, so the
     # paper latency includes the relay hop) and is refused the same way when the relay is down.
-    # false: buys go direct to Polymarket (paper: no relay call). Take-profit / stop-loss sells and every
+    # false (default): buys go direct to Polymarket (paper: no relay call). Take-profit / stop-loss sells and every
     # other call (market data, balance, positions, cancel) are always direct.
-    order_proxy_enabled: bool = True
+    order_proxy_enabled: bool = False
     order_proxy_url: str = "https://polybot.akramhossain5010.workers.dev"
     clob_ws_url: str = "wss://ws-subscriptions-clob.polymarket.com/ws/market"
     rtds_ws_url: str = "wss://ws-live-data.polymarket.com"

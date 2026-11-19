@@ -50,8 +50,8 @@ def test_switch_off_means_direct_whatever_the_url():
     assert order_relay_url(_settings(order_proxy_enabled=False, order_proxy_url=RELAY)) == ""
 
 
-def test_proxy_is_on_by_default():
-    assert Settings.model_fields["order_proxy_enabled"].default is True
+def test_proxy_is_off_by_default():
+    assert Settings.model_fields["order_proxy_enabled"].default is False
 
 
 def test_buy_order_post_goes_through_relay_and_other_posts_stay_direct(http):
