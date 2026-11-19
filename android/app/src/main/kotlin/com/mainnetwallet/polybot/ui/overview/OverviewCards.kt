@@ -201,7 +201,7 @@ private fun HeroRing(
 /**
  * Hero card: the 5-minute window countdown, the BTC price and its gap to the price to beat, and the account
  * numbers (balance, PnL, trades) in one place. The clock follows the server, not the phone.
- * The card tints amber inside the stage 1.
+ * The card tints amber while a stage window is open.
  */
 @Composable
 fun HeroCard(

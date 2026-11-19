@@ -62,4 +62,33 @@ class RingStageTest {
         assertEquals(1, ringStage(true, null, s))
         assertNull(ringStage(false, null, s))
     }
+
+    @Test fun stagesEndWhereTheNextEnabledStageStarts() {
+        assertEquals(100.0, stageEndSeconds(0, s), 0.0)
+        assertEquals(50.0, stageEndSeconds(1, s), 0.0)
+        assertEquals(30.0, stageEndSeconds(2, s), 0.0)
+        assertEquals(0.0, stageEndSeconds(3, s), 0.0)
+        // a switched-off stage is skipped
+        assertEquals(30.0, stageEndSeconds(1, s.copy(stage2Enabled = false)), 0.0)
+        assertEquals(0.0, stageEndSeconds(1, s.copy(stage2Enabled = false, stage3Enabled = false)), 0.0)
+        assertEquals(0.0, stageEndSeconds(2, s.copy(stage3Enabled = false)), 0.0)
+    }
+
+    @Test fun onlyOneEntryStageIsOpenAtATime() {
+        // stage 1 hands over to stage 2 at 50 s and stage 2 to stage 3 at 30 s: never several "active" at once
+        fun open(left: Double) = (1..3).filter { stageOpen(it, left, s) }
+        assertEquals(listOf(1), open(85.0))
+        assertEquals(listOf(1), open(51.0))
+        assertEquals(listOf(2), open(50.0))
+        assertEquals(listOf(2), open(31.0))
+        assertEquals(listOf(3), open(30.0))
+        assertEquals(listOf(3), open(1.0))
+        assertEquals(emptyList<Int>(), open(95.0))
+    }
+
+    @Test fun stageOpenNeedsAClockAndTheSwitch() {
+        org.junit.Assert.assertFalse(stageOpen(1, null, s))
+        org.junit.Assert.assertFalse(stageOpen(0, 120.0, s.copy(stage0Enabled = false)))
+        org.junit.Assert.assertTrue(stageOpen(0, 120.0, s))
+    }
 }

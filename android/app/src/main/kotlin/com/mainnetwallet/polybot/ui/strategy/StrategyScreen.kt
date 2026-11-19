@@ -35,6 +35,10 @@ import com.mainnetwallet.polybot.data.model.Snapshot
 import com.mainnetwallet.polybot.data.model.StrategyState
 import com.mainnetwallet.polybot.data.model.TriggerRow
 import com.mainnetwallet.polybot.domain.Tone
+import com.mainnetwallet.polybot.domain.stageEnabled
+import com.mainnetwallet.polybot.domain.stageEndSeconds
+import com.mainnetwallet.polybot.domain.stageOpen
+import com.mainnetwallet.polybot.domain.stageStartSeconds
 import com.mainnetwallet.polybot.domain.statusTone
 import com.mainnetwallet.polybot.ui.Fmt
 import com.mainnetwallet.polybot.ui.LocalGraph
@@ -215,10 +219,10 @@ private fun triggerCounts(rows: List<TriggerRow>): List<Int> = TriggerFilter.ent
 
 private fun stageSpecs(snap: StrategyView, remaining: Double?): List<StageSpec> {
     val s = snap.strategy
-    val open0 = remaining != null && remaining <= s.stage0StartSeconds && remaining > s.stage0EndSeconds
-    val open1 = remaining != null && remaining <= s.stage1Seconds
-    val open2 = remaining != null && remaining <= s.stage2Seconds
-    val open3 = remaining != null && remaining <= s.stage3Seconds
+    val open0 = stageOpen(0, remaining, s)
+    val open1 = stageOpen(1, remaining, s)
+    val open2 = stageOpen(2, remaining, s)
+    val open3 = stageOpen(3, remaining, s)
     val tierValues = listOf(s.stage0TakeProfitPctLow, s.stage0TakeProfitPctMid, s.stage0TakeProfitPctHigh)
     val tiers0 = if (tierValues.all { it <= 0.0 }) "off" else tierValues.joinToString(" / ") { Fmt.plain(it) } + "%"
     return listOf(
@@ -227,7 +231,7 @@ private fun stageSpecs(snap: StrategyView, remaining: Double?): List<StageSpec> 
             title = "Early buy",
             window = "${secs(s.stage0StartSeconds)} → ${secs(s.stage0EndSeconds)} left",
             enabled = s.stage0Enabled,
-            active = s.stage0Enabled && open0,
+            active = open0,
             highlights = listOf(
                 "Entry ask" to centsRange(s.stage0MinAsk, s.stage0EarlyMaxAsk),
                 "Take-profit" to tiers0,
@@ -253,7 +257,7 @@ private fun stageSpecs(snap: StrategyView, remaining: Double?): List<StageSpec> 
             title = "Stage 1",
             window = "last ${secs(s.stage1Seconds)}",
             enabled = s.stage1Enabled,
-            active = s.stage1Enabled && open1,
+            active = open1,
             highlights = listOf(
                 "Entry ask" to "≥ " + Fmt.centsShort(s.stage1Threshold),
                 "Take-profit" to if (s.stage1SellEnabled) pct(s.stage1TakeProfitPct) else "off",
@@ -277,7 +281,7 @@ private fun stageSpecs(snap: StrategyView, remaining: Double?): List<StageSpec> 
             title = "Add-on",
             window = "from ${secs(s.stage2Seconds)} left",
             enabled = s.stage2Enabled,
-            active = s.stage2Enabled && open2,
+            active = open2,
             highlights = listOf(
                 "Entry ask" to "≥ " + Fmt.centsShort(s.stage2Threshold),
                 "Take-profit" to if (s.stage2SellEnabled) "bid " + Fmt.centsShort(s.stage2SellPrice) else "off",
@@ -298,7 +302,7 @@ private fun stageSpecs(snap: StrategyView, remaining: Double?): List<StageSpec> 
             title = "Add-on",
             window = "from ${secs(s.stage3Seconds)} left",
             enabled = s.stage3Enabled,
-            active = s.stage3Enabled && open3,
+            active = open3,
             highlights = listOf(
                 "Entry ask" to "≥ " + Fmt.centsShort(s.stage3Threshold),
                 "Take-profit" to "hold",
@@ -330,15 +334,15 @@ private fun TimelineCard(snap: StrategyView, remaining: Double?) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
-            val lanes = listOf(
+            val lanes = (0..3).map { stage ->
                 StageLane(
-                    "S0", s.stage0StartSeconds, s.stage0EndSeconds, s.stage0Enabled,
-                    s.stage0Enabled && remaining != null && remaining <= s.stage0StartSeconds && remaining > s.stage0EndSeconds,
-                ),
-                StageLane("S1", s.stage1Seconds, 0.0, s.stage1Enabled, s.stage1Enabled && remaining != null && remaining <= s.stage1Seconds),
-                StageLane("S2", s.stage2Seconds, 0.0, s.stage2Enabled, s.stage2Enabled && remaining != null && remaining <= s.stage2Seconds),
-                StageLane("S3", s.stage3Seconds, 0.0, s.stage3Enabled, s.stage3Enabled && remaining != null && remaining <= s.stage3Seconds),
-            )
+                    label = "S$stage",
+                    fromRemaining = stageStartSeconds(stage, s),
+                    toRemaining = stageEndSeconds(stage, s),
+                    enabled = stageEnabled(stage, s),
+                    active = stageOpen(stage, remaining, s),
+                )
+            }
             StageTimeline(duration = duration, remaining = remaining, lanes = lanes)
             TimelineLegend()
             val observe = Math.max(0.0, duration - s.stage1Seconds)
