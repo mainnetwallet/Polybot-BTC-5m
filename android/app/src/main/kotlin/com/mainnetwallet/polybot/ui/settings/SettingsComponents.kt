@@ -56,16 +56,24 @@ import com.mainnetwallet.polybot.ui.theme.Space
 private const val HairlineAlpha = 0.55f
 private val IconSize = 38.dp
 
-/** Small caps title above a card, with an optional grey caption below it. It sits outside the card. */
+/**
+ * Small caps title above a card, with an optional small icon in front of it and a grey caption below. It sits
+ * outside the card.
+ */
 @Composable
-fun GroupHeader(title: String, modifier: Modifier = Modifier, caption: String? = null) {
+fun GroupHeader(title: String, modifier: Modifier = Modifier, caption: String? = null, icon: ImageVector? = null) {
     Column(
         modifier
             .fillMaxWidth()
             .padding(horizontal = Space.xs),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        Label(title)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+            if (icon != null) {
+                Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+            }
+            Label(title)
+        }
         if (caption != null) {
             Text(caption, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }

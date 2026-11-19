@@ -38,6 +38,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -48,6 +49,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
@@ -65,6 +67,7 @@ import com.mainnetwallet.polybot.data.store.ThemeMode
 import com.mainnetwallet.polybot.domain.SettingGroup
 import com.mainnetwallet.polybot.domain.SettingSection
 import com.mainnetwallet.polybot.domain.SettingsSpec
+import com.mainnetwallet.polybot.domain.StageFacts
 import com.mainnetwallet.polybot.ui.LocalGraph
 import com.mainnetwallet.polybot.ui.LocalUi
 import com.mainnetwallet.polybot.ui.collectSelectedAsState
@@ -73,6 +76,7 @@ import com.mainnetwallet.polybot.ui.components.IconBadge
 import com.mainnetwallet.polybot.ui.components.Pill
 import com.mainnetwallet.polybot.ui.components.PolyPullToRefresh
 import com.mainnetwallet.polybot.ui.components.ProHero
+import com.mainnetwallet.polybot.ui.components.ProStat
 import com.mainnetwallet.polybot.ui.components.SegmentedTabs
 import com.mainnetwallet.polybot.ui.components.SkeletonCard
 import com.mainnetwallet.polybot.ui.graphViewModel
@@ -84,8 +88,10 @@ import com.mainnetwallet.polybot.ui.theme.Space
 import kotlinx.coroutines.launch
 
 // Settings is a hub with detail pages, each one a navigation route (see MainScaffold):
-//   SettingsHome         connection, one row per trading section, preferences, danger zone and log out
-//   SettingsSectionPage  the editable fields of one trading section (Entry, Stage 0 ... Paper)
+//   SettingsHome         connection, one card per stage (with its own on/off switch), Risk and Paper,
+//                        preferences, danger zone and log out
+//   SettingsSectionPage  everything one section owns. A stage page holds that stage's timing, entry rules,
+//                        take-profit and stop-loss; Risk holds the account-wide limits and order policies
 //   SettingsDangerPage   resets that change or wipe data on the PC
 // The three share one SettingsViewModel (scoped to the hub's back stack entry), so an edit made on a detail page
 // is still there, and still counted, when the person comes back to the hub.
@@ -128,13 +134,26 @@ fun SettingsHome(
             },
         )
 
+        val stageSections = SettingsSpec.sections.filter { StageFacts.stageOf(it) != null }
+        val generalSections = SettingsSpec.sections.filter { StageFacts.stageOf(it) == null }
+
         Column(verticalArrangement = Arrangement.spacedBy(Space.sm)) {
             GroupHeader(
-                "Trading configuration",
-                caption = "The rules the bot follows on your PC. Changes are sent when you save.",
+                "Stages",
+                caption = "Each stage keeps its own timing, entry rules, take-profit and stop-loss. The switch turns a stage on or off.",
             )
             SettingsCard {
-                SettingsSpec.sections.forEachIndexed { index, section ->
+                stageSections.forEachIndexed { index, section ->
+                    if (index > 0) RowDivider()
+                    StageRow(section, state, vm, onClick = { onOpenSection(section.id) })
+                }
+            }
+        }
+
+        Column(verticalArrangement = Arrangement.spacedBy(Space.sm)) {
+            GroupHeader("General", caption = "Rules that apply across all stages. Changes are sent when you save.")
+            SettingsCard {
+                generalSections.forEachIndexed { index, section ->
                     if (index > 0) RowDivider()
                     SectionRow(section, state, onClick = { onOpenSection(section.id) })
                 }
@@ -213,12 +232,16 @@ fun SettingsHome(
     }
 }
 
-/** The fields of one trading section, grouped as in [SettingsSpec]. */
+/**
+ * Everything one section owns, grouped as in [SettingsSpec]. A stage page opens with a header (its state, key
+ * numbers and master switch); a switched-off stage keeps its fields editable but dimmed.
+ */
 @Composable
 fun SettingsSectionPage(sectionId: String, owner: ViewModelStoreOwner, modifier: Modifier = Modifier) {
     val vm: SettingsViewModel = graphViewModel(owner)
     val scope = rememberCoroutineScope()
     val section = SettingsSpec.sections.firstOrNull { it.id == sectionId } ?: return
+    val stage = StageFacts.stageOf(section)
 
     PageFrame(vm, showSaveBar = true, modifier = modifier) { state ->
         when {
@@ -230,7 +253,17 @@ fun SettingsSectionPage(sectionId: String, owner: ViewModelStoreOwner, modifier:
                 message = state.loadError,
                 onRetry = { scope.launch { vm.load() } },
             )
-            else -> section.groups.forEach { group -> GroupBlock(group, state, vm) }
+            else -> {
+                val stageOff = stage != null && !StageFacts.enabled(stage, state.draft)
+                if (stage != null) StageHero(section, stage, state, vm)
+                if (stageOff) StageOffNotice()
+                Column(
+                    Modifier.alpha(if (stageOff) 0.6f else 1f),
+                    verticalArrangement = Arrangement.spacedBy(Space.xl),
+                ) {
+                    section.groups.forEach { group -> GroupBlock(section, group, state, vm) }
+                }
+            }
         }
     }
 }
@@ -414,7 +447,7 @@ private fun PageFrame(
         }
         if (showSaveBar && state.dirty.isNotEmpty()) {
             SettingsSaveBar(
-                changed = state.dirty.mapNotNull { SettingsSpec.field(it)?.label },
+                changed = state.dirty.map { SettingsSpec.displayName(it) },
                 problems = state.errors.size,
                 saving = state.saving,
                 canSave = state.canSave,
@@ -431,9 +464,13 @@ private fun PageFrame(
 }
 
 @Composable
-private fun GroupBlock(group: SettingGroup, state: SettingsViewModel.State, vm: SettingsViewModel) {
+private fun GroupBlock(section: SettingSection, group: SettingGroup, state: SettingsViewModel.State, vm: SettingsViewModel) {
+    // A stage's on/off switch lives in the page header, not in a group.
+    val enabledKey = SettingsSpec.enabledKey(section)
+    val fields = group.keys.filter { it != enabledKey }.mapNotNull { SettingsSpec.field(it) }
+    if (fields.isEmpty()) return
     Column(verticalArrangement = Arrangement.spacedBy(Space.sm)) {
-        GroupHeader(group.title, caption = group.description)
+        GroupHeader(group.title, caption = group.description, icon = groupIcon(group.title))
         SettingsCard {
             // The low take-profit tier has no field of its own: it starts at the stage 0 min ask.
             val showsTiers = group.keys.firstOrNull() == "stage0_mid_from_ask"
@@ -444,7 +481,7 @@ private fun GroupBlock(group: SettingGroup, state: SettingsViewModel.State, vm: 
                     value = state.draft["stage0_min_ask"].orEmpty(),
                 )
             }
-            group.keys.mapNotNull { SettingsSpec.field(it) }.forEachIndexed { index, field ->
+            fields.forEachIndexed { index, field ->
                 if (index > 0 || showsTiers) RowDivider()
                 SettingFieldRow(
                     field = field,
@@ -455,6 +492,81 @@ private fun GroupBlock(group: SettingGroup, state: SettingsViewModel.State, vm: 
                     onChange = { vm.edit(field.key, it) },
                 )
             }
+        }
+    }
+}
+
+private fun groupIcon(title: String): ImageVector = when (title) {
+    "Timing" -> Icons.Filled.Timer
+    "Entry", "Entry band" -> Icons.Filled.Bolt
+    "Take-profit", "Take-profit tiers" -> Icons.Filled.TrendingUp
+    "Stop-loss" -> Icons.Filled.Shield
+    "Sizing" -> Icons.Filled.Tune
+    "Daily limits" -> Icons.Filled.Flag
+    "Order handling" -> Icons.Filled.Layers
+    "Data quality" -> Icons.Filled.CheckCircle
+    "Paper fill model" -> Icons.Filled.Science
+    else -> Icons.Filled.Tune
+}
+
+/**
+ * Top of a stage page: icon and name with an ON / OFF pill, the four numbers that define the stage (read from the
+ * draft, so they follow edits as they are typed) and the stage's master switch.
+ */
+@Composable
+private fun StageHero(section: SettingSection, stage: Int, state: SettingsViewModel.State, vm: SettingsViewModel) {
+    val scheme = MaterialTheme.colorScheme
+    val colors = Poly.colors
+    val meta = sectionMeta(section.id)
+    val on = StageFacts.enabled(stage, state.draft)
+    val enabledKey = SettingsSpec.enabledKey(section)
+    val enabledField = enabledKey?.let { SettingsSpec.field(it) }
+
+    ProHero {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.md)) {
+            IconBadge(meta.icon, scheme.primary, scheme.primaryContainer, size = 44.dp)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(section.title, style = MaterialTheme.typography.titleMedium)
+                Text(meta.description, style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+            }
+            if (on) Pill("ON", colors.up, colors.upContainer) else Pill("OFF", scheme.onSurfaceVariant, scheme.surfaceVariant)
+        }
+        StageFacts.facts(stage, state.draft).chunked(2).forEach { row ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.md)) {
+                row.forEach { fact -> ProStat(fact.label, fact.value, Modifier.weight(1f)) }
+            }
+        }
+        if (enabledField != null && enabledKey != null) {
+            SettingsCard(container = scheme.surface.copy(alpha = 0.6f)) {
+                SettingFieldRow(
+                    field = enabledField,
+                    value = state.draft[enabledKey].orEmpty(),
+                    error = state.errors[enabledKey],
+                    dirty = enabledKey in state.dirty,
+                    enabled = !state.saving,
+                    onChange = { vm.edit(enabledKey, it) },
+                )
+            }
+        }
+    }
+}
+
+/** Shown under the header of a switched-off stage. */
+@Composable
+private fun StageOffNotice() {
+    val colors = Poly.colors
+    SettingsCard(container = colors.warnContainer.copy(alpha = 0.45f)) {
+        Row(
+            Modifier.padding(Space.lg),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Space.md),
+        ) {
+            Icon(Icons.Filled.Warning, contentDescription = null, tint = colors.warn)
+            Text(
+                "This stage is off: it does not buy, take profit or stop out. Your values below are kept for when you switch it on again.",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f),
+            )
         }
     }
 }
@@ -474,29 +586,30 @@ private fun LoadError(message: String?, onRetry: () -> Unit) {
 
 private enum class Tone { Primary, Warn, Info }
 
-private data class SectionMeta(val icon: ImageVector, val summary: String, val tone: Tone = Tone.Primary)
+private data class SectionMeta(
+    val icon: ImageVector,
+    val summary: String,
+    val description: String = summary,
+    val tone: Tone = Tone.Primary,
+)
 
 private fun sectionMeta(id: String): SectionMeta = when (id) {
-    "entry" -> SectionMeta(Icons.Filled.Bolt, "Stage 1, trigger and order policy")
-    "stage0" -> SectionMeta(Icons.Filled.Timer, "Early buy with tiered take-profit")
-    "stage1" -> SectionMeta(Icons.Filled.TrendingUp, "Price gap, take-profit and stop-loss")
-    "stage2" -> SectionMeta(Icons.Filled.Layers, "One extra buy close to expiry")
-    "stage3" -> SectionMeta(Icons.Filled.Flag, "Last buy, with a stop-loss")
-    "risk" -> SectionMeta(Icons.Filled.Shield, "Sizing, daily limits and data quality", Tone.Warn)
-    "paper" -> SectionMeta(Icons.Filled.Science, "Simulated slippage and fees", Tone.Info)
+    "stage0" -> SectionMeta(Icons.Filled.Timer, "Early buy with tiered take-profit", "Early buy with tiered take-profit and stop-loss.")
+    "stage1" -> SectionMeta(Icons.Filled.TrendingUp, "First final-window buy", "First final-window buy once the ask reaches its trigger.")
+    "stage2" -> SectionMeta(Icons.Filled.Layers, "One extra buy close to expiry", "Adds one more buy, only if stage 1 already bought before this stage starts.")
+    "stage3" -> SectionMeta(Icons.Filled.Flag, "Last buy, with a stop-loss", "Last buy on its own rules. It has a stop-loss but no take-profit.")
+    "risk" -> SectionMeta(Icons.Filled.Shield, "Sizing, daily limits, order policies and data quality", tone = Tone.Warn)
+    "paper" -> SectionMeta(Icons.Filled.Science, "Simulated slippage and fees", tone = Tone.Info)
     else -> SectionMeta(Icons.Filled.Tune, "")
 }
 
-/** One row of the trading list: icon, title, summary, an "N edited" pill and, for stages, an ON / OFF pill. */
+/** One row of the General list: icon, title, summary and an "N edited" pill. */
 @Composable
 private fun SectionRow(section: SettingSection, state: SettingsViewModel.State, onClick: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
     val colors = Poly.colors
     val meta = sectionMeta(section.id)
     val edited = SettingsSpec.dirtyIn(section, state.dirty)
-    val stageOn: Boolean? = SettingsSpec.enabledKey(section)
-        ?.let { state.draft[it] }
-        ?.let { it == "true" }
     val (tint, container) = when (meta.tone) {
         Tone.Primary -> scheme.primary to scheme.primaryContainer
         Tone.Warn -> colors.warn to colors.warnContainer
@@ -512,10 +625,47 @@ private fun SectionRow(section: SettingSection, state: SettingsViewModel.State, 
         container = container,
         trailing = {
             if (edited > 0) Pill("$edited edited", colors.info, colors.info.copy(alpha = 0.16f))
-            when (stageOn) {
-                true -> Pill("ON", colors.up, colors.upContainer)
-                false -> Pill("OFF", scheme.onSurfaceVariant, scheme.surfaceVariant)
-                null -> Unit
+        },
+    )
+}
+
+/**
+ * One row of the Stages list: icon, name, the stage's window and ask trigger, an "N edited" pill and the stage's
+ * own on/off switch. Tapping the row opens the stage page; the switch edits the draft like any other field.
+ */
+@Composable
+private fun StageRow(section: SettingSection, state: SettingsViewModel.State, vm: SettingsViewModel, onClick: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    val colors = Poly.colors
+    val stage = StageFacts.stageOf(section) ?: return
+    val meta = sectionMeta(section.id)
+    val enabledKey = SettingsSpec.enabledKey(section)
+    val on = StageFacts.enabled(stage, state.draft)
+    val edited = SettingsSpec.dirtyIn(section, state.dirty)
+    val facts = StageFacts.facts(stage, state.draft)
+    val ask = facts.firstOrNull { it.label == "Ask" }?.value
+    // A switched-off stage has no window of its own (the stages before it run on), so it says so instead.
+    val subtitle = if (on) {
+        listOfNotNull(StageFacts.window(stage, state.draft), ask?.let { "ask $it" }).joinToString("  ·  ")
+    } else {
+        "Switched off  ·  settings kept"
+    }
+
+    SettingsNavRow(
+        icon = meta.icon,
+        title = section.title,
+        subtitle = subtitle,
+        onClick = onClick,
+        tint = if (on) scheme.primary else scheme.onSurfaceVariant,
+        container = if (on) scheme.primaryContainer else scheme.surfaceVariant,
+        trailing = {
+            if (edited > 0) Pill("$edited edited", colors.info, colors.info.copy(alpha = 0.16f))
+            if (enabledKey != null) {
+                Switch(
+                    checked = on,
+                    onCheckedChange = { vm.edit(enabledKey, it.toString()) },
+                    enabled = !state.saving,
+                )
             }
         },
     )

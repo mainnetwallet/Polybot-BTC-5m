@@ -52,6 +52,11 @@ class SettingsPatch(BaseModel):
     stage1_threshold: float | None = Field(default=None, ge=0.01, le=0.999)
     stage1_seconds: int | None = Field(default=None, ge=1, le=300)
     stage1_max_ask: float | None = Field(default=None, ge=0.01, le=1.0)
+    stage2_max_ask: float | None = Field(default=None, ge=0.01, le=1.0)
+    stage2_max_spread: float | None = Field(default=None, ge=0.0, le=1.0)
+    stage3_max_ask: float | None = Field(default=None, ge=0.01, le=1.0)
+    stage3_max_spread: float | None = Field(default=None, ge=0.0, le=1.0)
+    stage3_min_stop_headroom: float | None = Field(default=None, ge=0.0, le=1.0)
     stage1_enabled: bool | None = None
     stage2_enabled: bool | None = None
     stage3_enabled: bool | None = None

@@ -27,9 +27,10 @@ trading logic or backend behaviour.
 3. **Connect.** In the app enter the PC URL (`gist:<id>`, a `gist.github.com` URL, `https://...` or a LAN
    `http://192.168.x.x:8000`) and the API token, tap *Test connection* (it shows Gist / tunnel / token step by
    step), then *Save*. *Log out* (Settings, under *Safety and account*) clears the stored token.
-   Settings opens as a hub: the PC connection, one page per trading section (Entry, Stage 0 to 3, Risk, Paper),
-   app preferences (theme, haptics) and the danger zone. Edits stay in place while you move between pages and are
-   sent together when you tap *Save*.
+   Settings opens as a hub: the PC connection, one card per stage (0 to 3, each with its own on/off switch and a
+   page holding that stage's timing, entry rules, take-profit and stop-loss), Risk and Paper pages, app preferences
+   (theme, haptics) and the danger zone. Edits stay in place while you move between pages and are sent together
+   when you tap *Save*.
 
 The PC URL field accepts:
 

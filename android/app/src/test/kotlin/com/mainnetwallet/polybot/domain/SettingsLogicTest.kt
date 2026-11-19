@@ -33,7 +33,6 @@ class SettingsLogicTest {
         assertEquals("stage1_enabled", switches["stage1"])
         assertEquals("stage2_enabled", switches["stage2"])
         assertEquals("stage3_enabled", switches["stage3"])
-        assertNull(switches["entry"])
         assertNull(switches["risk"])
         assertNull(switches["paper"])
     }
@@ -130,5 +129,76 @@ class SettingsLogicTest {
         assertEquals("true", settingText(JsonPrimitive(true)))
         assertEquals("up_first", settingText(JsonPrimitive("up_first")))
         assertEquals("", settingText(null))
+    }
+
+    @Test fun everyStageOwnsItsTimingEntryAndExitSettings() {
+        fun keys(id: String) = SettingsSpec.keysOf(SettingsSpec.sections.first { it.id == id }).toSet()
+        // The stage 1 trigger, window and block used to sit on a separate "Entry" page.
+        assertTrue(keys("stage1").containsAll(listOf("stage1_enabled", "stage1_seconds", "stage1_threshold", "stage1_max_ask", "stage1_block_ask", "min_price_gap_usd")))
+        assertTrue(keys("stage2").containsAll(listOf("stage2_seconds", "stage2_threshold", "stage2_max_ask", "stage2_max_spread", "stage2_block_ask", "stage2_sell_price", "stage2_stop_loss_pct")))
+        assertTrue(keys("stage3").containsAll(listOf("stage3_seconds", "stage3_threshold", "stage3_max_ask", "stage3_max_spread", "stage3_min_stop_headroom", "stage3_block_ask", "stage3_stop_loss_pct")))
+        assertTrue(keys("stage3").containsAll(listOf("stage3_mid_seconds", "stage3_mid_stop_loss_pct", "stage3_last_seconds", "stage3_last_seconds_stop_loss_pct")))
+        assertNull(SettingsSpec.sections.firstOrNull { it.id == "entry" })
+        for (stage in 0..3) {
+            val own = keys("stage$stage")
+            // a stage page never holds another stage's settings
+            val foreign = (0..3).filter { it != stage }.flatMap { o -> own.filter { it.startsWith("stage${o}_") } }
+            assertEquals(emptyList<String>(), foreign)
+        }
+        assertEquals("risk", SettingsSpec.sectionOfKey("duplicate_policy")?.id)
+        assertEquals("risk", SettingsSpec.sectionOfKey("conflict_policy")?.id)
+    }
+
+    @Test fun maxAskMustNotBeBelowItsTrigger() {
+        fun errors(vararg edits: Pair<String, String>) = SettingsLogic.validate(fresh() + edits.toMap(), saved)
+        assertEquals("The stage 1 max ask must not be lower than the stage 1 ask trigger, or stage 1 could never buy.", errors("stage1_max_ask" to "0.5")["stage1_max_ask"])
+        assertEquals("The stage 2 max ask must not be lower than the stage 2 ask trigger, or stage 2 could never buy.", errors("stage2_max_ask" to "0.5")["stage2_max_ask"])
+        assertEquals("The stage 3 max ask must not be lower than the stage 3 ask trigger, or stage 3 could never buy.", errors("stage3_max_ask" to "0.5")["stage3_max_ask"])
+        assertNull(errors("stage3_max_ask" to "0.98")["stage3_max_ask"])
+    }
+
+    @Test fun newStageSettingsMirrorTheServerRanges() {
+        fun error(key: String, value: String) = SettingsLogic.validate(fresh() + (key to value), saved)[key]
+        assertEquals("Must be at most 1.", error("stage2_max_spread", "1.5"))
+        assertNull(error("stage2_max_spread", "0"))
+        assertEquals("Must be at most 1.", error("stage3_min_stop_headroom", "2"))
+        assertEquals("Must be at most 99.", error("stage3_mid_stop_loss_pct", "100"))
+        assertEquals("Must be at most 300.", error("stage3_last_seconds", "301"))
+        assertEquals("Whole numbers only.", error("stage3_mid_seconds", "12.5"))
+        assertNull(error("stage3_mid_seconds", "0"))
+        val diff = SettingsLogic.diff(fresh() + mapOf("stage3_mid_seconds" to "25", "stage3_max_spread" to "0.04"), saved)
+        assertEquals(JsonPrimitive(25L), diff["stage3_mid_seconds"]) // integer field goes out as an integer
+        assertEquals(JsonPrimitive(0.04), diff["stage3_max_spread"])
+    }
+
+    @Test fun displayNameCarriesTheSection() {
+        assertEquals("Stage 2: Ask trigger", SettingsSpec.displayName("stage2_threshold"))
+        assertEquals("Risk and sizing: Order notional", SettingsSpec.displayName("trade_amount_usdc"))
+        assertEquals("nope", SettingsSpec.displayName("nope"))
+    }
+
+    @Test fun stageWindowsFollowTheNextEnabledStage() {
+        // stage 1 ends where stage 2 starts (50s), stage 2 where stage 3 starts (30s), stage 3 runs to expiry
+        assertEquals("90s → 50s left", StageFacts.window(1, fresh()))
+        assertEquals("50s → 30s left", StageFacts.window(2, fresh()))
+        assertEquals("30s → expiry", StageFacts.window(3, fresh()))
+        assertEquals("200s → 100s left", StageFacts.window(0, fresh()))
+        // with stage 2 switched off, stage 1 runs to stage 3's start
+        assertEquals("90s → 30s left", StageFacts.window(1, fresh() + ("stage2_enabled" to "false")))
+        // with every later stage off, stage 1 runs to expiry
+        assertEquals("90s → expiry", StageFacts.window(1, fresh() + mapOf("stage2_enabled" to "false", "stage3_enabled" to "false")))
+    }
+
+    @Test fun stageFactsReadTheDraft() {
+        val stage1 = StageFacts.facts(1, fresh()).associate { it.label to it.value }
+        assertEquals("≥ 0.85", stage1["Ask"])
+        assertEquals("+8%", stage1["Take-profit"])
+        assertEquals("30%", stage1["Stop-loss"])
+        assertEquals("Off", StageFacts.facts(1, fresh() + ("stage1_sell_enabled" to "false")).first { it.label == "Take-profit" }.value)
+        assertEquals("Off", StageFacts.facts(3, fresh() + ("stage3_stop_loss_pct" to "0")).first { it.label == "Stop-loss" }.value)
+        assertEquals("None", StageFacts.facts(3, fresh()).first { it.label == "Take-profit" }.value)
+        assertEquals("Bid 0.99", StageFacts.facts(2, fresh()).first { it.label == "Take-profit" }.value)
+        assertEquals(0, StageFacts.stageOf(SettingsSpec.sections.first { it.id == "stage0" }))
+        assertNull(StageFacts.stageOf(SettingsSpec.sections.first { it.id == "risk" }))
     }
 }

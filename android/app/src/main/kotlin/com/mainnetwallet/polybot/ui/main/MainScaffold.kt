@@ -87,7 +87,7 @@ const val ROUTE_SETTINGS = "settings"
 const val ROUTE_SETTINGS_DANGER = "settings/danger"
 const val ROUTE_CONNECTION = "connection"
 
-/** Route of the detail page of one trading section (`entry`, `stage0` ... `paper`). */
+/** Route of the detail page of one settings section (`stage0` ... `stage3`, `risk`, `paper`). */
 fun settingsSectionRoute(sectionId: String): String = "settings/section/$sectionId"
 
 /** Title of the top bar on the pages that are not one of the five tabs. */

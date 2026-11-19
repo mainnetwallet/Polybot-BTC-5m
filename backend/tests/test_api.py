@@ -230,6 +230,42 @@ def test_settings_patch_and_validation():
         assert bad_window.status_code in {400, 422}
 
 
+def test_every_overridable_setting_is_accepted_by_the_patch_schema():
+    # A setting that is overridable but missing from SettingsPatch is silently dropped by PATCH /api/settings,
+    # so the dashboard and the Android app could show a field that never saves.
+    from app.api.schemas import SettingsPatch
+    from app.config.runtime import OVERRIDABLE_KEYS
+
+    assert set(OVERRIDABLE_KEYS) - set(SettingsPatch.model_fields) == set()
+
+
+def test_settings_patch_saves_stage_entry_guards_and_stage3_stop_tiers():
+    changes = {
+        "stage2_max_ask": 0.95,
+        "stage2_max_spread": 0.04,
+        "stage3_max_ask": 0.97,
+        "stage3_max_spread": 0.03,
+        "stage3_min_stop_headroom": 0.02,
+        "stage3_mid_seconds": 18,
+        "stage3_mid_stop_loss_pct": 4.0,
+        "stage3_last_seconds": 8,
+        "stage3_last_seconds_stop_loss_pct": 2.5,
+    }
+    with TestClient(create_app()) as client:
+        ok = client.patch("/api/settings", json=changes)
+        assert ok.status_code == 200
+        body = client.get("/api/settings").json()
+        for key, value in changes.items():
+            assert body[key] == value, key
+
+        # ranges mirror the schema: a spread above 1 and a stop-loss of 100 % are rejected
+        assert client.patch("/api/settings", json={"stage3_max_spread": 1.5}).status_code in {400, 422}
+        assert client.patch("/api/settings", json={"stage3_mid_stop_loss_pct": 100}).status_code in {400, 422}
+        # a max ask below its own trigger could never buy, so the server refuses it
+        assert client.patch("/api/settings", json={"stage2_max_ask": 0.5}).status_code == 400
+        client.post("/api/settings/reset")
+
+
 def test_settings_reset_restores_env_defaults():
     with TestClient(create_app()) as client:
         from app.config.settings import get_settings
