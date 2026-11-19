@@ -2,17 +2,29 @@
 
 Never imports or calls the live CLOB client. Fills walk real ask levels, so
 spread and slippage are represented; depth caps produce partial fills.
+
+With ORDER_PROXY_ENABLED a paper BUY goes through the order relay like a live one: no order is
+sent, but the buy makes the same round trip to the relay (GET /time) first, so its latency
+includes the relay hop, and it is refused when the relay is down (no direct fallback).
 """
 
 from __future__ import annotations
 
+import logging
 import uuid
 from collections.abc import Callable
+
+import httpx
 
 from app import clock
 from app.config.settings import Settings
 from app.execution.base import ExecutionEngine, ExecutionReport, FillPart, OrderRequest, SellRequest
+from app.execution.relay import order_relay_url
 from app.market_data.book import OrderBook
+
+logger = logging.getLogger(__name__)
+
+RELAY_TIMEOUT_SECONDS = 3.0
 
 BookProvider = Callable[[str], OrderBook | None]
 
@@ -20,9 +32,37 @@ BookProvider = Callable[[str], OrderBook | None]
 class PaperExecutionEngine(ExecutionEngine):
     mode = "paper"
 
-    def __init__(self, settings: Settings, book_provider: BookProvider) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        book_provider: BookProvider,
+        relay_client: httpx.AsyncClient | None = None,
+    ) -> None:
         self._settings = settings
         self._book_provider = book_provider
+        self._relay_url = order_relay_url(settings)
+        self._relay_client = relay_client  # created on first use (tests pass a mock-transport client)
+
+    async def _relay_round_trip(self) -> str | None:
+        """One GET /time through the order relay. Returns None when it answered, else an error text."""
+        if self._relay_client is None:
+            self._relay_client = httpx.AsyncClient(
+                timeout=RELAY_TIMEOUT_SECONDS, headers={"User-Agent": "py_clob_client_v2"}
+            )
+        try:
+            resp = await self._relay_client.get(f"{self._relay_url}/time")
+        except httpx.RequestError as exc:
+            logger.error("paper order relay unreachable (%s)", type(exc).__name__)
+            return f"order relay unreachable ({type(exc).__name__})"
+        if resp.status_code >= 500:
+            logger.error("paper order relay returned HTTP %s", resp.status_code)
+            return f"order relay returned HTTP {resp.status_code}"
+        return None
+
+    async def close(self) -> None:
+        client, self._relay_client = self._relay_client, None
+        if client is not None:
+            await client.aclose()
 
     def _fee(self, shares: float, price: float) -> float:
         base = max(0.0, price * (1.0 - price))
@@ -30,6 +70,23 @@ class PaperExecutionEngine(ExecutionEngine):
         return round(shares * rate, 8)
 
     async def place_buy(self, request: OrderRequest) -> ExecutionReport:
+        if not self._relay_url:
+            return self._simulate_buy(request)
+        # Same path as a live buy: through the relay, never direct. The book is read after the round
+        # trip, as a real order would reach the exchange after the relay hop.
+        error = await self._relay_round_trip()
+        if error is not None:
+            return ExecutionReport(
+                status="REJECTED",
+                latency_ms=float(max(0, clock.now_ms() - request.observed_at_ms)),
+                error=error,
+                route="proxy",
+            )
+        report = self._simulate_buy(request)
+        report.route = "proxy"
+        return report
+
+    def _simulate_buy(self, request: OrderRequest) -> ExecutionReport:
         started_ms = clock.now_ms()
         book = self._book_provider(request.side)
         if book is None or book.best_ask is None:

@@ -26,6 +26,7 @@ from concurrent.futures import ThreadPoolExecutor
 from app import clock
 from app.config.settings import Settings
 from app.execution.base import ExecutionEngine, ExecutionReport, FillPart, OrderRequest, SellRequest
+from app.execution.relay import order_relay_url
 
 logger = logging.getLogger(__name__)
 
@@ -78,23 +79,6 @@ def ceil_price_to_tick(price: float, tick: float) -> float:
         return round(price, 6)
     steps = math.ceil(round(price / tick, 6) - 1e-9)
     return round(min(max(steps * tick, tick), 1.0 - tick), 6)
-
-
-def order_relay_url(settings: Settings) -> str:
-    """Relay prefix for the order POST: ``<ORDER_PROXY_URL>/<CLOB_BASE_URL>``.
-
-    Empty (orders go direct) when ORDER_PROXY_ENABLED is false, when ORDER_PROXY_URL is empty, or when
-    CLOB_BASE_URL already points at the relay (then every call uses it already).
-    """
-    if not settings.order_proxy_enabled:
-        return ""
-    base = (settings.order_proxy_url or "").strip().rstrip("/")
-    if not base:
-        return ""
-    clob = settings.clob_base_url.strip().rstrip("/")
-    if clob.startswith(base):
-        return ""
-    return f"{base}/{clob}"
 
 
 def _make_client_class(relay_url: str = ""):

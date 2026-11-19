@@ -52,8 +52,9 @@ class ExecutionReport:
     latency_ms: float | None = None
     error: str | None = None
     raw: dict | None = None
-    # How the order POST left this machine: "proxy" (order relay), "direct" (straight to Polymarket)
-    # or None (paper: nothing was sent).
+    # How the buy left this machine: "proxy" (order relay), "direct" (straight to Polymarket) or None
+    # (paper with the relay off: nothing was sent). A paper buy with the relay on is "proxy": no order
+    # is posted, but it made the round trip to the relay.
     route: str | None = None
 
 

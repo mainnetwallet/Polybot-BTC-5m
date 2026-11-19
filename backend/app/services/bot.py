@@ -274,6 +274,7 @@ class TradingBot:
         await self.orders.close()
         await self.discovery.close()
         await self.live_engine.close()
+        await self.paper_engine.close()
         await self.logs.stop()
 
     # ------------------------------------------------------------------

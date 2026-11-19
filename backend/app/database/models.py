@@ -99,7 +99,7 @@ class Order(Base):
     fee: Mapped[float] = mapped_column(Float, default=0.0)
     exchange_order_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     latency_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
-    route: Mapped[str | None] = mapped_column(String(12), nullable=True)  # proxy | direct | None (paper)
+    route: Mapped[str | None] = mapped_column(String(12), nullable=True)  # proxy | direct | None (paper, relay off)
     reason: Mapped[str] = mapped_column(String(300), default="")
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)

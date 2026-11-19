@@ -18,6 +18,7 @@ os.environ["LIVE_TRADING_ENABLED"] = "false"
 os.environ["POLYMARKET_GEO_VERIFIED"] = "false"
 os.environ["POLYMARKET_PRIVATE_KEY"] = ""
 os.environ["BTC_PRICE_ENABLED"] = "false"
+os.environ["ORDER_PROXY_ENABLED"] = "false"  # the shipped default is on; tests never call the real relay
 os.environ["BTC_TICK_HISTORY_FILE"] = ""  # tests never touch the real tick history
 os.environ["DISCOVERY_REFRESH_SECONDS"] = "3600"
 os.environ["RESOLUTION_POLL_SECONDS"] = "3600"
