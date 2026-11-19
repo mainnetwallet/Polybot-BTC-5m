@@ -81,10 +81,10 @@ All values are defaults and can be changed in Settings or `.env`. Up to 3 buys p
 
 | Stage | Entry | Take-profit | Stop-loss |
 | --- | --- | --- | --- |
-| **0** early buy | `160`-`100`s left, ask `0.70`-`0.96` (cheaper buys up to `0.85`; `0.89`+ only after 50% of the window), BTC gap >= `$70` beyond the price to beat (`$60` for the `0.89`+ buys). One buy per market | Best bid `+10%` / `+7%` / `+5%` over avg cost (buy below `0.80` / `0.80`-`0.85` / `0.85`+), at most bid `0.98` (`STAGE0_SELL_CAP_PRICE`, editable in Settings); `0` = hold | `70%` below avg cost (`20%` if bought at `0.89`+) |
-| **1** stage 1 | `90`-`50`s left (until stage 2 starts), best ask >= `0.85`, gap >= `$35` (waits and buys as soon as it gets there inside that window) | Bought up to `0.88`: `+8%`; dearer: bid `0.98` | `18%` |
-| **2** add-on | `<= 50`s left, ask `0.88`-`0.97`, spread <= `0.05`, gap >= `$30` | Bid `0.98` | `10%` |
-| **3** add-on | `<= 30`s left, ask `0.90`-`0.98`, spread <= `0.05`, bid above the current stop by `0.01`, gap >= `$25` | held to settlement | `5%` |
+| **0** early buy | `180`-`100`s left, ask `0.70`-`0.96` (cheaper buys up to `0.85`; `0.89`+ only after 50% of the window), BTC gap >= `$80` beyond the price to beat (`$70` for the `0.89`+ buys). One buy per market | Best bid `+10%` / `+7%` / `+5%` over avg cost (buy below `0.80` / `0.80`-`0.85` / `0.85`+), at most bid `0.98` (`STAGE0_SELL_CAP_PRICE`, editable in Settings); `0` = hold | `60%` below avg cost (`30%` if bought at `0.89`+) |
+| **1** stage 1 | `90`-`50`s left (until stage 2 starts), best ask >= `0.85`, gap >= `$45` (waits and buys as soon as it gets there inside that window) | Bought up to `0.88`: `+8%`; dearer: bid `0.98` | `18%` |
+| **2** add-on | `<= 50`s left, ask `0.88`-`0.97`, spread <= `0.05`, gap >= `$38` | Bid `0.98` | `10%` |
+| **3** add-on | `<= 30`s left, ask `0.90`-`0.98`, spread <= `0.05`, bid above the current stop by `0.01`, gap >= `$35` | held to settlement | `5%` |
 
 - Orders are marketable BUY (FOK) at the current ask. `0.85` / `0.88` / `0.90` are triggers, never limit prices; `MAX_EXECUTION_PRICE` caps the price paid.
 - Take-profit sells are marketable and never below their sell price. Stop-loss sells at market with no floor. `0` turns a stop-loss off.
@@ -108,8 +108,8 @@ Most used keys:
 | `STAGE1_THRESHOLD` / `STAGE1_SECONDS` | `0.85` / `90` | Stage 1 ask trigger and window |
 | `STAGE0..3_ENABLED` | `true` | Switch a stage fully on/off |
 | `STAGE0_*`, `STAGE1_*`, `STAGE2_*`, `STAGE3_*` | see table above | Timing, ask range, take-profit, stop-loss per stage |
-| `MIN_PRICE_GAP_USD` / `STAGE2_...` / `STAGE3_...` | `35` / `30` / `25` | BTC (Chainlink TWAP60) must be this far beyond the price to beat; `0` = off; missing BTC data blocks the buy |
-| `TRADE_AMOUNT_USDC` | `50` | Notional per trade |
+| `MIN_PRICE_GAP_USD` / `STAGE2_...` / `STAGE3_...` | `45` / `38` / `35` | BTC (Chainlink TWAP60) must be this far beyond the price to beat; `0` = off; missing BTC data blocks the buy |
+| `TRADE_AMOUNT_USDC` | `2` | Notional per trade |
 | `MAX_EXECUTION_PRICE` | `0.98` | Hard price cap for every stage, stage 0 included (stage 0 also needs `STAGE0_MIN_ASK` at or below it) |
 | `STAGE1_MAX_ASK` | `0.97` | Stage 1 does not buy when the best ask is above this |
 | `STAGE2_MAX_ASK` | `0.97` | Stage 2 does not buy when the best ask is above this (buys at 0.97, never at 0.98+); `STAGE2_SELL_PRICE` must be >= this + 0.01 |
@@ -120,7 +120,7 @@ Most used keys:
 | `STAGE0_BLOCK_ASK` | `0.98` | Same for stage 0 (stage 0 keeps 0.98) |
 | `STAGE1..3_BLOCK_ASK` | `0.99` | Once either side's best ask reaches this inside that stage's window, the stage stops buying in that market (even if the ask falls back). Per market and per stage; resets on restart |
 | `STALE_DATA_MAX_AGE_MS` | `2000` | Max book age for a buy (exits skip the check) |
-| `MAX_DAILY_LOSS` / `DAILY_PROFIT_TARGET` / `MAX_TRADES_PER_DAY` | `5.0` / `10.0` / `600` | Risk limits |
+| `MAX_DAILY_LOSS` / `DAILY_PROFIT_TARGET` / `MAX_TRADES_PER_DAY` | `2.0` / `4.0` / `600` | Risk limits |
 | `MAX_OPEN_POSITIONS` | `1` | Per-market position cap |
 | `DUPLICATE_POLICY` | `one_per_market` | or `one_per_side`, `allow` |
 | `CONFLICT_POLICY` | `up_first` | or `down_first`, `highest_ask`, `block_both` |

@@ -115,7 +115,7 @@ class Settings(BaseSettings):
     # Stage 3 does not buy unless the best bid is at least this far ABOVE the stop-loss level that applies right now
     # (the stop tightens to 3 % / 2 % in the last seconds). 0 = off. Stops a buy from being stopped out at once.
     stage3_min_stop_headroom: float = 0.01
-    trade_amount_usdc: float = 50.0
+    trade_amount_usdc: float = 2.0
     # Book age only resets on a websocket book event, so a stable price on a quiet book looks
     # "old" without being wrong, so too low a limit blocks stage 2/3 (armed by the clock) on a quiet
     # book. 2s: a signal is never built on a book older than that. Exits do not check book age.
@@ -125,7 +125,7 @@ class Settings(BaseSettings):
     # 15 attempts x 250 ms keeps a retry window of a few seconds.
     entry_max_attempts: int = 15
     entry_retry_gap_ms: int = 250
-    # Stage 0 has a ~60 s window (160 s -> 100 s left), so 15 attempts (~4 s) would end it long before the
+    # Stage 0 has an ~80 s window (180 s -> 100 s left), so 15 attempts (~4 s) would end it long before the
     # window does when a live FOK keeps missing on a thin book. 240 x 250 ms covers the whole window.
     stage0_entry_max_attempts: int = 240
     # Gap between two sell attempts of the same exit (take-profit / stop-loss) when the previous
@@ -135,16 +135,16 @@ class Settings(BaseSettings):
     # Price-to-beat filter: a buy needs the current BTC price at least this many USD beyond the
     # price to beat in the bought direction (UP: current >= beat + gap, DOWN: current <= beat - gap).
     # 0 disables the rule. With the rule on, missing/stale BTC data blocks the buy (fail closed).
-    min_price_gap_usd: float = 35.0  # stage 1
-    # Each add-on stage has its own gap: stage 2 = 30 USD, stage 3 = 25 USD by default.
-    stage2_min_price_gap_usd: float = 30.0
-    stage3_min_price_gap_usd: float = 25.0
+    min_price_gap_usd: float = 45.0  # stage 1
+    # Each add-on stage has its own gap: stage 2 = 38 USD, stage 3 = 35 USD by default.
+    stage2_min_price_gap_usd: float = 38.0
+    stage3_min_price_gap_usd: float = 35.0
     # Stage 0: an early, independent entry with its own take-profit SELL. While more than `stage0_end_seconds`
     # and at most `stage0_start_seconds` remain (independent of the stage 1), buy a side whose best ask is
     # <= stage0_max_ask and whose BTC price gap beyond the price to beat is >= stage0_min_price_gap_usd.
     # The shares are sold again as soon as the best bid is the tier's take-profit percentage above the buy price.
     stage0_enabled: bool = True
-    stage0_start_seconds: int = 160
+    stage0_start_seconds: int = 180
     stage0_end_seconds: int = 100
     stage0_min_ask: float = 0.70
     # Max ask by buy price: a buy below stage0_high_buy_price goes up to stage0_early_max_ask (0.85); an expensive
@@ -154,10 +154,10 @@ class Settings(BaseSettings):
     stage0_early_max_ask: float = 0.85
     # An ask at or above this inside the stage 0 window blocks further stage 0 buys in that market.
     stage0_block_ask: float = 0.98
-    stage0_min_price_gap_usd: float = 70.0
+    stage0_min_price_gap_usd: float = 80.0
     # Own BTC gap for the expensive buys (ask >= stage0_high_buy_price, 0.89-0.96): stage0_min_price_gap_usd
-    # (70) keeps applying to the cheaper buys. 0 = no gap needed for the expensive buys.
-    stage0_high_min_price_gap_usd: float = 60.0
+    # (80) keeps applying to the cheaper buys. 0 = no gap needed for the expensive buys.
+    stage0_high_min_price_gap_usd: float = 70.0
     # Take-profit for stage 0: sell once the best bid is this many percent ABOVE the average price paid per
     # share (cost * (1 + pct / 100), capped at stage0_sell_cap_price). The percentage depends on what stage 0
     # paid per share:
@@ -187,15 +187,15 @@ class Settings(BaseSettings):
     stage2_sell_price: float = 0.98
     # Stop-loss per entry stage, in percent of the average price paid per share: once the best bid
     # is at or below cost * (1 - pct / 100), that stage's own shares are sold at the market.
-    # 0 switches the stop-loss off for that stage. Stage 0 = 70 %, stage 1 = 18 %, stage 2 = 10 %, stage 3 = 5 % by default.
-    stage0_stop_loss_pct: float = 70.0
+    # 0 switches the stop-loss off for that stage. Stage 0 = 60 %, stage 1 = 18 %, stage 2 = 10 %, stage 3 = 5 % by default.
+    stage0_stop_loss_pct: float = 60.0
     stage1_stop_loss_pct: float = 18.0
     stage2_stop_loss_pct: float = 10.0
     stage3_stop_loss_pct: float = 5.0
     # Stage 0 shares that cost stage0_high_buy_price (0.89) or more use this tighter stop-loss instead of
     # stage0_stop_loss_pct. 0 = off (the normal stage 0 stop-loss applies to every buy price).
     stage0_high_buy_price: float = 0.89
-    stage0_high_buy_stop_loss_pct: float = 20.0
+    stage0_high_buy_stop_loss_pct: float = 30.0
     # Last-seconds stop-loss for stage 3: once `stage3_last_seconds` or fewer seconds remain, stage 3
     # shares use this (tight) percentage instead of stage3_stop_loss_pct. 0 = off.
     # Middle tier: with `stage3_mid_seconds` or fewer seconds left (more than stage3_last_seconds).
@@ -204,14 +204,14 @@ class Settings(BaseSettings):
     stage3_last_seconds: int = 10
     stage3_last_seconds_stop_loss_pct: float = 2.0
     # Buys at stage0_high_buy_price (0.89) or more are only allowed once this percent of the stage 0 window
-    # (start -> end) has passed: 50 with the 160s -> 100s window = from 130s left. 0 = the whole window.
+    # (start -> end) has passed: 50 with the 180s -> 100s window = from 140s left. 0 = the whole window.
     stage0_high_buy_after_pct: float = 50.0
     duplicate_policy: str = "one_per_market"  # one_per_market | one_per_side | allow
     conflict_policy: str = "up_first"  # up_first | down_first | highest_ask | block_both
 
     # --- risk -----------------------------------------------------------
-    max_daily_loss: float = 5.0
-    daily_profit_target: float = 10.0
+    max_daily_loss: float = 2.0
+    daily_profit_target: float = 4.0
     # False (default): MAX_DAILY_LOSS / DAILY_PROFIT_TARGET look at REALIZED pnl only (closed positions), so the
     # spread + entry fee shown right after a buy cannot halt the other stages. True = realized + unrealized.
     daily_limit_include_unrealized: bool = False

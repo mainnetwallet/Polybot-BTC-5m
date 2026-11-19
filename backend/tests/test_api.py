@@ -487,9 +487,9 @@ def test_websocket_requires_token_when_configured():
         settings.api_token = ""
 
 
-def test_min_price_gap_setting_defaults_to_35_and_is_patchable():
+def test_min_price_gap_setting_defaults_to_45_and_is_patchable():
     with TestClient(create_app()) as client:
-        assert client.get("/api/settings").json()["min_price_gap_usd"] == 35.0
+        assert client.get("/api/settings").json()["min_price_gap_usd"] == 45.0
         assert client.get("/api/settings").json()["stage2_min_price_gap_usd"] == 25.0
         assert client.get("/api/settings").json()["stage3_min_price_gap_usd"] == 30.0
         updated = client.patch("/api/settings", json={"min_price_gap_usd": 40})

@@ -52,7 +52,7 @@ def test_stage0_buys_at_90_cents_or_more_use_the_tighter_15_percent_stop():
 def test_stage0_expensive_buy_defaults_and_validation():
     fields = Settings.model_fields
     assert fields["stage0_high_buy_price"].default == 0.89
-    assert fields["stage0_high_buy_stop_loss_pct"].default == 20.0
+    assert fields["stage0_high_buy_stop_loss_pct"].default == 30.0
     with pytest.raises(ValueError):
         make_config(stage0_high_buy_stop_loss_pct=100.0)
     with pytest.raises(ValueError):
@@ -66,9 +66,9 @@ def test_stop_loss_is_off_at_zero_and_when_settings_are_built_directly():
     assert only_stage1.stop_loss_price_for(1, 0.85) == pytest.approx(0.7225)
 
 
-def test_app_defaults_are_70_18_10_5_percent_for_stages_0_1_2_3():
+def test_app_defaults_are_60_18_10_5_percent_for_stages_0_1_2_3():
     fields = Settings.model_fields
-    assert fields["stage0_stop_loss_pct"].default == 70.0
+    assert fields["stage0_stop_loss_pct"].default == 60.0
     assert fields["stage1_stop_loss_pct"].default == 18.0
     assert fields["stage2_stop_loss_pct"].default == 10.0
     assert fields["stage3_stop_loss_pct"].default == 5.0
