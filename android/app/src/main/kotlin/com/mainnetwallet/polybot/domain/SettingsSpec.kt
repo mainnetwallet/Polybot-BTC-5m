@@ -169,7 +169,7 @@ object SettingsSpec {
             SettingGroup("Stop-loss", "Stage 3 has no take-profit. The stop-loss tightens as the market ends: normal, then mid tier, then last tier. A tier set to 0 is skipped.",
                 listOf("stage3_stop_loss_pct", "stage3_mid_seconds", "stage3_mid_stop_loss_pct", "stage3_last_seconds", "stage3_last_seconds_stop_loss_pct")),
         )),
-        SettingSection("risk", "Risk and sizing", listOf(
+        SettingSection("risk", "Amount Limit", listOf(
             SettingGroup("Sizing", null, listOf("trade_amount_usdc", "max_execution_price")),
             SettingGroup("Daily limits", null, listOf("max_daily_loss", "daily_profit_target", "max_trades_per_day", "max_open_positions")),
             SettingGroup("Order handling", "Applies to every stage.", listOf("duplicate_policy", "conflict_policy")),

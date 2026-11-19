@@ -173,7 +173,7 @@ class SettingsLogicTest {
 
     @Test fun displayNameCarriesTheSection() {
         assertEquals("Stage 2: Ask trigger", SettingsSpec.displayName("stage2_threshold"))
-        assertEquals("Risk and sizing: Order notional", SettingsSpec.displayName("trade_amount_usdc"))
+        assertEquals("Amount Limit: Order notional", SettingsSpec.displayName("trade_amount_usdc"))
         assertEquals("nope", SettingsSpec.displayName("nope"))
     }
 
