@@ -201,4 +201,18 @@ class SettingsLogicTest {
         assertEquals(0, StageFacts.stageOf(SettingsSpec.sections.first { it.id == "stage0" }))
         assertNull(StageFacts.stageOf(SettingsSpec.sections.first { it.id == "risk" }))
     }
+
+    @Test fun longStagePagesAreSplitIntoTabsThatCoverEveryGroupOnce() {
+        for (section in SettingsSpec.sections) {
+            val pages = SettingsSpec.pagesOf(section)
+            assertEquals(section.groups.map { it.title }, pages.flatMap { p -> p.groups.map { it.title } })
+        }
+        fun labels(id: String) = SettingsSpec.pagesOf(SettingsSpec.sections.first { it.id == id }).map { it.label }
+        assertEquals(listOf("Timing", "Entry", "Exits"), labels("stage0"))
+        assertEquals(listOf("Entry", "Exits"), labels("stage1"))
+        assertEquals(listOf("Entry", "Exits"), labels("stage3"))
+        assertEquals(1, labels("risk").size)
+        val stage3Exit = SettingsSpec.pagesOf(SettingsSpec.sections.first { it.id == "stage3" }).last()
+        assertTrue("stage3_stop_loss_pct" in SettingsSpec.keysOf(stage3Exit))
+    }
 }

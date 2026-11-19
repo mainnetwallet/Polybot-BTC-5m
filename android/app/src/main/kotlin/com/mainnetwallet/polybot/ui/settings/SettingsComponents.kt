@@ -12,16 +12,19 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -30,6 +33,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -160,7 +167,33 @@ fun EditedPill() {
     Pill("EDITED", info, info.copy(alpha = 0.16f))
 }
 
-/** Switch row. The whole row is the touch target; [icon] is optional (setting fields have none). */
+/** Small "i" button that opens and closes the explanation of a setting. */
+@Composable
+private fun HintButton(open: Boolean, onToggle: () -> Unit) {
+    IconButton(onClick = onToggle, modifier = Modifier.size(28.dp)) {
+        Icon(
+            Icons.Outlined.Info,
+            contentDescription = if (open) "Hide explanation" else "Show explanation",
+            tint = if (open) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+            modifier = Modifier.size(18.dp),
+        )
+    }
+}
+
+/** Name of a setting with its EDITED pill and the "i" button, on one line. */
+@Composable
+private fun NameLine(label: String, dirty: Boolean, open: Boolean, onToggleHint: () -> Unit, modifier: Modifier = Modifier) {
+    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+        Text(label, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f, fill = false))
+        if (dirty) EditedPill()
+        HintButton(open, onToggleHint)
+    }
+}
+
+/**
+ * Switch row. The whole row is the touch target; [icon] is optional (setting fields have none). With
+ * [collapsibleHint] the explanation hides behind an "i" button, which keeps a long list short.
+ */
 @Composable
 fun SettingsToggleRow(
     title: String,
@@ -171,12 +204,14 @@ fun SettingsToggleRow(
     icon: ImageVector? = null,
     enabled: Boolean = true,
     edited: Boolean = false,
+    collapsibleHint: Boolean = false,
 ) {
+    var open by remember { mutableStateOf(false) }
     Row(
         modifier
             .fillMaxWidth()
             .toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onChange)
-            .padding(horizontal = Space.lg, vertical = Space.md),
+            .padding(horizontal = Space.lg, vertical = if (collapsibleHint) Space.sm else Space.md),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Space.md),
     ) {
@@ -184,17 +219,26 @@ fun SettingsToggleRow(
             IconBadge(icon, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.primaryContainer, size = IconSize)
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
-                Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f, fill = false))
-                if (edited) EditedPill()
+            if (collapsibleHint) {
+                NameLine(title, edited, open, onToggleHint = { open = !open })
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+                    Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f, fill = false))
+                    if (edited) EditedPill()
+                }
             }
-            Text(hint, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (!collapsibleHint || open) {
+                Text(hint, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
         Switch(checked = checked, onCheckedChange = null, enabled = enabled)
     }
 }
 
-/** One editable bot setting: a switch, a number input or an option list, with its hint and any validation error. */
+/**
+ * One editable bot setting, kept short: a switch, a number input beside its name, or an option list. The
+ * explanation is behind the "i" button; a validation error always shows.
+ */
 @Composable
 fun SettingFieldRow(
     field: SettingField,
@@ -204,6 +248,7 @@ fun SettingFieldRow(
     enabled: Boolean,
     onChange: (String) -> Unit,
 ) {
+    var open by remember { mutableStateOf(false) }
     when (val kind = field.kind) {
         SettingKind.Toggle -> {
             Column {
@@ -214,6 +259,7 @@ fun SettingFieldRow(
                     onChange = { onChange(it.toString()) },
                     enabled = enabled,
                     edited = dirty,
+                    collapsibleHint = true,
                 )
                 if (error != null) ErrorLine(error, Modifier.padding(start = Space.lg, end = Space.lg, bottom = Space.md))
             }
@@ -221,32 +267,36 @@ fun SettingFieldRow(
         is SettingKind.Number -> Column(
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = Space.lg, vertical = Space.md),
-            verticalArrangement = Arrangement.spacedBy(Space.sm),
+                .padding(horizontal = Space.lg, vertical = Space.sm),
+            verticalArrangement = Arrangement.spacedBy(Space.xs),
         ) {
-            FieldHeader(field, dirty)
-            OutlinedTextField(
-                value = value,
-                onValueChange = onChange,
-                suffix = kind.suffix?.let { { Text(it) } },
-                singleLine = true,
-                enabled = enabled,
-                isError = error != null,
-                textStyle = Mono.body,
-                shape = MaterialTheme.shapes.medium,
-                keyboardOptions = KeyboardOptions(keyboardType = if (kind.integer) KeyboardType.Number else KeyboardType.Decimal),
-                modifier = Modifier.fillMaxWidth(),
-            )
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.md)) {
+                NameLine(field.label, dirty, open, onToggleHint = { open = !open }, modifier = Modifier.weight(1f))
+                OutlinedTextField(
+                    value = value,
+                    onValueChange = onChange,
+                    suffix = kind.suffix?.let { { Text(it) } },
+                    singleLine = true,
+                    enabled = enabled,
+                    isError = error != null,
+                    textStyle = Mono.body,
+                    shape = MaterialTheme.shapes.medium,
+                    keyboardOptions = KeyboardOptions(keyboardType = if (kind.integer) KeyboardType.Number else KeyboardType.Decimal),
+                    modifier = Modifier.width(146.dp),
+                )
+            }
+            if (open) HintText(field.hint)
             if (error != null) ErrorLine(error)
         }
         is SettingKind.Choice -> Column(
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = Space.lg, vertical = Space.md),
-            verticalArrangement = Arrangement.spacedBy(Space.sm),
+                .padding(horizontal = Space.lg, vertical = Space.sm),
+            verticalArrangement = Arrangement.spacedBy(Space.xs),
         ) {
-            FieldHeader(field, dirty)
-            Column(verticalArrangement = Arrangement.spacedBy(Space.sm)) {
+            NameLine(field.label, dirty, open, onToggleHint = { open = !open })
+            if (open) HintText(field.hint)
+            Column(verticalArrangement = Arrangement.spacedBy(Space.xs)) {
                 kind.options.forEach { (id, label) ->
                     ChoiceOption(label = label, selected = value == id, enabled = enabled, onClick = { onChange(id) })
                 }
@@ -256,40 +306,35 @@ fun SettingFieldRow(
     }
 }
 
-/** Read-only row for a value derived from another setting (shown, not editable). */
+@Composable
+private fun HintText(text: String) {
+    Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+}
+
+/** Read-only row for a value derived from another setting (shown, not editable): name and value on one line. */
 @Composable
 fun DerivedValueRow(title: String, hint: String, value: String) {
+    var open by remember { mutableStateOf(false) }
     Column(
         Modifier
             .fillMaxWidth()
-            .padding(horizontal = Space.lg, vertical = Space.md),
-        verticalArrangement = Arrangement.spacedBy(Space.sm),
+            .padding(horizontal = Space.lg, vertical = Space.sm),
+        verticalArrangement = Arrangement.spacedBy(Space.xs),
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-            Text(hint, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.md)) {
+            NameLine(title, dirty = false, open = open, onToggleHint = { open = !open }, modifier = Modifier.weight(1f))
+            Text(
+                value,
+                style = Mono.body,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .width(146.dp)
+                    .clip(MaterialTheme.shapes.medium)
+                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, MaterialTheme.shapes.medium)
+                    .padding(horizontal = Space.lg, vertical = Space.md),
+            )
         }
-        Text(
-            value,
-            style = Mono.body,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(MaterialTheme.shapes.medium)
-                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, MaterialTheme.shapes.medium)
-                .padding(horizontal = Space.lg, vertical = Space.md),
-        )
-    }
-}
-
-@Composable
-private fun FieldHeader(field: SettingField, dirty: Boolean) {
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
-            Text(field.label, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f, fill = false))
-            if (dirty) EditedPill()
-        }
-        Text(field.hint, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (open) HintText(hint)
     }
 }
 
@@ -310,7 +355,7 @@ private fun ChoiceOption(label: String, selected: Boolean, enabled: Boolean, onC
             .background(if (selected) scheme.primaryContainer.copy(alpha = 0.45f) else Color.Transparent)
             .border(1.dp, if (selected) scheme.primary else scheme.outlineVariant, shape)
             .selectable(selected = selected, enabled = enabled, role = Role.RadioButton, onClick = onClick)
-            .padding(horizontal = Space.md, vertical = Space.sm),
+            .padding(horizontal = Space.md, vertical = Space.xs),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Space.sm),
     ) {

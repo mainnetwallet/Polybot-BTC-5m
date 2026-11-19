@@ -46,6 +46,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -242,6 +243,7 @@ fun SettingsSectionPage(sectionId: String, owner: ViewModelStoreOwner, modifier:
     val scope = rememberCoroutineScope()
     val section = SettingsSpec.sections.firstOrNull { it.id == sectionId } ?: return
     val stage = StageFacts.stageOf(section)
+    var tabState by rememberSaveable(sectionId) { mutableStateOf(0) }
 
     PageFrame(vm, showSaveBar = true, modifier = modifier) { state ->
         when {
@@ -257,11 +259,25 @@ fun SettingsSectionPage(sectionId: String, owner: ViewModelStoreOwner, modifier:
                 val stageOff = stage != null && !StageFacts.enabled(stage, state.draft)
                 if (stage != null) StageHero(section, stage, state, vm)
                 if (stageOff) StageOffNotice()
+                // A stage is split into tabs (Timing / Entry / Exits) so a screen shows a handful of fields.
+                val pages = SettingsSpec.pagesOf(section)
+                val tab = tabState.coerceIn(0, pages.lastIndex)
+                if (pages.size > 1) {
+                    SegmentedTabs(
+                        labels = pages.map { page ->
+                            val keys = SettingsSpec.keysOf(page)
+                            if (keys.any { it in state.errors }) "${page.label} !" else page.label
+                        },
+                        selected = tab,
+                        onSelect = { tabState = it },
+                        counts = pages.map { page -> SettingsSpec.keysOf(page).count { it in state.dirty } },
+                    )
+                }
                 Column(
                     Modifier.alpha(if (stageOff) 0.6f else 1f),
-                    verticalArrangement = Arrangement.spacedBy(Space.xl),
+                    verticalArrangement = Arrangement.spacedBy(Space.lg),
                 ) {
-                    section.groups.forEach { group -> GroupBlock(section, group, state, vm) }
+                    pages[tab].groups.forEach { group -> GroupBlock(section, group, state, vm) }
                 }
             }
         }
@@ -439,8 +455,8 @@ private fun PageFrame(
                 Modifier
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
-                    .padding(Space.lg),
-                verticalArrangement = Arrangement.spacedBy(Space.xl),
+                    .padding(horizontal = Space.lg, vertical = Space.md),
+                verticalArrangement = Arrangement.spacedBy(Space.lg),
             ) {
                 content(state)
             }
@@ -510,42 +526,37 @@ private fun groupIcon(title: String): ImageVector = when (title) {
 }
 
 /**
- * Top of a stage page: icon and name with an ON / OFF pill, the four numbers that define the stage (read from the
- * draft, so they follow edits as they are typed) and the stage's master switch.
+ * Top of a stage page, kept short: icon, name and the stage's master switch on one line, then the four numbers
+ * that define the stage (read from the draft, so they follow edits as they are typed).
  */
 @Composable
 private fun StageHero(section: SettingSection, stage: Int, state: SettingsViewModel.State, vm: SettingsViewModel) {
     val scheme = MaterialTheme.colorScheme
-    val colors = Poly.colors
     val meta = sectionMeta(section.id)
     val on = StageFacts.enabled(stage, state.draft)
     val enabledKey = SettingsSpec.enabledKey(section)
-    val enabledField = enabledKey?.let { SettingsSpec.field(it) }
 
     ProHero {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.md)) {
-            IconBadge(meta.icon, scheme.primary, scheme.primaryContainer, size = 44.dp)
+            IconBadge(meta.icon, scheme.primary, scheme.primaryContainer, size = 40.dp)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(section.title, style = MaterialTheme.typography.titleMedium)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+                    Text(if (on) "${section.title} is on" else "${section.title} is off", style = MaterialTheme.typography.titleMedium)
+                    if (enabledKey != null && enabledKey in state.dirty) EditedPill()
+                }
                 Text(meta.description, style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
             }
-            if (on) Pill("ON", colors.up, colors.upContainer) else Pill("OFF", scheme.onSurfaceVariant, scheme.surfaceVariant)
+            if (enabledKey != null) {
+                Switch(
+                    checked = on,
+                    onCheckedChange = { vm.edit(enabledKey, it.toString()) },
+                    enabled = !state.saving,
+                )
+            }
         }
         StageFacts.facts(stage, state.draft).chunked(2).forEach { row ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.md)) {
                 row.forEach { fact -> ProStat(fact.label, fact.value, Modifier.weight(1f)) }
-            }
-        }
-        if (enabledField != null && enabledKey != null) {
-            SettingsCard(container = scheme.surface.copy(alpha = 0.6f)) {
-                SettingFieldRow(
-                    field = enabledField,
-                    value = state.draft[enabledKey].orEmpty(),
-                    error = state.errors[enabledKey],
-                    dirty = enabledKey in state.dirty,
-                    enabled = !state.saving,
-                    onChange = { vm.edit(enabledKey, it) },
-                )
             }
         }
     }

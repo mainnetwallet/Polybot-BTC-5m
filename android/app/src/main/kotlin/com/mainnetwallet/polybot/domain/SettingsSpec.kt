@@ -23,6 +23,9 @@ data class SettingGroup(val title: String, val description: String? = null, val 
 
 data class SettingSection(val id: String, val title: String, val groups: List<SettingGroup>)
 
+/** One tab of a section: a label and the groups shown on it. */
+data class SettingPage(val label: String, val groups: List<SettingGroup>)
+
 object SettingsSpec {
     private fun num(min: Double? = null, max: Double? = null, integer: Boolean = false, suffix: String? = null) =
         SettingKind.Number(min, max, integer, suffix)
@@ -176,6 +179,31 @@ object SettingsSpec {
             SettingGroup("Paper fill model", null, listOf("paper_slippage_bps", "paper_fee_rate")),
         )),
     )
+
+    /**
+     * How a long page is split into tabs, so one screen shows a handful of fields instead of a long scroll.
+     * Pairs of tab label and the titles of the groups on that tab. Sections not listed here are one page.
+     */
+    private val pageLayout: Map<String, List<Pair<String, List<String>>>> = mapOf(
+        "stage0" to listOf(
+            "Timing" to listOf("Timing"),
+            "Entry" to listOf("Entry band"),
+            "Exits" to listOf("Take-profit tiers", "Stop-loss"),
+        ),
+        "stage1" to listOf("Entry" to listOf("Timing", "Entry"), "Exits" to listOf("Take-profit", "Stop-loss")),
+        "stage2" to listOf("Entry" to listOf("Timing", "Entry"), "Exits" to listOf("Take-profit", "Stop-loss")),
+        "stage3" to listOf("Entry" to listOf("Timing", "Entry"), "Exits" to listOf("Take-profit", "Stop-loss")),
+    )
+
+    /** The tabs of [section]: one page for a short section, several for a stage. Every group is on exactly one page. */
+    fun pagesOf(section: SettingSection): List<SettingPage> {
+        val layout = pageLayout[section.id] ?: return listOf(SettingPage(section.title, section.groups))
+        return layout.map { (label, titles) -> SettingPage(label, section.groups.filter { it.title in titles }) }
+            .filter { it.groups.isNotEmpty() }
+    }
+
+    /** Keys of every field on [page], in display order. */
+    fun keysOf(page: SettingPage): List<String> = page.groups.flatMap { it.keys }
 
     /** "Stage 2: Ask trigger": the field label with its section, so a list of edits stays unambiguous. */
     fun displayName(key: String): String {
