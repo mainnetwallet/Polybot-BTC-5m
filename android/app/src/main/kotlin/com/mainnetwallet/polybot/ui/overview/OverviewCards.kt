@@ -216,9 +216,6 @@ fun HeroCard(
 ) {
     val c = Poly.colors
     val scheme = MaterialTheme.colorScheme
-    // Accent drives the clock, progress bar and card tint (amber in the stage 1 window, primary while waiting).
-    val accent = if (inWindow) c.warn else scheme.primary
-
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(market?.marketId) {
         if (market != null) {
@@ -235,6 +232,8 @@ fun HeroCard(
     // Only the hero ring has its own colors, one per stage (violet while waiting, then stage 0 to 3).
     val stage = ringStage(inWindow, remaining, strategy)
     val ringColor = c.ring(stage)
+    // Accent drives the clock, progress bar and card tint (amber while a stage window is open, primary while waiting).
+    val accent = if (stage != null) c.warn else scheme.primary
     val fraction: Float = if (market != null && remaining != null && market.durationSeconds > 0) {
         (remaining / market.durationSeconds).coerceIn(0.0, 1.0).toFloat()
     } else {
@@ -276,8 +275,8 @@ fun HeroCard(
                             Pill("${account.positionsAwaitingSettlement} settling$redeem", scheme.onSurfaceVariant, scheme.surfaceVariant)
                         }
                         if (market != null) {
-                            if (inWindow) {
-                                Pill("STAGE 1", c.warn, c.warnContainer)
+                            if (stage != null) {
+                                Pill("STAGE $stage", c.warn, c.warnContainer)
                             } else {
                                 Pill("OBSERVING", scheme.onSecondaryContainer, scheme.secondaryContainer)
                             }

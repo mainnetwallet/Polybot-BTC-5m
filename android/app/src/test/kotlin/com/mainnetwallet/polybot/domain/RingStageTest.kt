@@ -29,6 +29,20 @@ class RingStageTest {
         assertEquals(1, ringStage(true, 51.0, s))
     }
 
+    @Test fun inWindowIsTrueAllRoundSoItDoesNotMeanStage1() {
+        // the server reports in_window for the whole live round: outside every stage window it is still "waiting"
+        assertNull(ringStage(true, 250.0, s))
+        assertNull(ringStage(true, 95.0, s))
+        assertEquals(0, ringStage(true, 148.0, s))
+        assertEquals(0, ringStage(true, 120.0, s))
+    }
+
+    @Test fun stage0KeepsItsColourWhenItOverlapsStage1() {
+        val overlap = s.copy(stage1Seconds = 150.0)
+        assertEquals(0, ringStage(true, 148.0, overlap))
+        assertEquals(1, ringStage(true, 100.0, overlap))
+    }
+
     @Test fun stage2And3TakeOverLater() {
         assertEquals(2, ringStage(true, 50.0, s))
         assertEquals(2, ringStage(true, 31.0, s))
