@@ -42,11 +42,12 @@ _STAGE_SUFFIX = re.compile(r":s(\d+)$")
 _SELL_STAGE = re.compile(r":s(\d+):sell:")
 # Stage 0 take-profit SELL orders carry this marker in their order key.
 _SELL_MARK = ":sell:"
-# Fast sell attempts per exit (stage, kind) and market: 450 x 50 ms is ~22 s of back-to-back tries.
-# A take-profit that used them up stops (it can wait for settlement). A stop-loss never gives up:
-# it only slows down to one try per STOP_LOSS_SLOW_GAP_MS, because an unsold losing position must
-# not be left unprotected for the rest of the market.
-MAX_SELL_ATTEMPTS = 450
+# Fast sell attempts per exit (stage, kind) and market are capped by TIME, not by a fixed count:
+# TAKE_PROFIT_RETRY_WINDOW_MS / EXIT_RETRY_GAP_MS tries (22 s / 10 ms = 2200), so changing the gap
+# never shrinks the window. A take-profit that used them up stops (it can wait for settlement).
+# A stop-loss never gives up: it only slows down to one try per STOP_LOSS_SLOW_GAP_MS, because an
+# unsold losing position must not be left unprotected for the rest of the market.
+TAKE_PROFIT_RETRY_WINDOW_MS = 22_000
 STOP_LOSS_SLOW_GAP_MS = 1000
 SELL_DUST = 0.01
 # Entry stages whose shares are watched for an exit: stages 0-2 have a take-profit sell, and every
@@ -916,6 +917,11 @@ class OrderManager:
         """True while a partly filled paper BUY of this market may still be topped up."""
         return (mode, market_id) in self._partial_pending
 
+    @property
+    def max_sell_attempts(self) -> int:
+        """Fast sell tries per exit and market: the retry window divided by the gap between tries."""
+        return max(1, TAKE_PROFIT_RETRY_WINDOW_MS // max(1, self._exit_retry_gap_ms))
+
     def reset_trigger_cache(self) -> None:
         self._partial_pending.clear()
         self._trigger_seen.clear()
@@ -1154,7 +1160,7 @@ class OrderManager:
                 sell_key = (mode, market.market_id, stage, kind)
                 attempts = self._sell_attempts.get(sell_key, 0)
                 retry_gap_ms = self._exit_retry_gap_ms
-                if attempts >= MAX_SELL_ATTEMPTS:
+                if attempts >= self.max_sell_attempts:
                     if kind != "stop_loss":
                         return [OrderResult(None, holding.side, "BLOCKED", "max_sell_attempts")]
                     retry_gap_ms = max(retry_gap_ms, STOP_LOSS_SLOW_GAP_MS)
@@ -1243,6 +1249,9 @@ class OrderManager:
             if sell_key is not None and isinstance(report.raw, dict) and report.raw.get("http_status") == 429:
                 # Rate limited by the CLOB (Retry-After): do not hammer it, wait ~250 ms for this exit.
                 self._last_sell_ms[sell_key] = clock.now_ms() + 200
+                # the rate limit refused the order before it reached the book: not the exit's fault,
+                # so the try does not use up its fast-attempt budget
+                self._sell_attempts[sell_key] = attempts
             if report.fills:
                 if sell_key is not None:
                     self._sell_attempts.pop(sell_key, None)

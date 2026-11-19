@@ -408,7 +408,7 @@ def test_stage3_stop_loss_steps_down_5_3_2_by_seconds_left():
 
 
 async def test_stop_loss_is_never_given_up_after_the_fast_attempts_run_out_but_take_profit_is():
-    from app.order_manager.manager import MAX_SELL_ATTEMPTS, STOP_LOSS_SLOW_GAP_MS
+    from app.order_manager.manager import STOP_LOSS_SLOW_GAP_MS
 
     stack = build_stack(make_config(**STAGE0, **STOPS, trade_amount_usdc=4.0))
     market = make_market(remaining=150)
@@ -416,6 +416,7 @@ async def test_stop_loss_is_never_given_up_after_the_fast_attempts_run_out_but_t
     await _stage0_buy(stack, market, books)
     manager = stack["manager"]
     key = ("paper", market.market_id, 0)
+    MAX_SELL_ATTEMPTS = manager.max_sell_attempts
 
     # take-profit: out of attempts -> blocked (it can wait for settlement)
     manager._sell_attempts[key + ("take_profit",)] = MAX_SELL_ATTEMPTS
@@ -433,3 +434,14 @@ async def test_stop_loss_is_never_given_up_after_the_fast_attempts_run_out_but_t
     manager._last_sell_ms[key + ("stop_loss",)] = int(_time.time() * 1000) - STOP_LOSS_SLOW_GAP_MS - 10
     results = await manager.handle_exits(market, books, "paper", stack["config"])
     assert [(r.status, r.reason) for r in results] == [("FILLED", "stage0_stop_loss")]
+
+
+def test_sell_attempt_cap_follows_the_retry_gap_so_the_window_stays_about_22_seconds():
+    from app.order_manager.manager import TAKE_PROFIT_RETRY_WINDOW_MS
+
+    manager = build_stack(make_config(**STAGE0, **STOPS))["manager"]
+    for gap_ms, expected in ((10, 2200), (50, 440), (0, TAKE_PROFIT_RETRY_WINDOW_MS)):
+        manager._exit_retry_gap_ms = gap_ms
+        assert manager.max_sell_attempts == expected
+    manager._exit_retry_gap_ms = 10
+    assert manager.max_sell_attempts * manager._exit_retry_gap_ms == TAKE_PROFIT_RETRY_WINDOW_MS
