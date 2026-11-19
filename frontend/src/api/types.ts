@@ -49,6 +49,7 @@ export interface StrategyState {
   stage3_max_ask?: number;
   stage3_max_spread?: number;
   stage3_min_stop_headroom?: number;
+  sell_floor_tolerance_ticks?: number;
   stage3_mid_seconds?: number;
   stage3_mid_stop_loss_pct?: number;
   stage3_last_seconds?: number;

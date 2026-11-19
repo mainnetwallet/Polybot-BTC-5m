@@ -211,6 +211,20 @@ def configure_sdk_http_pool() -> bool:
     return True
 
 
+def _is_no_match_error(text: str) -> bool:
+    """True when the CLOB refused an order only because nothing could be matched.
+
+    FOK: "... fully filled or killed". FAK: "no orders found to match with FAK order".
+    """
+    lowered = (text or "").lower()
+    return (
+        "fok" in lowered
+        or "fully filled" in lowered
+        or "fak" in lowered
+        or "no orders found to match" in lowered
+    )
+
+
 def _error_text(exc: Exception) -> str:
     detail = getattr(exc, "error_msg", None) or getattr(exc, "msg", None) or ""
     return str(detail)[:200]
@@ -233,10 +247,10 @@ def classify_post_exception(exc: Exception) -> ExecutionReport:
         if isinstance(status, int) and 400 <= status < 500 and status not in _AMBIGUOUS_HTTP_STATUSES:
             text = _error_text(exc)
             lowered = text.lower()
-            if "fok" in lowered or "fully filled" in lowered:
+            if _is_no_match_error(lowered):
                 return ExecutionReport(
                     status="CANCELED",
-                    error="FOK order was not filled",
+                    error="order was not filled",
                     raw={"http_status": status, "error": text},
                 )
             return ExecutionReport(
@@ -533,13 +547,13 @@ class LiveExecutionEngine(ExecutionEngine):
             side=Side.SELL,
             # worst acceptable price (floor), not a resting limit
             price=ceil_price_to_tick(request.min_price, tick),
-            order_type=OrderType.FOK,
+            order_type=OrderType.FAK,
             user_usdc_balance=0,
             position_id=request.token_id if request.asset_version == 2 else None,
         )
         call_started = time.perf_counter()
         try:
-            response = client.create_and_post_market_order(args, None, OrderType.FOK, False)
+            response = client.create_and_post_market_order(args, None, OrderType.FAK, False)
         except Exception as exc:
             report = classify_post_exception(exc)
             if report.status == "SUBMITTED":
@@ -557,18 +571,18 @@ class LiveExecutionEngine(ExecutionEngine):
         error_msg = str(response.get("errorMsg") or "")
         status_raw = str(response.get("status") or "").lower()
         if error_msg or response.get("success") is False or not order_id:
-            killed = "fok" in error_msg.lower() or "fully filled" in error_msg.lower()
+            killed = _is_no_match_error(error_msg)
             return ExecutionReport(
                 status="CANCELED" if killed else "REJECTED",
                 exchange_order_id=order_id,
-                error="FOK sell was not filled" if killed else "CLOB rejected the sell order",
+                error="sell was not filled (FAK: nothing matched at or above the floor)" if killed else "CLOB rejected the sell order",
                 raw=response,
             )
         if status_raw == "unmatched":
             return ExecutionReport(
                 status="CANCELED",
                 exchange_order_id=order_id,
-                error="sell not matched (FOK)",
+                error="sell not matched (FAK)",
                 raw=response,
             )
         making = _num(response.get("makingAmount"))  # SELL: shares given up

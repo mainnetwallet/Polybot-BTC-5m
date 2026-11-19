@@ -751,3 +751,73 @@ async def test_live_sells_run_in_parallel_without_a_shared_lock():
     reports = await asyncio.gather(*(engine.place_sell(req(s)) for s in range(3)))
     assert [r.status for r in reports] == ["FILLED"] * 3
     assert len(started) == 3
+
+
+# --- sells are FAK (partial fills allowed), buys stay FOK -------------------------------------
+
+
+class _TypeRecordingClient(_FakeV2Client):
+    def __init__(self, response):
+        super().__init__(response)
+        self.order_type = None
+
+    def create_and_post_market_order(self, args, options, order_type, defer_exec=False):
+        self.order_type = order_type
+        return super().create_and_post_market_order(args, options, order_type, defer_exec)
+
+    def get_tick_size(self, token_id):
+        return "0.01"
+
+
+def _sell_req(size=5.0, floor=0.92):
+    from app.execution.base import SellRequest
+
+    return SellRequest("k", "c", "m", "UP", "tok", size, floor, 0)
+
+
+def test_live_sell_is_fak_and_partial_fill_is_reported():
+    from py_clob_client_v2 import OrderType
+
+    engine = LiveExecutionEngine(Settings())
+    engine._ensure_conditional_allowance = lambda client, token_id: None
+    client = _TypeRecordingClient({
+        "success": True, "errorMsg": "", "orderID": "0xabc", "status": "matched",
+        "makingAmount": "3", "takingAmount": "2.85",
+    })
+    report = engine._place_sell_sync(client, _sell_req(size=5.0))
+    assert client.order_type == OrderType.FAK
+    assert report.status == "PARTIALLY_FILLED"
+    assert report.filled_size == 3.0 and report.avg_price == 0.95
+
+
+def test_live_buy_stays_fok():
+    from py_clob_client_v2 import OrderType
+
+    engine = LiveExecutionEngine(Settings())
+    client = _TypeRecordingClient({"success": False, "errorMsg": "FOK orders are fully filled or killed", "orderID": ""})
+    engine._place_sync(client, _request())
+    assert client.order_type == OrderType.FOK
+
+
+@pytest.mark.parametrize("msg", [
+    "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is found.",
+    "FAK orders are partially filled or killed",
+])
+def test_live_sell_fak_no_match_is_canceled_not_rejected(msg):
+    engine = LiveExecutionEngine(Settings())
+    engine._ensure_conditional_allowance = lambda client, token_id: None
+    client = _TypeRecordingClient({"success": False, "errorMsg": msg, "orderID": ""})
+    report = engine._place_sell_sync(client, _sell_req())
+    assert report.status == "CANCELED" and report.filled_size == 0
+
+
+def test_sell_floor_tolerance_setting_defaults_and_bounds():
+    from app.api.schemas import SettingsPatch
+    from app.config.runtime import RuntimeSettings
+
+    assert Settings().sell_floor_tolerance_ticks == 1
+    assert RuntimeSettings.model_fields["sell_floor_tolerance_ticks"].default == 1
+    assert SettingsPatch(sell_floor_tolerance_ticks=2).sell_floor_tolerance_ticks == 2
+    for bad in (-1, 6):
+        with pytest.raises(Exception):
+            SettingsPatch(sell_floor_tolerance_ticks=bad)

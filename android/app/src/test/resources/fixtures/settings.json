@@ -9,6 +9,7 @@
  "stage3_max_ask": 0.98,
  "stage3_max_spread": 0.05,
  "stage3_min_stop_headroom": 0.01,
+ "sell_floor_tolerance_ticks": 1,
  "stage1_seconds": 90,
  "stage1_enabled": true,
  "stage2_enabled": true,

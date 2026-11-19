@@ -23,6 +23,7 @@ OVERRIDABLE_KEYS = (
     "stage3_max_ask",
     "stage3_max_spread",
     "stage3_min_stop_headroom",
+    "sell_floor_tolerance_ticks",
     "stage1_seconds",
     "stage1_enabled",
     "stage2_enabled",
@@ -101,6 +102,8 @@ class RuntimeSettings(BaseModel):
     stage3_max_ask: float = Field(default=0.98, ge=0.01, le=1.0)
     stage3_max_spread: float = Field(default=0.0, ge=0.0, le=1.0)
     stage3_min_stop_headroom: float = Field(default=0.0, ge=0.0, le=1.0)
+    # Take-profit SELL floor = take-profit price minus this many ticks (0.01 each). 0 = exact price.
+    sell_floor_tolerance_ticks: int = Field(default=1, ge=0, le=5)
     # Once either side's best ask reaches this inside the stage 1 window without a stage 1 buy, stage 1 stops
     # buying in that market for good (the ask dropping again does not lift it). Asks never exceed 0.99, so a
     # value above 0.99 effectively turns the block off.

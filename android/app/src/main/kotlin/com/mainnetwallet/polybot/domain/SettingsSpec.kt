@@ -101,6 +101,7 @@ object SettingsSpec {
         SettingField("daily_profit_target", "Daily profit target", "Risk halt once the day's PnL reaches this profit.", num(0.0, null, suffix = "USDC")),
         SettingField("max_trades_per_day", "Max trades / day", "Hard cap on submitted entries per day.", num(1.0, 10_000.0, true)),
         SettingField("max_open_positions", "Max open positions", "Maximum concurrent open positions in the active mode.", num(0.0, 100.0, true)),
+        SettingField("sell_floor_tolerance_ticks", "Take-profit floor tolerance", "Sells are FAK (partial fills allowed). A take-profit sell accepts a fill this many ticks (0.01 each) under the take-profit price, so a small bid dip during order latency still fills. 0 = exact price. Default 1. Stop-loss is not affected.", num(0.0, 5.0, true, "ticks")),
         SettingField("stale_data_max_age_ms", "Stale data cap", "Quotes older than this are rejected before an order is built.", num(100.0, 60_000.0, true, "ms")),
 
         SettingField("paper_slippage_bps", "Paper slippage", "Simulated adverse slippage applied to walked ask levels.", num(0.0, 5_000.0, suffix = "bps")),
@@ -172,7 +173,7 @@ object SettingsSpec {
         SettingSection("risk", "Amount Limit", listOf(
             SettingGroup("Sizing", null, listOf("trade_amount_usdc", "max_execution_price")),
             SettingGroup("Daily limits", null, listOf("max_daily_loss", "daily_profit_target", "max_trades_per_day", "max_open_positions")),
-            SettingGroup("Order handling", "Applies to every stage.", listOf("duplicate_policy", "conflict_policy")),
+            SettingGroup("Order handling", "Applies to every stage.", listOf("duplicate_policy", "conflict_policy", "sell_floor_tolerance_ticks")),
             SettingGroup("Data quality", null, listOf("stale_data_max_age_ms")),
         )),
         SettingSection("paper", "Paper", listOf(

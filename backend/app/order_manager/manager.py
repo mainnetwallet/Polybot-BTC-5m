@@ -55,6 +55,7 @@ EXIT_STAGES = (0, 1, 2, 3)
 # Worst acceptable price of a stop-loss sell: it is a market sell, the exit must not be refused
 # because the bid keeps falling (the take-profit sell, by contrast, never sells below its price).
 STOP_LOSS_FLOOR = 0.01
+SELL_TICK = 0.01  # price tick used for the take-profit floor tolerance
 
 
 def _floor_shares(size: float) -> float:
@@ -1143,7 +1144,11 @@ class OrderManager:
                 if stop_price is not None and bid <= stop_price + 1e-9:
                     kind, floor = "stop_loss", STOP_LOSS_FLOOR
                 elif sell_price is not None and bid + 1e-9 >= sell_price:
-                    kind, floor = "take_profit", sell_price
+                    kind = "take_profit"
+                    floor = max(
+                        round(sell_price - config.sell_floor_tolerance_ticks * SELL_TICK, 6),
+                        STOP_LOSS_FLOOR,
+                    )
                 else:
                     return []  # neither exit is due (or both are switched off): held to settlement
                 sell_key = (mode, market.market_id, stage, kind)

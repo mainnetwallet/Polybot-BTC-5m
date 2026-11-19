@@ -1743,6 +1743,7 @@ class TradingBot:
                 "stage3_max_ask": config.stage3_max_ask,
                 "stage3_max_spread": config.stage3_max_spread,
                 "stage3_min_stop_headroom": config.stage3_min_stop_headroom,
+                "sell_floor_tolerance_ticks": config.sell_floor_tolerance_ticks,
                 "stage1_enabled": config.stage1_enabled,
                 "stage2_enabled": config.stage2_enabled,
                 "stage3_enabled": config.stage3_enabled,
