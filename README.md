@@ -90,7 +90,7 @@ All values are defaults and can be changed in Settings or `.env`. Up to 3 buys p
 - Take-profit sells are marketable and never below their sell price minus the floor tolerance. Stop-loss sells at market with no floor. `0` turns a stop-loss off.
 - A blocked or failed entry is retried on the next book event and every 0.5s while the book is quiet.
 - A partly filled paper buy is topped up only while its entry rules still hold (own time window, ask threshold, BTC gap, no kill switch / daily limit). Live FOK buys fill completely or not at all.
-- A failed take-profit sell is retried every 50ms for ~450 attempts, then left to settlement. A failed stop-loss sell is never given up: after 450 fast attempts it keeps retrying once per second.
+- A failed take-profit sell is retried every 10ms for ~450 attempts, then left to settlement. A failed stop-loss sell is never given up: after 450 fast attempts it keeps retrying once per second.
 - Execution is WebSocket/event-driven, no sleeps in the trigger path.
 
 ## Dashboard

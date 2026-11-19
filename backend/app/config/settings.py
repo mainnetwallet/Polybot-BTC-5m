@@ -130,7 +130,7 @@ class Settings(BaseSettings):
     stage0_entry_max_attempts: int = 240
     # Gap between two sell attempts of the same exit (take-profit / stop-loss) when the previous
     # FOK sell did not fill. Kept short: an exit must not wait a full second for the next try.
-    exit_retry_gap_ms: int = 50
+    exit_retry_gap_ms: int = 10
     # Sells are FAK (fill what the book gives above the floor, the rest is retried), not FOK. A
     # take-profit floor sits this many ticks (0.01 each) under the take-profit price, so a bid that
     # dipped during the order's latency still fills. 0 = floor exactly at the take-profit price.

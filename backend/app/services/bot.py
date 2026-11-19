@@ -1099,8 +1099,8 @@ class TradingBot:
     # FOK sell did not fill, never waits for the next book event or for a half-second tick.
     RETRY_TICK_S = 0.5
     RETRY_QUIET_MS = 500
-    EXIT_RETRY_TICK_S = 0.05
-    EXIT_RETRY_QUIET_MS = 50
+    EXIT_RETRY_TICK_S = 0.01
+    EXIT_RETRY_QUIET_MS = 10
 
     def _retry_timing(self) -> tuple[float, int]:
         market = self._market
