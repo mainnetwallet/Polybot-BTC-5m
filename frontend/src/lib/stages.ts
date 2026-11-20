@@ -11,6 +11,13 @@ import { fmtClock, fmtGapUsd, fmtPx, isNum } from "./format";
 export type StageId = 0 | 1 | 2 | 3;
 export const STAGES: StageId[] = [0, 1, 2, 3];
 
+/** The server numbers one-tap buys as stage 9. They are manual trades, not one of the entry stages 0-3. */
+export const TAP_STAGE = 9;
+export const TAP_COLOR = "var(--tap)";
+export function isTapOrder(order: { stage?: number; tap?: boolean }): boolean {
+  return order.tap === true || order.stage === TAP_STAGE;
+}
+
 export const STAGE_VAR: Record<StageId, string> = {
   0: "var(--stage-0)",
   1: "var(--stage-1)",
@@ -316,6 +323,7 @@ export function stageFills(orders: OrderRow[], openOrders: OrderRow[], marketId:
   const cost: Record<StageId, number> = { 0: 0, 1: 0, 2: 0, 3: 0 };
   for (const order of orders) {
     if (order.market_id !== marketId || order.action !== "BUY" || !(order.filled_size > 0)) continue;
+    if (isTapOrder(order)) continue; // a one-tap buy is not what a stage bought
     const stage = Math.min(3, Math.max(0, order.stage ?? 1)) as StageId;
     const price = order.avg_fill_price ?? order.submitted_price ?? order.requested_price;
     out[stage].shares += order.filled_size;
@@ -326,6 +334,7 @@ export function stageFills(orders: OrderRow[], openOrders: OrderRow[], marketId:
   }
   for (const order of openOrders) {
     if (order.market_id !== marketId || order.action !== "BUY") continue;
+    if (isTapOrder(order)) continue;
     const stage = Math.min(3, Math.max(0, order.stage ?? 1)) as StageId;
     out[stage].pending = true;
   }

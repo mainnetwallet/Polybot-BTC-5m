@@ -87,6 +87,12 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ market_id: marketId, side, stage }),
     }),
+  /** One-tap buy: one market buy of `amount` USDC. `requestId` makes a retried request buy only once. */
+  tapBuy: (marketId: string, side: Side, amount: number, requestId: string) =>
+    request<Snapshot>("/api/orders/tap-buy", {
+      method: "POST",
+      body: JSON.stringify({ market_id: marketId, side, amount, request_id: requestId }),
+    }),
   /** Instant "sell all": every stage that holds shares in this market is sold at the market (no confirmation step). */
   sellAll: (marketId: string) =>
     request<Snapshot>("/api/orders/sell-all", {

@@ -118,6 +118,8 @@ export interface PositionRow {
   fees: number;
   unrealized_pnl: number;
   realized_pnl: number;
+  /** "" = strategy stages 0-3, "tap" = one-tap buy */
+  tag?: string;
   status: string;
   resolution: string | null;
   awaiting_settlement?: boolean;
@@ -139,6 +141,8 @@ export interface OrderRow {
   market_id: string;
   side: Side;
   stage?: number;
+  /** true for one-tap buys and their sells (stage 9 on the server) */
+  tap?: boolean;
   action?: "BUY" | "SELL";
   status: string;
   requested_notional: number;
@@ -234,6 +238,10 @@ export interface Snapshot {
   open_orders: OrderRow[];
   /** shares the operator can sell right now (live market, bot running) */
   sellable?: SellableHolding[];
+  /** limits of the one-tap buy */
+  tap?: { min_usdc: number; max_usdc: number; cooldown_ms: number };
+  /** present only on the reply to a one-tap buy */
+  tap_buy?: { status: string; side: string; filled_size: number; avg_price: number | null };
   /** present only on the reply to a "sell all": which stages went through and which could not be sold */
   manual_sell_all?: {
     sold: Array<{ status: string; side: string; filled_size: number }>;

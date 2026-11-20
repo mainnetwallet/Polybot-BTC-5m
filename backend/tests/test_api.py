@@ -44,7 +44,7 @@ def test_health_and_state():
     with TestClient(create_app()) as client:
         health = client.get("/api/health")
         assert health.status_code == 200
-        assert health.json()["db_revision"] == "0002_order_route"
+        assert health.json()["db_revision"] == "0003_position_tag"
         state = client.get("/api/state").json()
         assert state["bot"]["mode"] in {"paper", "live"}
         assert state["strategy"]["name"] == "FINAL_60_SECONDS_MARKET_BUY"

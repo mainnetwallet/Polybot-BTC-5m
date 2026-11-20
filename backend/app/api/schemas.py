@@ -32,7 +32,16 @@ class ResetPaperRequest(BaseModel):
 class ManualSellRequest(BaseModel):
     market_id: str
     side: Literal["UP", "DOWN"]
-    stage: int = Field(ge=0, le=3)
+    # 0-3 = a strategy stage, 9 = the one-tap buys
+    stage: Literal[0, 1, 2, 3, 9]
+
+
+class TapBuyRequest(BaseModel):
+    market_id: str
+    side: Literal["UP", "DOWN"]
+    amount: float = Field(ge=1, le=100000)
+    # one id per tap: the same id sent twice (a retry over a bad connection) buys only once
+    request_id: str | None = Field(default=None, max_length=64)
 
 
 class ManualSellAllRequest(BaseModel):

@@ -20,6 +20,7 @@ from app.api.schemas import (
     ResetServerRequest,
     SettingsPatch,
     StartRequest,
+    TapBuyRequest,
 )
 from app.api.auth import AuthService
 from app.config.runtime import SettingsService
@@ -117,6 +118,14 @@ def build_router(
     async def set_buys(request: BuysRequest) -> dict:
         """Turn NEW buys on or off (all stages). Exits, settlement and market data are not affected."""
         return await bot.set_buys(request.enabled, "dashboard")
+
+    @router.post("/orders/tap-buy")
+    async def tap_buy(request: TapBuyRequest) -> dict:
+        """One-tap buy: one market buy of `amount` USDC, separate from the strategy stages (see TradingBot.tap_buy)."""
+        try:
+            return await bot.tap_buy(request.market_id, request.side, request.amount, request.request_id)
+        except BotError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @router.post("/orders/sell")
     async def manual_sell(request: ManualSellRequest) -> dict:

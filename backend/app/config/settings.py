@@ -116,6 +116,8 @@ class Settings(BaseSettings):
     # (the stop tightens to 3 % / 2 % in the last seconds). 0 = off. Stops a buy from being stopped out at once.
     stage3_min_stop_headroom: float = 0.01
     trade_amount_usdc: float = 2.0
+    # Largest single one-tap buy (dashboard / app) in USDC; the smallest is 1.
+    tap_buy_max_usdc: float = 100.0
     # Book age only resets on a websocket book event, so a stable price on a quiet book looks
     # "old" without being wrong, so too low a limit blocks stage 2/3 (armed by the clock) on a quiet
     # book. 2s: a signal is never built on a book older than that. Exits do not check book age.

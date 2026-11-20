@@ -32,6 +32,8 @@
   --stage-1: #a78bfa;
   --stage-2: #f5b544;
   --stage-3: #f472b6;
+  /* one-tap buys are manual trades, not a stage: their own color */
+  --tap: #22d3ee;
 
   /* soft fills of the meaning colors (chips, tiles) */
   --up-soft: rgba(61, 220, 151, 0.12);

@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type { Candle } from "../hooks/BtcTape";
 import { isNum } from "../lib/format";
-import { STAGE_VAR, type StageId } from "../lib/stages";
+import { STAGE_VAR, TAP_COLOR, type StageId } from "../lib/stages";
 
 export interface BuyMarker {
   key: string;
   t: number;
-  stage: StageId;
+  /** entry stage 0-3, or "tap" for a one-tap buy */
+  stage: StageId | "tap";
   label: string;
 }
 
@@ -268,7 +269,7 @@ export function CandleChart({
           return (
             <g key={buy.key}>
               <title>{buy.label}</title>
-              <path d={`M ${bx} ${by - 7} L ${bx + 6.5} ${by + 5} L ${bx - 6.5} ${by + 5} Z`} fill={STAGE_VAR[buy.stage]} stroke="#0c1c24" strokeWidth="1.5" />
+              <path d={`M ${bx} ${by - 7} L ${bx + 6.5} ${by + 5} L ${bx - 6.5} ${by + 5} Z`} fill={buy.stage === "tap" ? TAP_COLOR : STAGE_VAR[buy.stage]} stroke="#0c1c24" strokeWidth="1.5" />
             </g>
           );
         })}
