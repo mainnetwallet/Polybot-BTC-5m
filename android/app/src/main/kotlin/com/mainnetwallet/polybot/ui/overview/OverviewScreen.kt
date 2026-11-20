@@ -62,6 +62,7 @@ fun OverviewScreen(modifier: Modifier = Modifier) {
     var tapLocked by remember { mutableStateOf(false) }
     var tapBusy by remember { mutableStateOf<String?>(null) }
     fun tapBuy(side: String, amount: Double) {
+        if (prefs?.tapEnabled != true) return // the switch is OFF: a tap never buys
         if (tapLocked || tapBusy != null) return
         tapLocked = true
         tapBusy = "$side:$amount"
@@ -131,10 +132,16 @@ fun OverviewScreen(modifier: Modifier = Modifier) {
                     limits = snap.tap,
                     locked = tapLocked,
                     busyKey = tapBusy,
+                    enabled = prefs?.tapEnabled ?: false,
                     expanded = prefs?.tapExpanded ?: true,
                     onToggle = { scope.launch { graph.prefsStore.setTapExpanded(!(prefs?.tapExpanded ?: true)) } },
                     onTap = { side, amount -> tapBuy(side, amount) },
-                    onSaveAmounts = { amounts -> scope.launch { graph.prefsStore.setTapAmounts(amounts) } },
+                    onSaveSettings = { amounts, enabled ->
+                        scope.launch {
+                            graph.prefsStore.setTapAmounts(amounts)
+                            graph.prefsStore.setTapEnabled(enabled)
+                        }
+                    },
                 )
                 PositionBoxCard(
                     marketId = snap.market?.marketId,

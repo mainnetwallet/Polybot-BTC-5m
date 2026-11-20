@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -23,6 +24,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -44,6 +46,7 @@ import com.mainnetwallet.polybot.data.model.MarketSnapshot
 import com.mainnetwallet.polybot.data.model.TapLimits
 import com.mainnetwallet.polybot.ui.Fmt
 import com.mainnetwallet.polybot.ui.components.Label
+import com.mainnetwallet.polybot.ui.components.Pill
 import com.mainnetwallet.polybot.ui.theme.Mono
 import com.mainnetwallet.polybot.ui.theme.Poly
 import com.mainnetwallet.polybot.ui.theme.Space
@@ -74,10 +77,11 @@ fun TapBuyCard(
     limits: TapLimits?,
     locked: Boolean,
     busyKey: String?,
+    enabled: Boolean,
     expanded: Boolean,
     onToggle: () -> Unit,
     onTap: (side: String, amount: Double) -> Unit,
-    onSaveAmounts: (List<Double>) -> Unit,
+    onSaveSettings: (amounts: List<Double>, enabled: Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -86,6 +90,7 @@ fun TapBuyCard(
     val chevron by animateFloatAsState(if (expanded) 180f else 0f, label = "tapChevron")
     val ended = market == null || market.remainingSeconds <= 0.0
     val blocked: String? = when {
+        !enabled -> "One-tap is OFF: open the settings (gear) to turn it on"
         bot.killSwitch -> "Kill switch is on"
         !bot.running -> "Start the bot to buy"
         ended -> "Waiting for the next market"
@@ -115,14 +120,16 @@ fun TapBuyCard(
                     style = Mono.small,
                     color = if (bot.isLive) scheme.error else scheme.onSurfaceVariant,
                 )
+                if (!enabled) Pill("OFF", scheme.onSurfaceVariant, scheme.surfaceContainerHighest)
                 if (expanded) {
-                    Text(
-                        "Edit",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = scheme.primary,
+                    Icon(
+                        Icons.Filled.Settings,
+                        contentDescription = "One-tap settings",
+                        tint = scheme.primary,
                         modifier = Modifier
                             .clickable { editing = true }
-                            .padding(horizontal = 4.dp, vertical = 6.dp),
+                            .padding(4.dp)
+                            .size(20.dp),
                     )
                 }
                 Icon(
@@ -163,7 +170,7 @@ fun TapBuyCard(
                                 val key = "$side:$amount"
                                 Button(
                                     onClick = { onTap(side, amount) },
-                                    enabled = blocked == null && ask != null && !locked && busyKey == null,
+                                    enabled = enabled && blocked == null && ask != null && !locked && busyKey == null,
                                     shape = RoundedCornerShape(10.dp),
                                     contentPadding = PaddingValues(horizontal = 2.dp, vertical = 3.dp),
                                     colors = ButtonDefaults.buttonColors(containerColor = container, contentColor = tone),
@@ -198,56 +205,84 @@ fun TapBuyCard(
     }
 
     if (editing) {
-        TapAmountsDialog(
+        TapSettingsDialog(
             amounts = amounts,
+            enabled = enabled,
             min = limits?.minUsdc ?: 1.0,
             max = limits?.maxUsdc ?: 100.0,
             onDismiss = { editing = false },
-            onSave = {
+            onSave = { newAmounts, on ->
                 editing = false
-                onSaveAmounts(it)
+                onSaveSettings(newAmounts, on)
             },
         )
     }
 }
 
+/** Centered settings dialog: the ON/OFF switch (default OFF) and the three buy amounts. Nothing changes until Save. */
 @Composable
-private fun TapAmountsDialog(
+private fun TapSettingsDialog(
     amounts: List<Double>,
+    enabled: Boolean,
     min: Double,
     max: Double,
     onDismiss: () -> Unit,
-    onSave: (List<Double>) -> Unit,
+    onSave: (List<Double>, Boolean) -> Unit,
 ) {
+    var on by remember { mutableStateOf(enabled) }
     var drafts by remember { mutableStateOf(amounts.map { tapMoney(it).removePrefix("$") }) }
     val parsed = drafts.map { it.trim().toDoubleOrNull() }
     val valid = parsed.all { it != null && it >= min && it <= max }
+    val scheme = MaterialTheme.colorScheme
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("One-tap amounts") },
+        title = { Text("One-tap buy settings") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(Space.sm)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
-                    drafts.forEachIndexed { i, value ->
-                        OutlinedTextField(
-                            value = value,
-                            onValueChange = { text -> drafts = drafts.toMutableList().also { it[i] = text } },
-                            prefix = { Text("$") },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                            modifier = Modifier.weight(1f),
+            Column(verticalArrangement = Arrangement.spacedBy(Space.md)) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Space.sm),
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            if (on) "One-tap buy: ON" else "One-tap buy: OFF",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (on) scheme.primary else scheme.onSurface,
+                        )
+                        Text(
+                            if (on) "A tap on a dollar button buys at once." else "Buttons are locked, a stray tap cannot buy.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = scheme.onSurfaceVariant,
                         )
                     }
+                    Switch(checked = on, onCheckedChange = { on = it })
                 }
-                Text(
-                    "Each from " + tapMoney(min) + " to " + tapMoney(max) + ". Saved on this phone.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(Space.sm)) {
+                    Text("Buy amounts (USDC)", style = MaterialTheme.typography.labelLarge)
+                    Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+                        drafts.forEachIndexed { i, value ->
+                            OutlinedTextField(
+                                value = value,
+                                onValueChange = { text -> drafts = drafts.toMutableList().also { it[i] = text } },
+                                prefix = { Text("$") },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                    }
+                    Text(
+                        "Each from " + tapMoney(min) + " to " + tapMoney(max) + ". Saved on this phone.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = scheme.onSurfaceVariant,
+                    )
+                }
             }
         },
         confirmButton = {
-            TextButton(onClick = { onSave(parsed.map { it ?: 1.0 }) }, enabled = valid) { Text("Save") }
+            TextButton(onClick = { onSave(parsed.map { it ?: 1.0 }, on) }, enabled = valid) { Text("Save") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
