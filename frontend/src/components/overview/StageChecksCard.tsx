@@ -25,7 +25,7 @@ const CHIP_TONE: Record<CheckTone, string> = {
 
 /** "Take profit +8%" -> ["Take profit", "+8%"]; "Ask 0.70 to 0.85" -> ["Ask", "0.70 to 0.85"] */
 function splitChip(label: string): [string, string] {
-  const m = label.match(/^(Take profit|Ask|Gap|Spread|Above)\s+(.*)$/);
+  const m = label.match(/^(Take profit|Ask|Gap|Spread|Above|Expensive)\s+(.*)$/);
   return m ? [m[1], m[2]] : ["", label];
 }
 
@@ -57,8 +57,12 @@ export function StageChecksCard({ orders, className }: { orders: OrderRow[]; cla
           const w = windows[stage];
           const status = stageStatus(w, remaining);
           const fill = fills[stage];
-          const chips = stageChecks(w, status, strategy, config, ctx);
+          const chips = stageChecks(w, status, strategy, config, ctx, remaining);
           const color = STAGE_VAR[stage];
+          // stage 0 row turns into "Expensive buy" while the live ask is in the expensive tier
+          const isExpensive =
+            stage === 0 && status.kind === "watching" && ctx.ask !== null && ctx.ask + 1e-9 >= strategy.stage0_high_buy_price;
+          const stageName = isExpensive ? "Expensive buy" : STAGE_NAME[stage];
 
           let right: { text: string; cls: string };
           if (status.kind === "off") right = { text: "Off", cls: "border-white/8 bg-white/[0.03] text-slate-500" };
@@ -85,7 +89,7 @@ export function StageChecksCard({ orders, className }: { orders: OrderRow[]; cla
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
                   <div className="sc-title min-w-0 text-[14px]">
-                    <span className="sc-name font-semibold text-slate-100">{STAGE_NAME[stage]}</span>
+                    <span className="sc-name font-semibold text-slate-100">{stageName}</span>
                     <span className="sc-window">{status.kind === "off" ? "switched off" : windowText(w)}</span>
                   </div>
                   <span className={cx("chip sc-status shrink-0", right.cls)}>{right.text}</span>

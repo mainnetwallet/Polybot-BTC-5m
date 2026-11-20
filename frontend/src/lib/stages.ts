@@ -219,6 +219,7 @@ export function stageChecks(
   s: StrategyState,
   config: Config,
   ctx: CheckContext,
+  remaining: number | null = null,
 ): StageCheck[] {
   const stage = window.stage;
   const live = status.kind === "watching";
@@ -226,12 +227,36 @@ export function stageChecks(
   const chips: StageCheck[] = [];
 
   const [lo, hi] = askRange(stage, s);
-  const askOk = isNum(ctx.ask) ? ctx.ask + 1e-9 >= lo && ctx.ask <= hi + 1e-9 : null;
-  chips.push({
-    key: "ask",
-    label: live && isNum(ctx.ask) ? `Ask ${fmtPx(ctx.ask)} in ${fmtPx(lo)} to ${fmtPx(hi)}` : `Ask ${fmtPx(lo)} to ${fmtPx(hi)}`,
-    tone: verdict(askOk),
-  });
+  // stage 0 has two buy tiers: the cheaper early buy and the expensive buy (ask >= stage0_high_buy_price)
+  const expHi = Math.min(s.stage0_max_ask, cfgNum(config, "max_execution_price") ?? 1);
+  const expensive = stage === 0 && isNum(ctx.ask) && ctx.ask + 1e-9 >= s.stage0_high_buy_price;
+  let askLabel: string;
+  let askOk: boolean | null;
+  if (stage === 0 && expensive && isNum(ctx.ask)) {
+    askOk = ctx.ask <= expHi + 1e-9;
+    askLabel = live ? `Ask ${fmtPx(ctx.ask)} in ${fmtPx(s.stage0_high_buy_price)} to ${fmtPx(expHi)}` : `Ask ${fmtPx(s.stage0_high_buy_price)} to ${fmtPx(expHi)}`;
+  } else {
+    askOk = isNum(ctx.ask) ? ctx.ask + 1e-9 >= lo && ctx.ask <= hi + 1e-9 : null;
+    if (live && isNum(ctx.ask)) askLabel = `Ask ${fmtPx(ctx.ask)} in ${fmtPx(lo)} to ${fmtPx(hi)}`;
+    else if (stage === 0) askLabel = `Ask ${fmtPx(lo)} to ${fmtPx(hi)}, ${fmtPx(s.stage0_high_buy_price)} to ${fmtPx(expHi)}`;
+    else askLabel = `Ask ${fmtPx(lo)} to ${fmtPx(hi)}`;
+  }
+  chips.push({ key: "ask", label: askLabel, tone: verdict(askOk) });
+
+  if (stage === 0) {
+    // expensive buys only start once stage0_high_buy_after_pct of the window has passed (mirrors stage0_high_buy_opens_at)
+    const span = Math.max(s.stage0_start_seconds - s.stage0_end_seconds, 0);
+    const opensAt = s.stage0_start_seconds - (span * s.stage0_high_buy_after_pct) / 100;
+    const timeOk = remaining !== null ? remaining <= opensAt + 1e-9 : null;
+    chips.push({
+      key: "expensive",
+      label:
+        live && expensive && timeOk
+          ? "Expensive open"
+          : `Expensive from ${Math.round(opensAt)} s left`,
+      tone: verdict(expensive ? timeOk : null),
+    });
+  }
 
   const need = requiredGap(stage, s, config, ctx.ask);
   if (need > 0) {
@@ -255,7 +280,11 @@ export function stageChecks(
   if (stage === 0) {
     const tiers = [s.stage0_take_profit_pct_low, s.stage0_take_profit_pct_mid, s.stage0_take_profit_pct_high];
     if (Math.max(...tiers) > 0) {
-      chips.push({ key: "tp", label: `Take profit +${tiers[0]}% / +${tiers[1]}% / +${tiers[2]}%`, tone: "neutral" });
+      chips.push({
+        key: "tp",
+        label: expensive ? `Take profit +${tiers[2]}%` : `Take profit +${tiers[0]}/+${tiers[1]}/+${tiers[2]}%`,
+        tone: "neutral",
+      });
     }
   } else if (stage === 1 && s.stage1_sell_enabled) {
     if (s.stage1_take_profit_pct > 0) chips.push({ key: "tp", label: `Take profit +${s.stage1_take_profit_pct}%`, tone: "neutral" });
