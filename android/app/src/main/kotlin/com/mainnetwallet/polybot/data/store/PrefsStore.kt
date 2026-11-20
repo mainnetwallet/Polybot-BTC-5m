@@ -36,6 +36,10 @@ data class AppPrefs(
     val lastTunnelUrl: String = "",
     /** The three dollar buttons of the one-tap buy card. */
     val tapAmounts: List<Double> = DEFAULT_TAP_AMOUNTS,
+    /** The one-tap buy card is open (true) or folded to its header (false). */
+    val tapExpanded: Boolean = true,
+    /** One-tap buy switch. OFF by default so a stray tap can never buy; the buttons stay locked until it is turned on. */
+    val tapEnabled: Boolean = false,
 ) {
     val isConfigured: Boolean get() = pcUrl.isNotBlank() && token.isNotBlank()
 }
@@ -52,6 +56,8 @@ class PrefsStore(private val context: Context) {
         val tunnelFor = stringPreferencesKey("tunnel_for")
         val tunnelUrl = stringPreferencesKey("tunnel_url")
         val tapAmounts = stringPreferencesKey("tap_amounts")
+        val tapExpanded = booleanPreferencesKey("tap_expanded")
+        val tapEnabled = booleanPreferencesKey("tap_enabled")
     }
 
     val prefs: Flow<AppPrefs> = context.polyDataStore.data
@@ -69,6 +75,8 @@ class PrefsStore(private val context: Context) {
                 lastTunnelFor = p[Keys.tunnelFor].orEmpty(),
                 lastTunnelUrl = p[Keys.tunnelUrl].orEmpty(),
                 tapAmounts = parseTapAmounts(p[Keys.tapAmounts]),
+                tapExpanded = p[Keys.tapExpanded] ?: true,
+                tapEnabled = p[Keys.tapEnabled] ?: false,
             )
         }
 
@@ -111,5 +119,13 @@ class PrefsStore(private val context: Context) {
         if (amounts.size != 3 || amounts.any { !it.isFinite() || it < 1.0 }) return
         val text = amounts.joinToString(",") { (Math.round(it * 100.0) / 100.0).toString() }
         context.polyDataStore.edit { it[Keys.tapAmounts] = text }
+    }
+
+    suspend fun setTapExpanded(expanded: Boolean) {
+        context.polyDataStore.edit { it[Keys.tapExpanded] = expanded }
+    }
+
+    suspend fun setTapEnabled(enabled: Boolean) {
+        context.polyDataStore.edit { it[Keys.tapEnabled] = enabled }
     }
 }

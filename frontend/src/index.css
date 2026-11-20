@@ -937,51 +937,79 @@ select:focus-visible,
 }
 
 /* ---- One-tap buy panel (BTC tape card, right of the chart) ----
-   One row per side: [Up 64c] [$1] [$2] [$5]. Small on purpose: on the one-screen Overview it has to fit next to
-   the chart in a 280px card, and on a phone it must not push the positions off the screen. */
+   Header (title + gear + fold chevron), one row per side: [Up 64c] [$1] [$2] [$5], then a footer line with cash.
+   Roomy on purpose: taller buttons and real gaps so nothing is squeezed; folded = the header line only. */
 .tap-panel {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 10px;
   min-width: 0;
   border: 1px solid var(--line);
   border-radius: var(--radius-tile);
   background: rgba(255, 255, 255, 0.025);
-  padding: 9px 10px 8px;
+  padding: 12px;
 }
+.tap-panel.is-folded { gap: 0; padding-block: 8px; }
 .tap-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; white-space: nowrap; }
-.tap-title { display: flex; min-width: 0; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: var(--text); }
+.tap-title {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 7px;
+  background: none;
+  border: 0;
+  padding: 2px 0;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+}
 .tap-name { overflow: hidden; text-overflow: ellipsis; }
 .tap-bolt { color: var(--tap); }
-.tap-live, .tap-paper {
+.tap-live, .tap-paper, .tap-offchip {
   flex: none;
   border-radius: 999px;
-  padding: 1px 6px;
+  padding: 1px 7px;
   font-size: 9.5px;
   font-weight: 800;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
 }
 .tap-live { background: var(--down-soft); color: #ff8fa0; border: 1px solid rgba(255, 107, 129, 0.4); }
-.tap-paper { background: rgba(255, 255, 255, 0.05); color: var(--muted); border: 1px solid var(--line); }
-.tap-sub { display: flex; flex: none; align-items: center; gap: 8px; font-size: 11.5px; color: var(--muted); }
-.tap-cash { font-variant-numeric: tabular-nums; }
-.tap-edit { background: none; border: 0; padding: 0; font-size: 11.5px; font-weight: 600; color: var(--text-2); cursor: pointer; }
-.tap-edit:hover { color: var(--text); text-decoration: underline; }
-.tap-grid { display: flex; flex-direction: column; gap: 6px; }
-.tap-row { display: grid; grid-template-columns: 54px repeat(3, minmax(0, 1fr)); gap: 6px; }
+.tap-paper, .tap-offchip { background: rgba(255, 255, 255, 0.05); color: var(--muted); border: 1px solid var(--line); }
+.tap-offchip { color: var(--amber); border-color: rgba(255, 193, 7, 0.35); }
+.tap-tools { display: flex; flex: none; align-items: center; gap: 2px; }
+.tap-icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: none;
+  border: 0;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+.tap-icon:hover { background: rgba(255, 255, 255, 0.07); color: var(--text); }
+.tap-chevron svg { transition: transform 0.18s ease; }
+.tap-chevron.is-open svg { transform: rotate(180deg); }
+.tap-grid { display: flex; flex-direction: column; gap: 8px; }
+.tap-row { display: grid; grid-template-columns: 56px repeat(3, minmax(0, 1fr)); gap: 8px; }
 .tap-side {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1px;
-  border-radius: 10px;
-  padding: 4px 2px;
+  gap: 2px;
+  border-radius: 11px;
+  padding: 6px 2px;
   font-size: 12px;
   font-weight: 800;
   line-height: 1.15;
 }
-.tap-side b { font-size: 13px; font-variant-numeric: tabular-nums; }
+.tap-side b { font-size: 14px; font-variant-numeric: tabular-nums; }
 .tap-up .tap-side { background: var(--up-soft); color: var(--up); }
 .tap-down .tap-side { background: var(--down-soft); color: var(--down); }
 .tap-old { opacity: 0.45; text-decoration: line-through; }
@@ -991,12 +1019,12 @@ select:focus-visible,
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1px;
-  min-height: 44px;
-  border-radius: 11px;
+  gap: 3px;
+  min-height: 52px;
+  border-radius: 12px;
   border: 1px solid var(--line-strong);
   background: rgba(255, 255, 255, 0.035);
-  padding: 4px 2px;
+  padding: 6px 2px;
   color: var(--text);
   cursor: pointer;
   touch-action: manipulation;
@@ -1008,25 +1036,65 @@ select:focus-visible,
 .tap-down .tap-btn:hover:not(:disabled) { border-color: var(--down); }
 .tap-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .tap-btn.is-busy { opacity: 1; border-color: var(--tap); }
-.tap-amt { font-size: 15px; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
-.tap-win { max-width: 100%; overflow: hidden; text-overflow: clip; white-space: nowrap; font-size: 10px; font-weight: 600; color: var(--up); line-height: 1.1; }
-.tap-note { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10.5px; line-height: 1.2; color: var(--muted); }
-.tap-note.is-warn { color: var(--amber); font-weight: 600; }
-.tap-editor { display: flex; flex-direction: column; gap: 6px; }
-.tap-editor-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.tap-amt { font-size: 16px; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.tap-win { max-width: 100%; overflow: hidden; text-overflow: clip; white-space: nowrap; font-size: 10.5px; font-weight: 600; color: var(--up); line-height: 1.1; }
+.tap-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+  font-size: 10.5px;
+  line-height: 1.2;
+  color: var(--muted);
+}
+.tap-foot-text { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tap-foot.is-warn { color: var(--amber); font-weight: 600; }
+.tap-foot.is-warn .tap-foot-text { display: inline; flex: 1; }
+.tap-cash { flex: none; font-size: 11.5px; font-variant-numeric: tabular-nums; color: var(--text-2); }
+.tap-panel.is-off .tap-grid { opacity: 0.85; }
+
+/* settings dialog */
+.tap-set { display: flex; flex-direction: column; gap: 20px; }
+.tap-set-switch { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.tap-set-title { font-size: 14px; font-weight: 700; color: var(--text); }
+.tap-set-sub { margin: 4px 0 0; font-size: 12.5px; line-height: 1.4; color: var(--muted); }
+.tap-set-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 10px; }
+.tap-switch {
+  position: relative;
+  flex: none;
+  width: 46px;
+  height: 26px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.tap-switch span {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--text-2);
+  transition: transform 0.15s, background 0.15s;
+}
+.tap-switch.is-on { background: color-mix(in srgb, var(--tap) 35%, transparent); border-color: var(--tap); }
+.tap-switch.is-on span { transform: translateX(20px); background: var(--tap); }
 .tap-field {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
   border: 1px solid var(--line-strong);
   border-radius: 10px;
-  padding: 6px 8px;
+  padding: 9px 10px;
   color: var(--muted);
   font-weight: 700;
 }
-.tap-field input { width: 100%; min-width: 0; background: none; border: 0; outline: 0; color: var(--text); font-size: 14px; font-weight: 700; }
-.tap-hint { margin: 0; font-size: 10.5px; color: var(--muted); }
-.tap-save { padding: 6px 10px; font-size: 12px; }
+.tap-field input { width: 100%; min-width: 0; background: none; border: 0; outline: 0; color: var(--text); font-size: 15px; font-weight: 700; }
 
 /* the right column of the tape card: tap panel on top, the two books under it */
 .tape-side { display: flex; min-width: 0; flex-direction: column; gap: 10px; }

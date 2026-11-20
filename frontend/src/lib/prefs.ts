@@ -112,3 +112,54 @@ export function useTapAmounts(): [number[], (amounts: number[]) => void] {
   // the raw string is the stable snapshot; the array is derived from it
   return [parseTapAmounts(raw), setTapAmounts];
 }
+
+// ---- One-tap buy: ON/OFF switch and fold state (this browser only) ----
+
+/** A boolean preference kept in localStorage; all open tabs follow. */
+function createBoolPref(key: string, fallback: boolean): () => [boolean, (value: boolean) => void] {
+  const listeners = new Set<() => void>();
+  let cached: boolean | null = null;
+
+  const read = (): boolean => {
+    try {
+      const raw = window.localStorage.getItem(key);
+      return raw === null ? fallback : raw === "true";
+    } catch {
+      return fallback;
+    }
+  };
+  const current = (): boolean => {
+    if (cached === null) cached = read();
+    return cached;
+  };
+  const set = (value: boolean): void => {
+    cached = value;
+    try {
+      window.localStorage.setItem(key, String(value));
+    } catch {
+      // storage can be blocked; the choice then only lasts until the next refresh
+    }
+    listeners.forEach((listener) => listener());
+  };
+  const subscribe = (listener: () => void): (() => void) => {
+    listeners.add(listener);
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== null && event.key !== key) return;
+      cached = read();
+      listener();
+    };
+    window.addEventListener("storage", onStorage);
+    return () => {
+      listeners.delete(listener);
+      window.removeEventListener("storage", onStorage);
+    };
+  };
+
+  return () => [useSyncExternalStore(subscribe, current, () => fallback), set];
+}
+
+/** `[one-tap buy is on, setter]`. Default OFF: the tap buttons stay locked until it is switched on, so a stray click cannot buy. */
+export const useTapEnabled = createBoolPref("polybot.tapEnabled", false);
+
+/** `[one-tap card is open, setter]`. Default open. Folded = only the header line shows. */
+export const useTapExpanded = createBoolPref("polybot.tapExpanded", true);
