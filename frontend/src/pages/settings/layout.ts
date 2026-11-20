@@ -158,8 +158,8 @@ export const TABS: TabSpec[] = [
       },
       {
         title: "Buy guards (switch all buying off)",
-        description: "Volatility circuit breakers. When one trips, new buys stop and Telegram sends an alert; send \"Buy\" on Telegram (or press Buy ON) to resume.",
-        keys: ["buy_guard_gap_usd", "buy_guard_trend_usd", "buy_guard_trend_markets"],
+        description: "Volatility circuit breakers. When one trips, new buys stop and Telegram sends an alert. Buying switches itself back on after the auto-resume wait (default 1 hour) unless you act: send \"Buy\" on Telegram (or press Buy ON) to resume now, or \"Off\" to keep it off until the next day.",
+        keys: ["buy_guard_gap_usd", "buy_guard_trend_usd", "buy_guard_trend_markets", "buy_guard_resume_minutes"],
       },
       { title: "Data quality", keys: ["stale_data_max_age_ms"] },
     ],

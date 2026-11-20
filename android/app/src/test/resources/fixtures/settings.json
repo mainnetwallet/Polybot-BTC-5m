@@ -35,6 +35,7 @@
  "buy_guard_gap_usd": 500.0,
  "buy_guard_trend_usd": 1000.0,
  "buy_guard_trend_markets": 3,
+ "buy_guard_resume_minutes": 60,
  "stage0_enabled": true,
  "stage0_start_seconds": 200,
  "stage0_end_seconds": 100,

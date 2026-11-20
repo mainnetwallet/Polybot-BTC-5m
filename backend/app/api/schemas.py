@@ -121,6 +121,7 @@ class SettingsPatch(BaseModel):
     buy_guard_gap_usd: float | None = Field(default=None, ge=0, le=1_000_000)
     buy_guard_trend_usd: float | None = Field(default=None, ge=0, le=1_000_000)
     buy_guard_trend_markets: int | None = Field(default=None, ge=1, le=12)
+    buy_guard_resume_minutes: int | None = Field(default=None, ge=0, le=1440)
 
     def changes(self) -> dict:
         return {k: v for k, v in self.model_dump().items() if v is not None}

@@ -266,6 +266,10 @@ data class BuyGuardState(
     @SerialName("off_by") val offBy: String? = null,
     val reason: String? = null,
     val since: String? = null,
+    /** When buying switches itself back on (UTC ISO); null while buying is on or auto-resume is off. */
+    @SerialName("resume_at") val resumeAt: String? = null,
+    /** Auto-resume wait after a guard trip, in minutes (0 = never switch back on by itself). */
+    @SerialName("resume_minutes") val resumeMinutes: Int = 60,
     @SerialName("gap_limit_usd") val gapLimitUsd: Double = 0.0,
     @SerialName("gap_now_usd") val gapNowUsd: Double? = null,
     @SerialName("trend_limit_usd") val trendLimitUsd: Double = 0.0,
@@ -281,6 +285,17 @@ data class BuyGuardState(
             "trend_guard" -> "BTC trend too large"
             else -> "Buying turned off"
         }
+
+    /** True when the operator turned buying off (no hourly timer: it stays off until the next day starts). */
+    val isManualOff: Boolean
+        get() = offBy == "manual"
+
+    /** Minutes (rounded up) until buying switches itself back on, or null when it will not. */
+    fun minutesUntilResume(nowMs: Long): Long? {
+        val at = resumeAt ?: return null
+        val atMs = runCatching { java.time.Instant.parse(at).toEpochMilli() }.getOrNull() ?: return null
+        return maxOf(0L, (atMs - nowMs + 59_999L) / 60_000L)
+    }
 }
 
 @Serializable

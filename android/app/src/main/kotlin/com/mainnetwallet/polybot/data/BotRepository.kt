@@ -339,7 +339,7 @@ class BotRepository(
     suspend fun setBuys(enabled: Boolean): ActionResult =
         act({
             if (enabled) "Buying is ON. New buys are allowed again."
-            else "Buying is OFF. Take-profit, stop-loss and settlement keep running."
+            else "Buying is OFF for the rest of the day (no auto-resume). Take-profit, stop-loss and settlement keep running."
         }) { api.setBuys(enabled) }
 
     suspend fun sellNow(marketId: String, side: String, stage: Int): ActionResult {

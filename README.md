@@ -142,17 +142,32 @@ stop-loss, settlement and market data are not affected, so open positions are st
 Both use the official Chainlink TWAP60 series the markets settle on. The trend guard needs real BTC history that
 reaches back that far (kept in `data/btc_ticks.csv`); until it has it, it waits instead of guessing.
 
-When a guard trips, Telegram gets an alert with the reason, and buying **stays off until you turn it on**:
+When a guard trips, Telegram gets an alert with the reason and buying goes off. What happens next:
 
-* send `Buy` to the Telegram bot (`Stop` turns it off, `Status` shows where things stand), or
-* press **Buy ON** in the web dashboard top bar / the **BUY** button in the Android app.
+* **Do nothing: buying comes back by itself after 1 hour** (`BUY_GUARD_RESUME_MINUTES=60`). The wait is counted from
+  the trip. When it ends, every guard is reset to zero (a guard you had switched on over earlier is armed again),
+  buying is on, and Telegram says so. If BTC is still 500 USD (or more) above/below the price to beat, the gap guard
+  trips again at once: you get a new Telegram alert and a new 1-hour wait.
+* **Change the wait any time** from any of the three places: send `Delay 30` / `Delay 90m` / `Delay 2h` to the Telegram
+  bot (`Delay off` = never switch back on by itself, plain `Delay` shows the current wait), edit *Buy guard:
+  auto-resume after* in the dashboard Settings page, or the same field in the Android app's Settings. It also
+  applies to a countdown that is already running (0 = no auto-resume, max 24 h).
+* **Turn buying on now**: send `Buy` to the Telegram bot, press **Buy ON** in the web dashboard top bar, or the
+  **BUY** button in the Android app. If BTC is still past the limit when you do, that guard stays quiet until BTC is
+  back inside its limit, then re-arms.
+* **Permanent off**: send `Off` (or `Stop`, `Permanent`) to Telegram, press **Buy OFF** in the dashboard / app, or
+  **Off today** while a guard has buying off. This cancels the 1-hour timer: buying stays off for the rest of the
+  day and switches itself back on at the start of the next day (00:00 UTC, the same day boundary as the daily loss
+  limit), with the guards re-armed. `Buy` turns it on earlier.
 
-You decide when to resume: if you turn buying on while the gap is still large, it stays on. That guard stays quiet
-until BTC is back inside its limit, then re-arms. The switch is saved, so a restart does not silently turn buying back on.
+`Status` on Telegram shows the BTC gap / trend now and when buying comes back. The switch and its start time are
+saved, so a restart does not silently turn buying back on early or lose the countdown.
 
 Telegram setup: create a bot with @BotFather, set `TELEGRAM_BOT_TOKEN`, send the bot one message, open
 `https://api.telegram.org/bot<TOKEN>/getUpdates`, and put `chat.id` into `TELEGRAM_CHAT_ID`. Only that chat can
-send commands; commands sent while the backend was down are ignored. API: `POST /api/buys {"enabled": true|false}`.
+send commands (`Buy`, `Off`, `Delay <minutes>`, `Status`); commands sent while the backend was down are ignored.
+API: `POST /api/buys {"enabled": true|false}` (`false` = off for the rest of the day); the wait is the
+`buy_guard_resume_minutes` setting (`PATCH /api/settings`).
 
 ## Live trading
 

@@ -14,6 +14,14 @@ interface TopbarProps {
   onOpenKill: () => void;
 }
 
+/** "42 min", "1 h 05 min", "<1 min" for the time left until buying switches itself back on. */
+function fmtLeft(ms: number): string {
+  const minutes = Math.ceil(Math.max(0, ms) / 60_000);
+  if (minutes < 1) return "<1 min";
+  if (minutes < 60) return `${minutes} min`;
+  return `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, "0")} min`;
+}
+
 function Pill({ tone, label, value, title }: { tone: "up" | "amber" | "down" | "none"; label: string; value: string; title?: string }) {
   return (
     <span className="chip border-white/10 bg-white/[0.03] !px-3.5 !py-1.5 !text-[13px] text-slate-300" title={title}>
@@ -40,6 +48,15 @@ export function Topbar({ page, onNavigate, onOpenMode, onStartLive, onOpenKill }
   const live = mode === "live";
   const guard = snapshot?.buy_guard;
   const buysOn = guard ? guard.buys_enabled : null;
+  const resumeMs = guard?.resume_at ? Date.parse(guard.resume_at) - (Date.now() + clockOffsetMs) : null;
+  const resumeText =
+    buysOn === false
+      ? resumeMs !== null && Number.isFinite(resumeMs)
+        ? guard?.off_by === "manual"
+          ? `back on next day (in ${fmtLeft(resumeMs)})`
+          : `back on in ${fmtLeft(resumeMs)}`
+        : "stays off until you turn it on"
+      : null;
 
   const market = snapshot?.market ?? null;
   const btc = snapshot?.btc;
@@ -133,7 +150,20 @@ export function Topbar({ page, onNavigate, onOpenMode, onStartLive, onOpenKill }
               <span className="h-1.5 w-1.5 rounded-full bg-down" aria-hidden="true" />
               Buying off
               {guard?.off_by === "gap_guard" ? " · BTC gap" : guard?.off_by === "trend_guard" ? " · BTC trend" : ""}
+              {resumeText ? ` · ${resumeText}` : ""}
             </span>
+          ) : null}
+
+          {buysOn === false && guard?.off_by !== "manual" ? (
+            <button
+              type="button"
+              onClick={() => void setBuys(false)}
+              className="btn btn-ghost h-10"
+              title="Cancel the auto-resume timer: buying stays off for the rest of the day and comes back at the next day's start (00:00 UTC). The same as sending &quot;Off&quot; on Telegram."
+              aria-label="Keep buying off until the next day"
+            >
+              <span>Off today</span>
+            </button>
           ) : null}
 
           {killActive ? (
@@ -150,8 +180,8 @@ export function Topbar({ page, onNavigate, onOpenMode, onStartLive, onOpenKill }
             className={cx("btn h-10", buysOn === false ? "btn-primary" : "btn-ghost")}
             title={
               buysOn === false
-                ? `Buying is off${guard?.reason ? `: ${guard.reason}` : ""}. Click to turn it on (the same as sending "Buy" on Telegram).`
-                : "Turn off all new buys. Take-profit, stop-loss and settlement keep running."
+                ? `Buying is off${guard?.reason ? `: ${guard.reason}` : ""}. Click to turn it on now (the same as sending "Buy" on Telegram).`
+                : "Turn off all new buys for the rest of the day (no auto-resume timer; they come back at the next day's start, 00:00 UTC). Take-profit, stop-loss and settlement keep running."
             }
             aria-label={buysOn === false ? "Turn buying on" : "Turn buying off"}
           >

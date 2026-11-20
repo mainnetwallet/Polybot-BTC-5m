@@ -2,7 +2,8 @@
 
 * ``send`` pushes an alert to TELEGRAM_CHAT_ID (never raises: a Telegram outage must not touch trading).
 * The poll loop long-polls ``getUpdates`` and hands plain-text commands from that one chat to the bot:
-  ``Buy`` (turn buying on), ``Stop`` (turn buying off), ``Status``. Messages from any other chat are ignored.
+  ``Buy`` (buying on), ``Off`` / ``Stop`` (buying off for the rest of the day), ``Delay 30`` (change the
+  auto-resume wait, in minutes), ``Status``. Messages from any other chat are ignored.
 * Commands that were sent while the backend was down are dropped at start-up, so an old "Buy" can never
   switch buying on later.
 
@@ -32,22 +33,71 @@ COMMANDS = {
     "on": "buy",
     "stop": "stop",
     "off": "stop",
+    "permanent": "stop",
+    "perm": "stop",
     "status": "status",
+    "delay": "delay",
+    "wait": "delay",
+    "timer": "delay",
 }
 
-# (command) -> reply text shown to the user
-CommandHandler = Callable[[str], Awaitable[str | None]]
+# (command, argument) -> reply text shown to the user. The argument is the rest of the message ("30" for "Delay 30").
+CommandHandler = Callable[[str, str], Awaitable[str | None]]
+
+MAX_DELAY_MINUTES = 1440  # same cap as the BUY_GUARD_RESUME_MINUTES setting
 
 
-def parse_command(text: str | None) -> str | None:
-    """'Buy', '/buy', ' buy please' -> 'buy'. Anything that is not a known command -> None."""
+def parse_message(text: str | None) -> tuple[str, str] | None:
+    """'Buy', '/buy', ' delay 30 ' -> ('buy', ''), ('delay', '30'). Anything that is not a known command -> None."""
     if not text:
         return None
-    words = text.strip().split()
+    words = text.strip().split(None, 1)
     if not words:
         return None
     word = words[0].lstrip("/").split("@", 1)[0].lower()  # "/buy@my_bot" in group chats
-    return COMMANDS.get(word)
+    command = COMMANDS.get(word)
+    if command is None:
+        return None
+    return command, (words[1].strip() if len(words) > 1 else "")
+
+
+def parse_command(text: str | None) -> str | None:
+    """Like parse_message but only the command word: 'Buy', '/buy', ' buy please' -> 'buy'."""
+    parsed = parse_message(text)
+    return parsed[0] if parsed else None
+
+
+def parse_minutes(arg: str | None) -> int | None:
+    """'30' / '30m' / '45 min' -> 30 / 30 / 45, '2h' / '1.5 hours' -> 120 / 90, 'off' / 'never' / '0' -> 0.
+
+    A bare number is minutes. Anything unreadable, negative or above a day -> None.
+    """
+    if not arg:
+        return None
+    text = arg.strip().lower().replace(",", ".")
+    if text in {"off", "never", "none", "no"}:
+        return 0
+    number = ""
+    for char in text:
+        if char.isdigit() or char == ".":
+            number += char
+        else:
+            break
+    unit = text[len(number):].strip()
+    if not number or number.count(".") > 1 or number == ".":
+        return None
+    try:
+        value = float(number)
+    except ValueError:
+        return None
+    if unit in {"", "m", "min", "mins", "minute", "minutes"}:
+        minutes = value
+    elif unit in {"h", "hr", "hrs", "hour", "hours"}:
+        minutes = value * 60
+    else:
+        return None
+    minutes = int(round(minutes))
+    return minutes if 0 <= minutes <= MAX_DELAY_MINUTES else None
 
 
 class TelegramService:
@@ -173,11 +223,12 @@ class TelegramService:
         chat = message.get("chat") or {}
         if str(chat.get("id", "")) != self._chat_id:
             return  # only the owner's chat may control the bot
-        command = parse_command(message.get("text"))
-        if command is None or self._on_command is None:
+        parsed = parse_message(message.get("text"))
+        if parsed is None or self._on_command is None:
             return
+        command, arg = parsed
         try:
-            reply = await self._on_command(command)
+            reply = await self._on_command(command, arg)
         except asyncio.CancelledError:
             raise
         except Exception as exc:

@@ -231,6 +231,10 @@ class Settings(BaseSettings):
     # 5-minute windows (current window included), measured from the price to beat of the oldest of them. 0 = off.
     buy_guard_trend_usd: float = 1000.0
     buy_guard_trend_markets: int = Field(default=3, ge=1, le=12)
+    # A guard trip switches buying off, and if the operator does nothing it switches itself back on after this many
+    # minutes (all guards fully re-armed; if BTC is still past a limit the guard trips again and Telegram is told
+    # again). 0 = never switch back on by itself. Editable from Telegram ("Delay 30"), the dashboard and the app.
+    buy_guard_resume_minutes: int = Field(default=60, ge=0, le=1440)
 
     # --- telegram -------------------------------------------------------
     # Alerts go to TELEGRAM_CHAT_ID; messages from that chat only ("Buy" / "Stop" / "Status") control buying.

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import replace
-from datetime import timezone
+from datetime import timedelta, timezone
 
 import httpx
 import pytest
@@ -12,14 +12,14 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from app.config.settings import Settings, get_settings
-from app.database.models import BotSetting, Order
+from app.database.models import BotSetting, Order, utcnow
 from app.database.session import session_scope
 from app.main import create_app
 from app.market_data.btc_price import BtcPriceFeed
 from app.risk_manager import buy_guard
 from app.risk_manager.manager import RiskManager
 from app.services import bot as bot_module
-from app.services.telegram import TelegramService, parse_command
+from app.services.telegram import TelegramService, parse_command, parse_message, parse_minutes
 
 from .helpers import books_for, build_stack, make_config, make_ctx, make_market, stage_books
 from .test_strategy import evaluate
@@ -59,6 +59,7 @@ def test_defaults_are_500_gap_1000_trend_over_3_markets():
     assert fields["buy_guard_gap_usd"].default == 500.0
     assert fields["buy_guard_trend_usd"].default == 1000.0
     assert fields["buy_guard_trend_markets"].default == 3
+    assert fields["buy_guard_resume_minutes"].default == 60  # buying comes back by itself after 1 hour
     assert get_settings().telegram_enabled is False  # nothing configured in tests
 
 
@@ -296,6 +297,202 @@ async def test_turning_buys_on_or_off_elsewhere_notifies_telegram(monkeypatch):
     assert bot.telegram.sent == []
 
 
+# --------------------------------------------------------------------------- auto-resume, delay, permanent off
+@pytest.mark.parametrize(
+    "arg,expected",
+    [
+        ("30", 30), ("30m", 30), ("45 min", 45), ("2h", 120), ("1.5 hours", 90), ("1,5h", 90), ("0", 0),
+        ("off", 0), ("never", 0), ("1440", 1440), ("24h", 1440),
+        ("", None), ("abc", None), ("-5", None), ("1441", None), ("25h", None), ("10x", None), ("1.2.3", None),
+    ],
+)
+def test_parse_minutes(arg, expected):
+    assert parse_minutes(arg) == expected
+
+
+def test_parse_message_keeps_the_argument():
+    assert parse_message("Delay 30") == ("delay", "30")
+    assert parse_message("/delay@my_bot 2h") == ("delay", "2h")
+    assert parse_message("buy") == ("buy", "")
+    assert parse_message("hello 30") is None
+
+
+async def test_trip_alert_tells_when_buying_comes_back_by_itself(monkeypatch):
+    bot, state, config = _new_bot(monkeypatch)
+    state["price"] = 100_700.0
+    bot._check_buy_guards(bot._market, config)
+    await _drain(bot)
+    alert = bot.telegram.sent[0]
+    assert "turns back on by itself in 60 min" in alert and "re-armed" in alert and '"Delay 30"' in alert
+
+    bot2, state2, config2 = _new_bot(monkeypatch)
+    config2 = make_config(buy_guard_gap_usd=500.0, buy_guard_resume_minutes=0)
+    state2["price"] = 100_700.0
+    bot2._check_buy_guards(bot2._market, config2)
+    await _drain(bot2)
+    assert "Auto-resume is off" in bot2.telegram.sent[0]
+
+
+async def test_buying_switches_itself_back_on_after_the_delay_and_the_guards_reset(monkeypatch):
+    bot, state, config = _new_bot(monkeypatch)
+    state["price"] = 100_700.0
+    bot._check_buy_guards(bot._market, config)
+    assert bot._buys_off and bot._buys_resume_at(config) == bot._buys_off_since + timedelta(minutes=60)
+
+    bot._buys_off_since = utcnow() - timedelta(minutes=59)  # not yet
+    assert bot._maybe_auto_resume(config) is None and bot._buys_off
+
+    # operator pressed Buy earlier while BTC was far away: that guard was disarmed; the reset re-arms it
+    bot._guard_disarmed = {buy_guard.GAP_GUARD}
+    bot._buys_off_since = utcnow() - timedelta(minutes=61)
+    text = bot._maybe_auto_resume(config)
+    assert text is not None and "back ON by itself" in text and "60 min" in text
+    assert not bot._buys_off and bot._buys_block_reason() == "" and bot._guard_disarmed == set()
+    with session_scope() as session:
+        assert session.get(BotSetting, bot_module.BUYS_STATE_KEY).value["off"] is False
+
+
+async def test_after_the_auto_resume_the_guard_trips_again_with_a_new_alert_if_btc_is_still_past_the_limit(monkeypatch):
+    bot, state, config = _new_bot(monkeypatch)
+    state["price"] = 100_700.0
+    bot._check_buy_guards(bot._market, config)
+    await _drain(bot)
+    first_since = bot._buys_off_since
+    assert len(bot.telegram.sent) == 1
+
+    bot._buys_off_since = utcnow() - timedelta(minutes=61)
+    assert bot._maybe_auto_resume(config) is not None
+    bot._check_buy_guards(bot._market, config)  # BTC is still 700 away
+    await _drain(bot)
+    assert bot._buys_off and bot._buys_off_by == buy_guard.GAP_GUARD
+    assert bot._buys_off_since > first_since  # a new wait starts
+    assert len(bot.telegram.sent) == 2 and "BUYING STOPPED" in bot.telegram.sent[1]
+
+    # BTC calmed down meanwhile: resume stays on and no alert
+    bot._buys_off_since = utcnow() - timedelta(minutes=61)
+    state["price"] = 100_100.0
+    assert bot._maybe_auto_resume(config) is not None
+    bot._check_buy_guards(bot._market, config)
+    await _drain(bot)
+    assert not bot._buys_off and len(bot.telegram.sent) == 2
+
+
+async def test_no_auto_resume_when_the_delay_is_off(monkeypatch):
+    bot, state, _config = _new_bot(monkeypatch)
+    config = make_config(buy_guard_gap_usd=500.0, buy_guard_resume_minutes=0)
+    state["price"] = 100_700.0
+    bot._check_buy_guards(bot._market, config)
+    bot._buys_off_since = utcnow() - timedelta(days=3)
+    assert bot._buys_resume_at(config) is None
+    assert bot._maybe_auto_resume(config) is None and bot._buys_off
+
+
+async def test_changing_the_delay_applies_to_the_running_countdown(monkeypatch):
+    bot, state, config = _new_bot(monkeypatch)
+    state["price"] = 100_700.0
+    bot._check_buy_guards(bot._market, config)
+    bot._buys_off_since = utcnow() - timedelta(minutes=50)
+    try:
+        assert "Auto-resume wait after a guard trip: 60 min" in await bot._on_telegram_command("delay")
+        reply = await bot._on_telegram_command("delay", "2h")
+        assert "120 min" in reply and "comes back at" in reply
+        assert bot.runtime.get().buy_guard_resume_minutes == 120
+        assert bot._buys_resume_at(bot.runtime.get()) == bot._buys_off_since + timedelta(minutes=120)
+
+        reply = await bot._on_telegram_command("delay", "30")  # 50 min already passed: due right away
+        assert "already passed" in reply
+        assert bot._maybe_auto_resume(bot.runtime.get()) is not None and not bot._buys_off
+
+        assert "could not read" in await bot._on_telegram_command("delay", "soon")
+        assert bot.runtime.get().buy_guard_resume_minutes == 30
+        assert "OFF" in await bot._on_telegram_command("delay", "off")
+        assert bot.runtime.get().buy_guard_resume_minutes == 0
+    finally:
+        with session_scope() as session:
+            bot.runtime.reset(session)
+
+
+async def test_off_is_permanent_for_the_day_and_comes_back_the_next_day(monkeypatch):
+    bot, state, config = _new_bot(monkeypatch)
+    monkeypatch.setattr(bot.runtime, "get", lambda: config)
+    await bot._change_buys(False, "dashboard")
+    assert bot._buys_off_by == "manual"
+
+    # hours later: still off, no hourly timer for the operator's Off
+    bot._buys_off_since = utcnow().replace(hour=0, minute=0, second=1, microsecond=0)
+    resume_at = bot._buys_resume_at(config)
+    assert resume_at == bot._buys_off_since.replace(hour=0, minute=0, second=0) + timedelta(days=1)
+    assert bot._maybe_auto_resume(config) is None and bot._buys_off
+
+    # the next day starts: buying is back and every guard is re-armed
+    bot._buys_off_since = utcnow() - timedelta(days=1, minutes=1)
+    bot._guard_disarmed = {buy_guard.GAP_GUARD}
+    text = bot._maybe_auto_resume(config)
+    assert text is not None and "New day" in text
+    assert not bot._buys_off and bot._guard_disarmed == set()
+
+
+async def test_off_while_a_guard_has_buying_off_turns_the_hourly_timer_into_off_for_the_day(monkeypatch):
+    bot, state, config = _new_bot(monkeypatch)
+    monkeypatch.setattr(bot.runtime, "get", lambda: config)
+    state["price"] = 100_700.0
+    bot._check_buy_guards(bot._market, config)
+    assert bot._buys_off_by == buy_guard.GAP_GUARD
+    reply = await bot._on_telegram_command("stop")
+    assert "rest of the day" in reply and bot._buys_off_by == "manual"
+    bot._buys_off_since = utcnow() - timedelta(minutes=90)  # the hour is over, but the operator said Off
+    assert bot._maybe_auto_resume(config) is None and bot._buys_off
+
+
+async def test_status_and_snapshot_show_when_buying_comes_back(monkeypatch):
+    bot, state, config = _new_bot(monkeypatch)
+    monkeypatch.setattr(bot.runtime, "get", lambda: config)
+    assert "Auto-resume wait after a guard trip: 60 min" in await bot._on_telegram_command("status")
+    state["price"] = 100_700.0
+    bot._check_buy_guards(bot._market, config)
+    status = bot.buy_guard_status(bot._market, config)
+    assert status["resume_minutes"] == 60 and status["resume_at"].endswith("Z")
+    assert "comes back by itself" in await bot._on_telegram_command("status")
+    await bot._change_buys(False, "dashboard")
+    assert "next day" in await bot._on_telegram_command("status")
+
+
+async def test_the_once_a_second_tick_resumes_buying_and_trips_the_guard_again_in_one_go(monkeypatch):
+    bot, state, config = _new_bot(monkeypatch)
+    monkeypatch.setattr(bot.runtime, "get", lambda: config)
+    state["price"] = 100_700.0
+    bot._buy_switch_tick()  # the guard trips
+    await _drain(bot)
+    assert bot._buys_off and len(bot.telegram.sent) == 1
+
+    bot._buy_switch_tick()  # still inside the hour: nothing changes, no second alert
+    await _drain(bot)
+    assert bot._buys_off and len(bot.telegram.sent) == 1
+
+    bot._buys_off_since = utcnow() - timedelta(minutes=61)
+    bot._buy_switch_tick()  # hour over, BTC still 700 away: resumed and tripped again within one tick
+    await _drain(bot)
+    assert bot._buys_off and bot._buys_off_by == buy_guard.GAP_GUARD
+    assert len(bot.telegram.sent) == 2 and "BUYING STOPPED" in bot.telegram.sent[1]
+    assert not any("back ON by itself" in m for m in bot.telegram.sent)  # one message, not two
+
+    bot._buys_off_since = utcnow() - timedelta(minutes=61)
+    state["price"] = 100_050.0  # calm now
+    bot._buy_switch_tick()
+    await _drain(bot)
+    assert not bot._buys_off and "back ON by itself" in bot.telegram.sent[-1]
+
+
+async def test_a_stopped_bot_still_switches_buying_back_on_when_the_wait_is_over(monkeypatch):
+    bot, state, config = _new_bot(monkeypatch)
+    monkeypatch.setattr(bot.runtime, "get", lambda: config)
+    await bot._change_buys(False, "dashboard")
+    bot._status = "STOPPED"
+    bot._buys_off_since = utcnow() - timedelta(days=1, minutes=5)
+    bot._buy_switch_tick()
+    assert not bot._buys_off
+
+
 # --------------------------------------------------------------------------- API
 def test_api_toggle_and_snapshot():
     with TestClient(create_app()) as client:
@@ -327,8 +524,14 @@ def test_guard_limits_can_be_changed_from_the_dashboard():
         body = client.get("/api/settings").json()
         assert (body["buy_guard_gap_usd"], body["buy_guard_trend_usd"], body["buy_guard_trend_markets"]) == (650, 1500, 4)
         assert client.patch("/api/settings", json={"buy_guard_trend_markets": 0}).status_code == 422
+        assert client.patch("/api/settings", json={"buy_guard_resume_minutes": 120}).status_code == 200
+        assert client.get("/api/settings").json()["buy_guard_resume_minutes"] == 120
+        assert client.patch("/api/settings", json={"buy_guard_resume_minutes": 0}).status_code == 200  # 0 = never
+        assert client.patch("/api/settings", json={"buy_guard_resume_minutes": 1441}).status_code == 422
+        assert client.patch("/api/settings", json={"buy_guard_resume_minutes": -1}).status_code == 422
         client.post("/api/settings/reset")
         assert client.get("/api/settings").json()["buy_guard_gap_usd"] == 500.0
+        assert client.get("/api/settings").json()["buy_guard_resume_minutes"] == 60
 
 
 # --------------------------------------------------------------------------- Telegram service
@@ -336,7 +539,8 @@ def test_guard_limits_can_be_changed_from_the_dashboard():
     "text,expected",
     [
         ("Buy", "buy"), ("buy", "buy"), (" BUY ", "buy"), ("/buy", "buy"), ("/buy@my_bot", "buy"), ("buy now", "buy"),
-        ("Stop", "stop"), ("off", "stop"), ("status", "status"),
+        ("Stop", "stop"), ("off", "stop"), ("Permanent", "stop"), ("status", "status"),
+        ("Delay 30", "delay"), ("/delay@my_bot 2h", "delay"), ("wait", "delay"),
         ("hello", None), ("", None), (None, None), ("buyer", None),
     ],
 )
@@ -383,7 +587,7 @@ async def test_disabled_without_token_or_chat():
 async def test_only_the_owner_chat_can_send_commands():
     received = []
 
-    async def on_command(command):
+    async def on_command(command, arg=""):
         received.append(command)
         return f"done {command}"
 
@@ -405,7 +609,7 @@ async def test_only_the_owner_chat_can_send_commands():
 async def test_commands_sent_while_the_backend_was_down_are_dropped():
     received = []
 
-    async def on_command(command):
+    async def on_command(command, arg=""):
         received.append(command)
 
     def handler(request: httpx.Request) -> httpx.Response:

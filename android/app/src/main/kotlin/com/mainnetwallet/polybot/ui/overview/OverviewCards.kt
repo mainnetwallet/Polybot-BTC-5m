@@ -33,6 +33,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -579,7 +580,13 @@ fun ModeToggle(
 
 /** A one-line message (risk halt, kill switch on). */
 @Composable
-private fun NoticeRow(text: String, color: Color, container: Color) {
+private fun NoticeRow(
+    text: String,
+    color: Color,
+    container: Color,
+    maxLines: Int = 2,
+    action: (@Composable () -> Unit)? = null,
+) {
     Surface(shape = RoundedCornerShape(10.dp), color = container, modifier = Modifier.fillMaxWidth()) {
         Row(
             Modifier.padding(horizontal = Space.md, vertical = Space.sm),
@@ -587,9 +594,17 @@ private fun NoticeRow(text: String, color: Color, container: Color) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(Icons.Filled.Warning, contentDescription = null, tint = color, modifier = Modifier.size(18.dp))
-            Text(text, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(text, style = MaterialTheme.typography.bodySmall, maxLines = maxLines, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            action?.invoke()
         }
     }
+}
+
+/** "42 min", "1 h 05 min", "<1 min": the time left until buying switches itself back on. */
+private fun fmtLeft(minutes: Long): String = when {
+    minutes < 1 -> "<1 min"
+    minutes < 60 -> "$minutes min"
+    else -> "${minutes / 60} h ${(minutes % 60).toString().padStart(2, '0')} min"
 }
 
 /** Risk halt, kill switch and "live not ready" messages for the Overview. Draws nothing when there is none. */
@@ -599,6 +614,7 @@ fun EngineNotices(
     live: LiveReadiness,
     modifier: Modifier = Modifier,
     buyGuard: BuyGuardState? = null,
+    onKeepOff: (() -> Unit)? = null,
 ) {
     val c = Poly.colors
     val hasRisk = !bot.riskHalt.isNullOrBlank()
@@ -608,7 +624,24 @@ fun EngineNotices(
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Space.sm)) {
         if (buyGuard != null && buysOff) {
             val why = buyGuard.reason?.takeIf { it.isNotBlank() }?.let { ": $it" } ?: ""
-            NoticeRow("Buying is OFF (${buyGuard.offLabel})$why. Exits keep running. Tap BUY to turn it on.", c.down, c.downContainer)
+            val left = buyGuard.minutesUntilResume(System.currentTimeMillis())
+            val resume = when {
+                left == null -> "It stays off until you tap BUY."
+                buyGuard.isManualOff -> "It comes back by itself next day (in ${fmtLeft(left)}); tap BUY to turn it on earlier."
+                else -> "Back on by itself in ${fmtLeft(left)} unless you act; tap BUY to turn it on now."
+            }
+            val keepOff = onKeepOff
+            NoticeRow(
+                "Buying is OFF (${buyGuard.offLabel})$why. Exits keep running. $resume",
+                c.down,
+                c.downContainer,
+                maxLines = 5,
+                action = if (keepOff != null && !buyGuard.isManualOff) {
+                    { TextButton(onClick = keepOff) { Text("Off today") } }
+                } else {
+                    null
+                },
+            )
         }
         if (hasRisk) {
             NoticeRow("Risk halt: ${bot.riskHalt}", c.warn, c.warnContainer)

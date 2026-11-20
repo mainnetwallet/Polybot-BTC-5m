@@ -51,6 +51,15 @@ class ModelsParsingTest {
         assertEquals(3, guard.trendMarkets)
         assertNull(guard.trendNowUsd)
         assertTrue(guard.telegramEnabled)
+        assertEquals(60, guard.resumeMinutes)
+        assertEquals("2026-11-15T04:09:30.000000Z", guard.resumeAt)
+        assertFalse(guard.isManualOff)
+        // from 03:30:00Z the resume time 04:09:30Z is 39.5 min away, shown rounded up
+        val now = java.time.Instant.parse("2026-11-15T03:30:00Z").toEpochMilli()
+        assertEquals(40L, guard.minutesUntilResume(now))
+        assertEquals(0L, guard.minutesUntilResume(java.time.Instant.parse("2026-11-15T05:00:00Z").toEpochMilli()))
+        assertNull(BuyGuardState(buysEnabled = false, offBy = "manual").minutesUntilResume(now))
+        assertTrue(BuyGuardState(buysEnabled = false, offBy = "manual").isManualOff)
         assertEquals("BTC trend too large", BuyGuardState(buysEnabled = false, offBy = "trend_guard").offLabel)
         assertEquals("Buying turned off", BuyGuardState(buysEnabled = false, offBy = "manual").offLabel)
     }

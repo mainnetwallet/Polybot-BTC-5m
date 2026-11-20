@@ -509,6 +509,16 @@ export const FIELDS: FieldSpec[] = [
     max: "12",
   },
   {
+    key: "buy_guard_resume_minutes",
+    label: "Buy guard: auto-resume after",
+    hint: "If you do nothing, buying switches itself back on this many minutes after a guard trip, with every guard re-armed (if BTC is still past a limit the guard trips again and Telegram is told again). 0 = never switch back on by itself. Default 60. \"Buy OFF\" is separate: it keeps buying off for the rest of the day and resumes at the next day's start (00:00 UTC). Telegram: \"Delay 30\".",
+    kind: "number",
+    step: "5",
+    min: "0",
+    max: "1440",
+    suffix: "min",
+  },
+  {
     key: "stale_data_max_age_ms",
     label: "Stale data cap",
     hint: "Quotes older than this are rejected before order construction.",

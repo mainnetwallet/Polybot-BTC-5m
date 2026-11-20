@@ -84,6 +84,7 @@ OVERRIDABLE_KEYS = (
     "buy_guard_gap_usd",
     "buy_guard_trend_usd",
     "buy_guard_trend_markets",
+    "buy_guard_resume_minutes",
 )
 
 
@@ -205,6 +206,8 @@ class RuntimeSettings(BaseModel):
     buy_guard_gap_usd: float = Field(default=0.0, ge=0.0, le=1_000_000.0)
     buy_guard_trend_usd: float = Field(default=0.0, ge=0.0, le=1_000_000.0)
     buy_guard_trend_markets: int = Field(default=3, ge=1, le=12)
+    # Minutes after a guard trip before buying switches itself back on (0 = never; the operator turns it on).
+    buy_guard_resume_minutes: int = Field(default=60, ge=0, le=1440)
     paper_fill_ratio: float = Field(gt=0.0, le=1.0)
     paper_fee_exponent: float = Field(ge=0.0, le=5.0)
     paper_starting_balance: float = Field(gt=0.0)

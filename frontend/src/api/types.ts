@@ -202,6 +202,10 @@ export interface BuyGuardState {
   off_by: string | null;
   reason: string | null;
   since: string | null;
+  /** When buying switches itself back on (UTC ISO). null while buying is on or auto-resume is off. */
+  resume_at: string | null;
+  /** The auto-resume wait after a guard trip, in minutes (0 = never switch back on by itself). */
+  resume_minutes: number;
   gap_limit_usd: number;
   /** BTC minus the price to beat right now (signed), null without data */
   gap_now_usd: number | null;
@@ -318,6 +322,7 @@ export interface SettingsState {
   buy_guard_gap_usd: number;
   buy_guard_trend_usd: number;
   buy_guard_trend_markets: number;
+  buy_guard_resume_minutes: number;
   stage0_enabled: boolean;
   stage0_start_seconds: number;
   stage0_end_seconds: number;
