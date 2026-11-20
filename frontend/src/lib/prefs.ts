@@ -160,6 +160,3 @@ function createBoolPref(key: string, fallback: boolean): () => [boolean, (value:
 
 /** `[one-tap buy is on, setter]`. Default OFF: the tap buttons stay locked until it is switched on, so a stray click cannot buy. */
 export const useTapEnabled = createBoolPref("polybot.tapEnabled", false);
-
-/** `[one-tap card is open, setter]`. Default open. Folded = only the header line shows. */
-export const useTapExpanded = createBoolPref("polybot.tapExpanded", true);
