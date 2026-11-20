@@ -131,6 +131,8 @@ fun OverviewScreen(modifier: Modifier = Modifier) {
                     limits = snap.tap,
                     locked = tapLocked,
                     busyKey = tapBusy,
+                    expanded = prefs?.tapExpanded ?: true,
+                    onToggle = { scope.launch { graph.prefsStore.setTapExpanded(!(prefs?.tapExpanded ?: true)) } },
                     onTap = { side, amount -> tapBuy(side, amount) },
                     onSaveAmounts = { amounts -> scope.launch { graph.prefsStore.setTapAmounts(amounts) } },
                 )
