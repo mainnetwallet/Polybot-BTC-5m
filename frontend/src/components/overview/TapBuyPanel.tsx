@@ -56,7 +56,7 @@ export function TapBuyPanel({ className }: { className?: string }) {
   const stale = typeof snapshot.config.stale_data_max_age_ms === "number" ? snapshot.config.stale_data_max_age_ms : null;
 
   let blocked: string | null = null;
-  if (!enabled) blocked = "Off · switch it on in settings";
+  if (!enabled) blocked = "Off · press ON to buy";
   else if (snapshot.bot.kill_switch) blocked = "Kill switch is on";
   else if (snapshot.bot.status !== "RUNNING") blocked = "Start the bot to buy";
   else if (ended) blocked = "Waiting for the next market";
@@ -105,6 +105,15 @@ export function TapBuyPanel({ className }: { className?: string }) {
           <span className="tap-name">One-tap buy</span>
         </div>
         <div className="tap-tools">
+          <button
+            type="button"
+            className={cx("tap-toggle", enabled && "is-on")}
+            onClick={() => setEnabled(!enabled)}
+            aria-pressed={enabled}
+            title={enabled ? "One-tap buy is ON, click to turn OFF" : "One-tap buy is OFF, click to turn ON"}
+          >
+            {enabled ? "ON" : "OFF"}
+          </button>
           <button type="button" className="tap-icon" onClick={openSettings} aria-label="One-tap settings" title="Settings: ON/OFF and amounts">
             <IconGear size={16} />
           </button>
