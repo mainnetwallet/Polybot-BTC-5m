@@ -126,12 +126,16 @@ class Fill(Base):
 
 class Position(Base):
     __tablename__ = "positions"
-    __table_args__ = (UniqueConstraint("mode", "market_id", "side", name="uq_position_mode_market_side"),)
+    # `tag` keeps one-tap buys apart from the strategy stages: "" = stages 0-3, "tap" = one-tap buy.
+    __table_args__ = (
+        UniqueConstraint("mode", "market_id", "side", "tag", name="uq_position_mode_market_side_tag"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     mode: Mapped[str] = mapped_column(String(8), index=True)
     market_id: Mapped[str] = mapped_column(String(120), index=True)
     side: Mapped[str] = mapped_column(String(8))
+    tag: Mapped[str] = mapped_column(String(8), default="", server_default="")
     size: Mapped[float] = mapped_column(Float, default=0.0)
     avg_price: Mapped[float] = mapped_column(Float, default=0.0)
     cost_basis: Mapped[float] = mapped_column(Float, default=0.0)

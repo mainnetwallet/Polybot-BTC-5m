@@ -87,11 +87,20 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ market_id: marketId, side, stage }),
     }),
-  /** Instant "sell all": every stage that holds shares in this market is sold at the market (no confirmation step). */
-  sellAll: (marketId: string) =>
+  /** One-tap buy: one market buy of `amount` USDC. `requestId` makes a retried request buy only once. */
+  tapBuy: (marketId: string, side: Side, amount: number, requestId: string) =>
+    request<Snapshot>("/api/orders/tap-buy", {
+      method: "POST",
+      body: JSON.stringify({ market_id: marketId, side, amount, request_id: requestId }),
+    }),
+  /**
+   * Instant "sell all" at the market (no confirmation step): scope "stages" (default) sells the strategy stages 0-3
+   * and never the one-tap shares; scope "tap" ("Sell all tap") sells the one-tap shares only.
+   */
+  sellAll: (marketId: string, scope: "stages" | "tap" = "stages") =>
     request<Snapshot>("/api/orders/sell-all", {
       method: "POST",
-      body: JSON.stringify({ market_id: marketId }),
+      body: JSON.stringify({ market_id: marketId, scope }),
     }),
   /** Turn NEW buys on/off (all stages). Exits, settlement and market data keep running. */
   setBuys: (enabled: boolean) =>

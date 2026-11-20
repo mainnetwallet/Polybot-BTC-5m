@@ -76,8 +76,24 @@ class BotApi(private val client: ApiClient) {
             buildJsonObject { put("market_id", marketId); put("side", side); put("stage", stage) },
         )
 
-    suspend fun sellAll(marketId: String): Snapshot =
-        call("POST", "/api/orders/sell-all", Snapshot.serializer(), buildJsonObject { put("market_id", marketId) })
+    /** One-tap buy of [amount] USDC. [requestId] makes a request the network repeats buy only once. */
+    suspend fun tapBuy(marketId: String, side: String, amount: Double, requestId: String): Snapshot =
+        call(
+            "POST", "/api/orders/tap-buy", Snapshot.serializer(),
+            buildJsonObject {
+                put("market_id", marketId)
+                put("side", side)
+                put("amount", amount)
+                put("request_id", requestId)
+            },
+        )
+
+    /** [scope] "stages" = Sell all (strategy stages 0-3, never the one-tap shares), "tap" = Sell all tap. */
+    suspend fun sellAll(marketId: String, scope: String = "stages"): Snapshot =
+        call(
+            "POST", "/api/orders/sell-all", Snapshot.serializer(),
+            buildJsonObject { put("market_id", marketId); put("scope", scope) },
+        )
 
     // ---- settings --------------------------------------------------------------------------------------------
 

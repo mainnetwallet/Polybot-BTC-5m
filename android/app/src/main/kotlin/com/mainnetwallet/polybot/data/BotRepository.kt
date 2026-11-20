@@ -4,6 +4,7 @@ import com.mainnetwallet.polybot.data.model.LogRow
 import com.mainnetwallet.polybot.data.model.Modes
 import com.mainnetwallet.polybot.data.model.PriceHistory
 import com.mainnetwallet.polybot.data.model.Snapshot
+import com.mainnetwallet.polybot.data.model.TAP_STAGE
 import com.mainnetwallet.polybot.data.net.ApiException
 import com.mainnetwallet.polybot.data.net.BotApi
 import com.mainnetwallet.polybot.data.net.FeedEvent
@@ -17,6 +18,14 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.Instant
+import java.util.Locale
+import java.util.UUID
+
+/** [ActionResult.message] of a one-tap buy that was ignored on purpose (a second tap inside one second). Not shown. */
+const val TAP_IGNORED = "tap ignored"
+
+/** A second one-tap buy inside this window is ignored (the server keeps the same rule). */
+private const val TAP_LOCK_MS = 1000L
 
 /** What a user action produced: a short message for the snackbar, and whether it worked. */
 data class ActionResult(val ok: Boolean, val message: String)
@@ -342,24 +351,73 @@ class BotRepository(
             else "Buying is OFF for the rest of the day (no auto-resume). Take-profit, stop-loss and settlement keep running."
         }) { api.setBuys(enabled) }
 
+    private val tapLock = Any()
+    private var tapBusy = false
+    private var tapLastMs = 0L
+
+    /**
+     * One-tap buy: one market buy of [amount] USDC on [side] in the live market. One tap = one buy: a second tap
+     * inside one second, or while one is on its way, is ignored ([TAP_IGNORED]). Every tap has its own request id,
+     * so a request the network repeats cannot buy twice.
+     */
+    suspend fun tapBuy(side: String, amount: Double): ActionResult {
+        val marketId = _snapshot.value?.market?.marketId
+            ?: return ActionResult(false, "There is no live market right now.")
+        val allowed = synchronized(tapLock) {
+            val now = System.currentTimeMillis()
+            if (tapBusy || now - tapLastMs < TAP_LOCK_MS) {
+                false
+            } else {
+                tapBusy = true
+                tapLastMs = now
+                true
+            }
+        }
+        if (!allowed) return ActionResult(false, TAP_IGNORED)
+        return try {
+            val requestId = UUID.randomUUID().toString()
+            val result = act({ next ->
+                val fill = next.tapBuy
+                val bought = if (fill != null && fill.filledSize > 0.0) {
+                    val at = fill.avgPrice?.let { " at " + String.format(Locale.US, "%.1f", it * 100.0) + "\u00A2" }.orEmpty()
+                    ": " + String.format(Locale.US, "%.1f", fill.filledSize) + " sh" + at
+                } else {
+                    ": order sent"
+                }
+                "One-tap $side bought$bought (" + "$" + String.format(Locale.US, "%.2f", amount) + ")"
+            }) { api.tapBuy(marketId, side, amount, requestId) }
+            if (!result.ok) refresh()
+            result
+        } finally {
+            synchronized(tapLock) {
+                tapBusy = false
+                tapLastMs = System.currentTimeMillis()
+            }
+        }
+    }
+
     suspend fun sellNow(marketId: String, side: String, stage: Int): ActionResult {
-        val result = act({ "Stage $stage $side shares sold at the market." }) { api.sellNow(marketId, side, stage) }
+        val label = if (stage == TAP_STAGE) "One-tap" else "Stage $stage"
+        val result = act({ "$label $side shares sold at the market." }) { api.sellNow(marketId, side, stage) }
         if (!result.ok) refresh()
         return result
     }
 
-    suspend fun sellAll(marketId: String): ActionResult {
+    /** [tapOnly] false = "Sell all" (strategy stages only); true = "Sell all tap" (one-tap shares only). */
+    suspend fun sellAll(marketId: String, tapOnly: Boolean = false): ActionResult {
+        val what = if (tapOnly) "one-tap position" else "stage"
+        val title = if (tapOnly) "Sell all tap" else "Sell all"
         val result = act(
             { next ->
                 val failed = next.manualSellAll?.failed.orEmpty()
                 val sold = next.manualSellAll?.sold.orEmpty()
                 if (failed.isEmpty()) {
-                    "Sell all sent: ${sold.size} stage${if (sold.size == 1) "" else "s"} sold."
+                    "$title sent: ${sold.size} $what${if (sold.size == 1) "" else "s"} sold."
                 } else {
                     "Sold ${sold.size}, ${failed.size} not sold: " + failed.joinToString(" | ") { "${it.side}: ${it.message}" }
                 }
             },
-        ) { api.sellAll(marketId) }
+        ) { api.sellAll(marketId, if (tapOnly) "tap" else "stages") }
         if (!result.ok) refresh()
         return result
     }

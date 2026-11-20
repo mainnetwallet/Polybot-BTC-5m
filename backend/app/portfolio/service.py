@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, time, timezone
 
 from sqlalchemy import and_, delete, func, or_, select
@@ -28,6 +29,18 @@ def start_of_day_utc(now: datetime | None = None) -> datetime:
     if now.tzinfo is not None:
         now = now.astimezone(timezone.utc).replace(tzinfo=None)
     return datetime.combine(now.date(), time.min)
+
+
+# One-tap buys are manual trades: they carry stage number 9 in their order key (buy ...:tap:<id>:s9, sell ...:s9:sell:<id>)
+# and live in their own Position row (tag "tap"), so the strategy stages never see them.
+TAP_STAGE = 9
+TAP_TAG = "tap"
+_TAP_KEY = re.compile(r":s9(?::sell:|$)")
+
+
+def order_tag(order_key: str | None) -> str:
+    """Position tag an order belongs to: "tap" for one-tap orders, "" for the strategy stages."""
+    return TAP_TAG if _TAP_KEY.search(order_key or "") else ""
 
 
 DAILY_RESET_KEY = "daily_reset_at:{mode}"
@@ -171,11 +184,13 @@ class Portfolio:
         total_cost = sum(p.price * p.size for p in report.fills)
         total_fee = sum(p.fee for p in report.fills)
 
+        tag = order_tag(order.order_key)
         position = session.execute(
             select(Position).where(
                 Position.mode == mode,
                 Position.market_id == order.market_id,
                 Position.side == order.side,
+                Position.tag == tag,
             )
         ).scalar_one_or_none()
         if position is None:
@@ -183,6 +198,7 @@ class Portfolio:
                 mode=mode,
                 market_id=order.market_id,
                 side=order.side,
+                tag=tag,
                 size=0.0,
                 avg_price=0.0,
                 cost_basis=0.0,
@@ -241,6 +257,7 @@ class Portfolio:
                 Position.mode == mode,
                 Position.market_id == order.market_id,
                 Position.side == order.side,
+                Position.tag == order_tag(order.order_key),
             )
         ).scalar_one_or_none()
         if position is None or position.size <= 0:
@@ -294,11 +311,16 @@ class Portfolio:
         mode: str,
         marks: dict[tuple[str, str], float],
         market_id: str | None = None,
+        include_tap: bool = True,
     ) -> float:
-        """Compute unrealized PnL from best-bid marks without writing to SQLite."""
+        """Compute unrealized PnL from best-bid marks without writing to SQLite.
+
+        `include_tap=False` leaves one-tap positions out (the risk limits only look at the strategy stages)."""
         positions = session.execute(
             select(Position).where(Position.mode == mode, Position.status == "open")
         ).scalars().all()
+        if not include_tap:
+            positions = [p for p in positions if p.tag != TAP_TAG]
         total = 0.0
         for position in positions:
             if market_id is not None and position.market_id != market_id:
@@ -341,25 +363,27 @@ class Portfolio:
                 position.size * mark - position.cost_basis - position.fees, 10
             )
 
-    def open_positions(self, session: Session, mode: str) -> list[Position]:
-        return list(
+    def open_positions(self, session: Session, mode: str, include_tap: bool = True) -> list[Position]:
+        rows = list(
             session.execute(
                 select(Position).where(Position.mode == mode, Position.status == "open")
             ).scalars().all()
         )
+        return rows if include_tap else [p for p in rows if p.tag != TAP_TAG]
 
-    def realized_today(self, session: Session, mode: str) -> float:
-        value = session.execute(
-            select(func.coalesce(func.sum(Position.realized_pnl), 0.0)).where(
-                Position.mode == mode,
-                Position.status == "closed",
-                Position.closed_at >= self.daily_floor(session, mode),
-            )
-        ).scalar_one()
+    def realized_today(self, session: Session, mode: str, include_tap: bool = True) -> float:
+        query = select(func.coalesce(func.sum(Position.realized_pnl), 0.0)).where(
+            Position.mode == mode,
+            Position.status == "closed",
+            Position.closed_at >= self.daily_floor(session, mode),
+        )
+        if not include_tap:
+            query = query.where(Position.tag != TAP_TAG)
+        value = session.execute(query).scalar_one()
         return round(float(value), 10)
 
-    def pnl_summary(self, session: Session, mode: str, unrealized: float) -> dict:
-        realized = self.realized_today(session, mode)
+    def pnl_summary(self, session: Session, mode: str, unrealized: float, include_tap: bool = True) -> dict:
+        realized = self.realized_today(session, mode, include_tap)
         return {
             "realized_pnl": round(realized, 6),
             "unrealized_pnl": round(unrealized, 6),
@@ -381,6 +405,8 @@ class Portfolio:
                 # Stage 0 take-profit SELLs are exits, not entries: they (and their FOK retries)
                 # must not eat the max_trades_per_day cap.
                 Order.order_key.not_like("%:sell:%"),
+                # One-tap buys are manual: they must not eat the max_trades_per_day cap of the strategy.
+                Order.order_key.not_like("%:tap:%"),
             )
         ).scalar_one()
         return int(value)

@@ -1,6 +1,6 @@
 import type { Mode, Side } from "../api/types";
 import { cx, sentence } from "../lib/format";
-import { STAGE_VAR, type StageId } from "../lib/stages";
+import { STAGE_VAR, TAP_COLOR, TAP_STAGE, type StageId } from "../lib/stages";
 import { IconArrowDown, IconArrowUp, IconLock, IconZap } from "./Icons";
 
 export function StatusPill({ running, killSwitch }: { running: boolean | null; killSwitch: boolean | null }) {
@@ -154,6 +154,17 @@ export function RouteChip({ route }: { route?: string | null }) {
 
 export function StageChip({ stage, action }: { stage?: number | null; action?: string | null }) {
   if (stage == null) return <span className="text-slate-600">—</span>;
+  if (stage === TAP_STAGE) {
+    return (
+      <span
+        className="chip"
+        style={{ color: TAP_COLOR, background: `color-mix(in srgb, ${TAP_COLOR} 14%, transparent)`, borderColor: `color-mix(in srgb, ${TAP_COLOR} 38%, transparent)` }}
+        title={action === "SELL" ? "Manual sale of one-tap shares" : "One-tap buy: held until the round settles or you sell it"}
+      >
+        One-tap
+      </span>
+    );
+  }
   const id = Math.min(3, Math.max(0, stage)) as StageId;
   const color = STAGE_VAR[id];
   return (

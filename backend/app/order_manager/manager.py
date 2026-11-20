@@ -4,7 +4,9 @@ import asyncio
 import logging
 import math
 import re
+import time
 import uuid
+from collections import OrderedDict
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
@@ -21,7 +23,7 @@ from app.execution.base import ExecutionEngine, ExecutionReport, FillPart, Order
 from app.market_data.book import OrderBook
 from app.market_discovery.types import MarketInfo
 from app.monitoring.logs import LogService
-from app.portfolio.service import Portfolio
+from app.portfolio.service import TAP_STAGE, TAP_TAG, Portfolio
 from app.risk_manager.manager import RiskContext, RiskManager
 from app.strategy.types import Signal, StrategyEvaluation
 
@@ -53,6 +55,15 @@ SELL_DUST = 0.01
 # Entry stages whose shares are watched for an exit: stages 0-2 have a take-profit sell, and every
 # stage (0-3) has a stop-loss sell (stage 3 has no take-profit, it is held to settlement otherwise).
 EXIT_STAGES = (0, 1, 2, 3)
+# Shares the operator can sell by hand: the stages plus the one-tap buys (TAP_STAGE). One-tap shares are
+# NOT in EXIT_STAGES on purpose: no take-profit and no stop-loss ever touches them, they are held until
+# the market settles or the operator sells them.
+SELLABLE_STAGES = EXIT_STAGES + (TAP_STAGE,)
+# One-tap buy: any second tap inside this window is ignored (double-click / double-tap guard).
+TAP_COOLDOWN_S = 1.0
+# Worst price of a one-tap buy: this many ticks above the ask it was shown at, never above TAP_MAX_PRICE.
+TAP_SLIPPAGE_TICKS = 2
+TAP_MAX_PRICE = 0.99
 # Worst acceptable price of a stop-loss sell: it is a market sell, the exit must not be refused
 # because the bid keeps falling (the take-profit sell, by contrast, never sells below its price).
 STOP_LOSS_FLOOR = 0.01
@@ -123,7 +134,12 @@ class OrderManager:
         self._lock = asyncio.Lock()
         # One lock per exit stage: a stop-loss must not queue behind an entry order (self._lock)
         # or behind another stage's sell that is still waiting for the exchange.
-        self._exit_locks: dict[int, asyncio.Lock] = {stage: asyncio.Lock() for stage in EXIT_STAGES}
+        self._exit_locks: dict[int, asyncio.Lock] = {stage: asyncio.Lock() for stage in SELLABLE_STAGES}
+        # One-tap buys have their own lock and cooldown: they never wait for (or block) a strategy entry.
+        self._tap_lock = asyncio.Lock()
+        self._tap_last_s = 0.0
+        self._tap_seen: OrderedDict[str, None] = OrderedDict()
+        self._tap_holdings: dict[tuple[str, str], Stage0Holding | None] = {}
         self._trigger_seen: set[tuple[str, str, str, int]] = set()
         self._trigger_market: str | None = None
         self._retry_after: dict[int, float] = {}
@@ -152,6 +168,8 @@ class OrderManager:
         self._partial_pending: set[tuple[str, str]] = set()
 
     def _holdings(self, stage: int) -> dict[tuple[str, str], Stage0Holding | None]:
+        if stage == TAP_STAGE:
+            return self._tap_holdings
         if stage == 1:
             return self._stage1_holdings
         if stage == 2:
@@ -462,6 +480,7 @@ class OrderManager:
                     return order
             return None
         orders = session.execute(query.where(Order.status.in_(ACTIVE_STATUSES))).scalars().all()
+        orders = [o for o in orders if self._key_stage(o.order_key) != TAP_STAGE]  # one-tap orders are not strategy entries
         return orders[0] if orders else None
 
     def _reserve_order(
@@ -737,6 +756,7 @@ class OrderManager:
                 (o.id, o.side, o.filled_size, o.avg_fill_price or 0.0, o.requested_notional, o.order_key)
                 for o in orders
                 if _SELL_MARK not in o.order_key  # a partly filled SELL must never be re-bought
+                and OrderManager._key_stage(o.order_key) != TAP_STAGE  # a one-tap buy is never topped up
             ]
 
     def _apply_partial_retry(self, order_id: int, report: ExecutionReport, mode: str) -> None:
@@ -933,6 +953,7 @@ class OrderManager:
         self._stage1_holdings.clear()
         self._stage2_holdings.clear()
         self._stage3_holdings.clear()
+        self._tap_holdings.clear()
         if len(self._sell_attempts) > 500:
             self._sell_attempts.clear()
             self._last_sell_ms.clear()
@@ -963,7 +984,10 @@ class OrderManager:
         held = sum(o.filled_size for o in buys if o.side == side) - sum(o.filled_size for o in sells)
         position = session.execute(
             select(Position).where(
-                Position.mode == mode, Position.market_id == market_id, Position.side == side
+                Position.mode == mode,
+                Position.market_id == market_id,
+                Position.side == side,
+                Position.tag == (TAP_TAG if stage == TAP_STAGE else ""),
             )
         ).scalar_one_or_none()
         if position is None or position.status != "open":
@@ -1049,6 +1073,163 @@ class OrderManager:
         )
         return [result for stage_results in per_stage for result in stage_results]
 
+    # ------------------------------------------------------------------
+    # One-tap buy: a manual market buy that is completely separate from the strategy stages
+    # ------------------------------------------------------------------
+    @dataclass(frozen=True)
+    class _TapSignal:
+        side: str
+        reason: str = "one-tap buy"
+
+    @staticmethod
+    def _reserve_tap_order(
+        mode: str, market: MarketInfo, side: str, token_id: str, key: str, notional: float, ask: float
+    ) -> int:
+        with session_scope() as session:
+            order = Order(
+                order_key=key,
+                client_order_id=f"ord-{uuid.uuid4().hex[:20]}",
+                mode=mode,
+                market_id=market.market_id,
+                side=side,
+                token_id=token_id,
+                status="PENDING",
+                requested_notional=notional,
+                requested_price=ask,
+                reason="one-tap buy",
+            )
+            session.add(order)
+            session.flush()
+            return order.id
+
+    async def tap_buy(
+        self,
+        market: MarketInfo,
+        books: dict[str, OrderBook],
+        mode: str,
+        config,
+        side: str,
+        notional: float,
+        request_id: str | None = None,
+    ) -> OrderResult:
+        """One tap = one market BUY of `notional` USDC on `side` at the best ask.
+
+        It deliberately skips everything the strategy uses: stage windows, ask ranges, BTC gap, risk limits,
+        duplicate / conflict policy, buy guards, take-profit and stop-loss. The shares carry the tap tag
+        (stage 9, Position.tag "tap") and are held until the market settles or the operator sells them.
+
+        Double tap guard: a second tap within TAP_COOLDOWN_S of an accepted one (any side, any size) is
+        refused, a tap is refused while another one is still on its way, and a request id that was already
+        seen is refused (a retried request over a bad connection cannot buy twice).
+        """
+        if side not in ("UP", "DOWN"):
+            return OrderResult(None, side, "BLOCKED", "bad_side")
+        if market.remaining_seconds() <= 0:
+            return OrderResult(None, side, "BLOCKED", "market_ended")
+        if request_id:
+            if request_id in self._tap_seen:
+                return OrderResult(None, side, "BLOCKED", "duplicate_request")
+        if self._tap_lock.locked():
+            return OrderResult(None, side, "BLOCKED", "tap_in_flight")
+        async with self._tap_lock:
+            now_s = time.monotonic()
+            if now_s - self._tap_last_s < TAP_COOLDOWN_S:
+                return OrderResult(None, side, "BLOCKED", "tap_cooldown")
+            if not self._submission_allowed(mode):
+                return OrderResult(None, side, "BLOCKED", "bot_not_accepting_orders")
+            token_id = market.token_for(side)
+            book = books.get(token_id)
+            ask = book.best_ask if book is not None else None
+            if book is None or ask is None or ask <= 0:
+                return OrderResult(None, side, "BLOCKED", "no_ask")
+            if book.age_ms() > config.stale_data_max_age_ms:
+                return OrderResult(None, side, "BLOCKED", "stale_book")
+            # The tap counts from here on, even if the exchange refuses the order: no second try within 1 s.
+            self._tap_last_s = now_s
+            if request_id:
+                self._tap_seen[request_id] = None
+                while len(self._tap_seen) > 200:
+                    self._tap_seen.popitem(last=False)
+
+            tick = float(getattr(market, "tick_size", 0.01) or 0.01)
+            max_price = min(TAP_MAX_PRICE, round(ask + TAP_SLIPPAGE_TICKS * tick, 4))
+            key = f"{mode}:{market.market_id}:{side}:tap:{uuid.uuid4().hex[:10]}:s{TAP_STAGE}"
+            order_id = await asyncio.to_thread(
+                self._reserve_tap_order, mode, market, side, token_id, key, notional, ask
+            )
+            request = OrderRequest(
+                order_key=key,
+                client_order_id=f"ord-{uuid.uuid4().hex[:20]}",
+                market_id=market.market_id,
+                side=side,
+                token_id=token_id,
+                notional=notional,
+                max_price=max_price,
+                observed_at_ms=clock.now_ms(),
+                asset_version=market.asset_version,
+            )
+            self._logs.log(
+                "INFO",
+                "order_submit",
+                f"TAP marketable BUY {side} {notional:.2f} USDC at ask {ask:.3f}",
+                payload={
+                    "market_id": market.market_id,
+                    "side": side,
+                    "best_ask": ask,
+                    "notional": notional,
+                    "max_price": max_price,
+                    "mode": mode,
+                    "order_key": key,
+                },
+                mode=mode,
+            )
+            try:
+                report = await self._executor_provider(mode).place_buy(request)
+            except Exception as exc:
+                logger.error("executor raised on one-tap buy (%s)", type(exc).__name__)
+                report = ExecutionReport(
+                    status="SUBMITTED" if mode == "live" else "REJECTED",
+                    error=(
+                        "order submission outcome is unknown; reconcile before retrying"
+                        if mode == "live"
+                        else f"{type(exc).__name__}: {exc}"
+                    ),
+                )
+            result = await asyncio.to_thread(
+                self._finalize_order, order_id, report, self._TapSignal(side), mode
+            )
+            self._tap_holdings.pop((mode, market.market_id), None)  # reload what is held
+            if report.fills:
+                self._logs.log(
+                    "INFO",
+                    "fill",
+                    f"TAP filled {report.filled_size:.4f} shares @ {report.avg_price or 0:.4f}",
+                    payload={
+                        "order_id": result.order_id,
+                        "filled_size": result.filled_size,
+                        "avg_price": result.avg_price,
+                        "latency_ms": result.latency_ms,
+                        "exchange_order_id": result.exchange_order_id,
+                    },
+                    mode=mode,
+                )
+            if report.error or report.status == "REJECTED":
+                self._logs.log(
+                    "ERROR",
+                    "error",
+                    f"TAP order {report.status}: {report.error or 'rejected'}",
+                    payload={
+                        "order_id": result.order_id,
+                        "side": side,
+                        "signal_ask": ask,
+                        "latency_ms": report.latency_ms,
+                        "exchange_response": report.raw,
+                        "max_price": max_price,
+                    },
+                    mode=mode,
+                )
+            return result
+
     async def manual_sell(
         self, market: MarketInfo, books: dict[str, OrderBook], mode: str, config, side: str, stage: int
     ) -> OrderResult:
@@ -1057,7 +1238,7 @@ class OrderManager:
         No confirmation, no retry gap and no take-profit / stop-loss condition: it only needs shares
         to sell and a bid. Not blocked by a risk halt, since selling only reduces exposure.
         """
-        if stage not in EXIT_STAGES:
+        if stage not in SELLABLE_STAGES:
             return OrderResult(None, side, "BLOCKED", "unknown_stage")
         if market.remaining_seconds() <= 0:
             return OrderResult(None, side, "BLOCKED", "market_ended")
@@ -1065,20 +1246,27 @@ class OrderManager:
         return results[0] if results else OrderResult(None, side, "BLOCKED", "no_holding")
 
     async def manual_sell_all(
-        self, market: MarketInfo, books: dict[str, OrderBook], mode: str, config
+        self, market: MarketInfo, books: dict[str, OrderBook], mode: str, config, scope: str = "stages"
     ) -> list[OrderResult]:
-        """Operator "sell all": sell what every stage (0-3) still holds in this market, right now.
+        """Operator "sell all": sell what the stages still hold in this market, right now.
 
-        Each stage that really holds shares gets its own manual sell, run side by side exactly like the
+        `scope="stages"` (default) is the strategy's stages 0-3 only: one-tap shares are never touched by it.
+        `scope="tap"` is the one-tap shares only.
+
+        Each holding that really holds shares gets its own manual sell, run side by side exactly like the
         per-stage exits (separate locks), so one slow stage never delays another. Stages with nothing
         held are skipped. Returns one result per stage that held shares (empty = nothing to sell).
         """
         if market.remaining_seconds() <= 0:
             return [OrderResult(None, "", "BLOCKED", "market_ended")]
+        if scope == "tap":
+            stages = tuple(stage for stage in SELLABLE_STAGES if stage == TAP_STAGE)
+        else:
+            stages = tuple(stage for stage in SELLABLE_STAGES if stage != TAP_STAGE)
         held = await asyncio.gather(
-            *(asyncio.to_thread(self.load_stage0_holding, mode, market.market_id, stage) for stage in EXIT_STAGES)
+            *(asyncio.to_thread(self.load_stage0_holding, mode, market.market_id, stage) for stage in stages)
         )
-        targets = [(stage, holding.side) for stage, holding in zip(EXIT_STAGES, held) if holding is not None]
+        targets = [(stage, holding.side) for stage, holding in zip(stages, held) if holding is not None]
         if not targets:
             return []
         return list(
@@ -1103,6 +1291,7 @@ class OrderManager:
         reaches it, or at the market once the best bid falls to its stop-loss level.
         With `manual_side` set it is the operator's "sell now": sold at the market, no condition."""
         manual = manual_side is not None
+        label = "TAP" if stage == TAP_STAGE else f"S{stage}"
         reg_key = (mode, market.market_id)
         holdings = self._holdings(stage)
         async with self._exit_locks[stage]:
@@ -1193,7 +1382,7 @@ class OrderManager:
             self._logs.log(
                 "WARNING" if kind == "stop_loss" else "INFO",
                 "order_submit",
-                f"S{stage} {'STOP-LOSS ' if kind == 'stop_loss' else 'MANUAL ' if kind == 'manual' else ''}marketable SELL "
+                f"{label} {'STOP-LOSS ' if kind == 'stop_loss' else 'MANUAL ' if kind == 'manual' else ''}marketable SELL "
                 f"{holding.side} {sell_size:.2f} shares at bid {bid:.3f}{stop_note}",
                 payload={
                     "market_id": market.market_id,
@@ -1260,7 +1449,7 @@ class OrderManager:
                 self._logs.log(
                     "INFO",
                     "fill",
-                    f"S{stage} sold {report.filled_size:.4f} shares @ {report.avg_price or 0:.4f}",
+                    f"{label} sold {report.filled_size:.4f} shares @ {report.avg_price or 0:.4f}",
                     payload={
                         "order_id": result.order_id,
                         "filled_size": result.filled_size,
@@ -1281,7 +1470,7 @@ class OrderManager:
                 self._logs.log(
                     "WARNING" if report.fills or report.status == "CANCELED" else "ERROR",
                     "error",
-                    f"S{stage} sell {report.status}: {report.error or 'rejected'}",
+                    f"{label} sell {report.status}: {report.error or 'rejected'}",
                     payload={
                         "order_id": result.order_id,
                         "side": holding.side,

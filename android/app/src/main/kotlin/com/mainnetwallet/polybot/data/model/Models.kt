@@ -136,11 +136,33 @@ data class PositionRow(
     val fees: Double = 0.0,
     @SerialName("unrealized_pnl") val unrealizedPnl: Double = 0.0,
     @SerialName("realized_pnl") val realizedPnl: Double = 0.0,
+    /** "" = strategy stages 0-3, "tap" = one-tap buy (its own row, held to settlement or sold by hand). */
+    val tag: String = "",
     val status: String = "",
     val resolution: String? = null,
     @SerialName("awaiting_settlement") val awaitingSettlement: Boolean = false,
     @SerialName("opened_at") val openedAt: String? = null,
     @SerialName("closed_at") val closedAt: String? = null,
+)
+
+/** Server stage number of one-tap buys: a manual trade, not one of the entry stages 0-3. */
+const val TAP_STAGE = 9
+
+/** Limits of the one-tap buy (`tap` of the state snapshot). */
+@Serializable
+data class TapLimits(
+    @SerialName("min_usdc") val minUsdc: Double = 1.0,
+    @SerialName("max_usdc") val maxUsdc: Double = 100.0,
+    @SerialName("cooldown_ms") val cooldownMs: Int = 1000,
+)
+
+/** Reply part of a one-tap buy (`tap_buy` of the state snapshot, only present on that reply). */
+@Serializable
+data class TapBuyResult(
+    val status: String = "",
+    val side: String = "",
+    @SerialName("filled_size") val filledSize: Double = 0.0,
+    @SerialName("avg_price") val avgPrice: Double? = null,
 )
 
 @Serializable
@@ -159,6 +181,8 @@ data class OrderRow(
     @SerialName("market_id") val marketId: String = "",
     val side: String = "",
     val stage: Int? = null,
+    /** true for one-tap buys and their sells (stage 9 on the server) */
+    val tap: Boolean = false,
     val action: String? = null,
     val status: String = "",
     @SerialName("requested_notional") val requestedNotional: Double = 0.0,
@@ -309,6 +333,8 @@ data class Snapshot(
     val positions: List<PositionRow> = emptyList(),
     @SerialName("open_orders") val openOrders: List<OrderRow> = emptyList(),
     val sellable: List<SellableHolding> = emptyList(),
+    val tap: TapLimits? = null,
+    @SerialName("tap_buy") val tapBuy: TapBuyResult? = null,
     @SerialName("manual_sell_all") val manualSellAll: ManualSellAll? = null,
     @SerialName("last_order") val lastOrder: LastOrder? = null,
     @SerialName("market_data") val marketData: MarketDataState = MarketDataState(),

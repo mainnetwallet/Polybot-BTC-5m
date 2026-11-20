@@ -20,6 +20,7 @@ from app.api.schemas import (
     ResetServerRequest,
     SettingsPatch,
     StartRequest,
+    TapBuyRequest,
 )
 from app.api.auth import AuthService
 from app.config.runtime import SettingsService
@@ -118,6 +119,14 @@ def build_router(
         """Turn NEW buys on or off (all stages). Exits, settlement and market data are not affected."""
         return await bot.set_buys(request.enabled, "dashboard")
 
+    @router.post("/orders/tap-buy")
+    async def tap_buy(request: TapBuyRequest) -> dict:
+        """One-tap buy: one market buy of `amount` USDC, separate from the strategy stages (see TradingBot.tap_buy)."""
+        try:
+            return await bot.tap_buy(request.market_id, request.side, request.amount, request.request_id)
+        except BotError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     @router.post("/orders/sell")
     async def manual_sell(request: ManualSellRequest) -> dict:
         """Sell what one order's stage still holds, right now, at the market (no confirmation step)."""
@@ -128,9 +137,9 @@ def build_router(
 
     @router.post("/orders/sell-all")
     async def manual_sell_all(request: ManualSellAllRequest) -> dict:
-        """Sell what every stage still holds in this market, right now, at the market (no confirmation step)."""
+        """Sell what every stage (or, with scope "tap", the one-tap shares) still holds in this market, right now, at the market."""
         try:
-            return await bot.manual_sell_all(request.market_id)
+            return await bot.manual_sell_all(request.market_id, request.scope)
         except BotError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 

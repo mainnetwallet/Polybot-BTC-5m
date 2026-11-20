@@ -9,7 +9,8 @@ import {
   type ReactNode,
 } from "react";
 import { api, apiToken } from "../api/client";
-import type { BookSnapshot, LogRow, Mode, SellableHolding, Snapshot } from "../api/types";
+import { TAP_STAGE } from "../lib/stages";
+import type { BookSnapshot, LogRow, Mode, SellableHolding, Side, Snapshot } from "../api/types";
 
 export type ActionResult = { ok: boolean; error?: string };
 export type ToastKind = "success" | "error" | "info" | "warning";
@@ -51,7 +52,10 @@ interface BotContextValue {
   killSwitch: (active: boolean) => Promise<ActionResult>;
   setBuys: (enabled: boolean) => Promise<ActionResult>;
   sellNow: (holding: SellableHolding) => Promise<ActionResult>;
-  sellAll: (marketId: string) => Promise<ActionResult>;
+  /** One-tap buy of `amount` USDC on `side` in the live market. A second tap within one second is ignored. */
+  tapBuy: (side: Side, amount: number) => Promise<ActionResult>;
+  /** "stages" = Sell all (strategy stages only), "tap" = Sell all tap (one-tap shares only) */
+  sellAll: (marketId: string, scope?: "stages" | "tap") => Promise<ActionResult>;
   resetPaper: (balance: number) => Promise<ActionResult>;
   resetDaily: () => Promise<ActionResult>;
   clearOrderHistory: () => Promise<ActionResult>;
@@ -69,6 +73,8 @@ function describeError(error: unknown): string {
 }
 
 const HISTORY_LIMIT = 180;
+/** one-tap buys: a second tap inside this window is ignored (the server keeps the same rule) */
+const TAP_LOCK_MS = 1000;
 const LOG_LIMIT = 400;
 
 // "Clear view" hides every log up to the newest one seen. The logs stay in the database (audit
@@ -424,7 +430,13 @@ export function BotProvider({ children }: { children: ReactNode }) {
       try {
         const next = await api.sellNow(holding.market_id, holding.side, holding.stage);
         applySnapshot(next);
-        notify("success", "Sell sent", `Stage ${holding.stage} ${holding.side} shares sold at the market.`);
+        notify(
+          "success",
+          "Sell sent",
+          holding.stage === TAP_STAGE
+            ? `One-tap ${holding.side} shares sold at the market.`
+            : `Stage ${holding.stage} ${holding.side} shares sold at the market.`,
+        );
         return { ok: true };
       } catch (error) {
         const message = describeError(error);
@@ -436,11 +448,56 @@ export function BotProvider({ children }: { children: ReactNode }) {
     [applySnapshot, notify, refresh],
   );
 
+  // One-tap buy. One click = one buy: a second tap within a second, or while one is on its way, is ignored
+  // here as well as on the server. Every tap carries its own id, so a request the network repeats buys once.
+  const tapGate = useRef({ busy: false, last: 0 });
+  const tapBuy = useCallback(
+    async (side: Side, amount: number): Promise<ActionResult> => {
+      const gate = tapGate.current;
+      const now = Date.now();
+      if (gate.busy || now - gate.last < TAP_LOCK_MS) return { ok: false, error: "ignored" };
+      const marketId = snapshotRef.current?.market?.market_id;
+      if (!marketId) {
+        notify("error", "One-tap buy failed", "There is no live market right now.");
+        return { ok: false, error: "no market" };
+      }
+      gate.busy = true;
+      gate.last = now;
+      try {
+        const requestId =
+          typeof crypto !== "undefined" && "randomUUID" in crypto
+            ? crypto.randomUUID()
+            : `${now.toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+        const next = await api.tapBuy(marketId, side, amount, requestId);
+        applySnapshot(next);
+        const fill = next.tap_buy;
+        notify(
+          "success",
+          `One-tap ${side} bought`,
+          fill && fill.filled_size > 0
+            ? `${fill.filled_size.toFixed(1)} shares${fill.avg_price ? ` at ${(fill.avg_price * 100).toFixed(1)}¢` : ""} for $${amount.toFixed(2)}.`
+            : `$${amount.toFixed(2)} order sent.`,
+        );
+        return { ok: true };
+      } catch (error) {
+        const message = describeError(error);
+        notify("error", "One-tap buy failed", message);
+        void refresh();
+        return { ok: false, error: message };
+      } finally {
+        gate.busy = false;
+        gate.last = Date.now();
+      }
+    },
+    [applySnapshot, notify, refresh],
+  );
+
   // Instant "sell all": every stage that holds shares in this market is sold at the market, no confirmation step.
   const sellAll = useCallback(
-    async (marketId: string): Promise<ActionResult> => {
+    async (marketId: string, scope: "stages" | "tap" = "stages"): Promise<ActionResult> => {
+      const what = scope === "tap" ? "one-tap position" : "stage";
       try {
-        const next = await api.sellAll(marketId);
+        const next = await api.sellAll(marketId, scope);
         applySnapshot(next);
         const failed = next.manual_sell_all?.failed ?? [];
         const sold = next.manual_sell_all?.sold ?? [];
@@ -451,12 +508,16 @@ export function BotProvider({ children }: { children: ReactNode }) {
             failed.map((f) => `${f.side}: ${f.message}`).join(" · "),
           );
         } else {
-          notify("success", "Sell all sent", `${sold.length} stage${sold.length === 1 ? "" : "s"} sold at the market.`);
+          notify(
+            "success",
+            scope === "tap" ? "Sell all tap sent" : "Sell all sent",
+            `${sold.length} ${what}${sold.length === 1 ? "" : "s"} sold at the market.`,
+          );
         }
         return { ok: true };
       } catch (error) {
         const message = describeError(error);
-        notify("error", "Sell all failed", message);
+        notify("error", scope === "tap" ? "Sell all tap failed" : "Sell all failed", message);
         void refresh();
         return { ok: false, error: message };
       }
@@ -545,6 +606,7 @@ export function BotProvider({ children }: { children: ReactNode }) {
       killSwitch,
       setBuys,
       sellNow,
+      tapBuy,
       sellAll,
       resetPaper,
       resetDaily,
@@ -569,6 +631,7 @@ export function BotProvider({ children }: { children: ReactNode }) {
       killSwitch,
       setBuys,
       sellNow,
+      tapBuy,
       sellAll,
       resetPaper,
       resetDaily,

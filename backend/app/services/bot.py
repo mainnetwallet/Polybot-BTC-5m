@@ -24,7 +24,8 @@ from app.market_data.client import ClobMarketDataClient
 from app.market_discovery.service import MarketDiscovery, MarketMonitor
 from app.market_discovery.types import MarketInfo, ResolutionInfo
 from app.monitoring.logs import LogService, Publisher
-from app.order_manager.manager import EXIT_STAGES, SELL_DUST, OrderManager, _floor_shares
+from app.order_manager.manager import EXIT_STAGES, SELL_DUST, TAP_COOLDOWN_S, OrderManager, _floor_shares
+from app.portfolio.service import TAP_STAGE, TAP_TAG
 from app.paper_trading.engine import PaperExecutionEngine
 from app.portfolio.analytics import AnalyticsService
 from app.portfolio.service import Portfolio, start_of_day_utc
@@ -48,6 +49,9 @@ GUARD_TITLES = {
 
 def evaluation_market_id(evaluation: StrategyEvaluation) -> str:
     return evaluation.signals[0].market_id if evaluation.signals else ""
+
+
+TAP_MIN_USDC = 1.0  # Polymarket does not take a marketable buy below one dollar
 
 
 class BotError(RuntimeError):
@@ -620,8 +624,12 @@ class TradingBot:
     ) -> RiskContext:
         marks = self._marks()
         with session_scope() as session:
-            unrealized = self.portfolio.unrealized_pnl(session, self._mode, marks, market.market_id)
-            summary = self.portfolio.pnl_summary(session, self._mode, unrealized)
+            # One-tap trades are manual: the strategy's risk limits (daily loss / profit, max open positions,
+            # trades per day) never count them.
+            unrealized = self.portfolio.unrealized_pnl(
+                session, self._mode, marks, market.market_id, include_tap=False
+            )
+            summary = self.portfolio.pnl_summary(session, self._mode, unrealized, include_tap=False)
             # daily loss / profit limits: realized pnl only unless DAILY_LIMIT_INCLUDE_UNREALIZED=true
             pnl = summary["daily_pnl"] if self.settings.daily_limit_include_unrealized else summary["realized_pnl"]
             trades_today = self.portfolio.trades_today(session, self._mode)
@@ -629,7 +637,7 @@ class TradingBot:
             # window that is still waiting to settle must not block the current market.
             position_sizes = {
                 position.side: position.size
-                for position in self.portfolio.open_positions(session, self._mode)
+                for position in self.portfolio.open_positions(session, self._mode, include_tap=False)
                 if position.market_id == market.market_id
             }
             exposure_keys = {(market.market_id, side) for side in position_sizes}
@@ -650,7 +658,7 @@ class TradingBot:
             exposure_keys.update(
                 (order.market_id, order.side)
                 for order in active_orders
-                if order.market_id == market.market_id
+                if order.market_id == market.market_id and self.orders._key_stage(order.order_key) != TAP_STAGE
             )
             market_orders = session.execute(
                 select(Order).where(Order.mode == self._mode, Order.market_id == market.market_id)
@@ -1400,8 +1408,62 @@ class TradingBot:
         snapshot["manual_sell"] = result.as_dict()
         return snapshot
 
-    async def manual_sell_all(self, market_id: str) -> dict:
-        """Operator "sell all": sell the shares of every stage that holds any in the live market, at the market.
+    async def tap_buy(self, market_id: str, side: str, amount: float, request_id: str | None = None) -> dict:
+        """One-tap buy: buy `amount` USDC of `side` in the live market right now, at the market.
+
+        Manual and separate from the strategy: no stage rules, no risk limits of the strategy, no buy guard
+        and no take-profit / stop-loss. The shares are tagged "tap" and stay until the market settles or the
+        operator sells them from the positions list. The kill switch, a stopped bot and a missing / stale
+        order book still block it, and so does a second tap within one second.
+        """
+        market = self._market
+        if self._status != "RUNNING" or self._kill_switch:
+            raise BotError("the bot must be running to buy")
+        if market is None or market.market_id != market_id or market.remaining_seconds() <= 0:
+            raise BotError("this market has ended: wait for the next one")
+        limit = float(getattr(self.settings, "tap_buy_max_usdc", 100.0))
+        if not (TAP_MIN_USDC <= amount <= limit):
+            raise BotError(f"one-tap amount must be between ${TAP_MIN_USDC:g} and ${limit:g}")
+        with session_scope() as session:
+            balance = self._balance(session)
+        if amount > balance + 1e-9:
+            raise BotError(f"not enough balance: ${balance:.2f} available")
+        self.logs.log(
+            "INFO",
+            "system",
+            f"one-tap BUY requested: {side} ${amount:.2f}",
+            payload={"market_id": market_id, "side": side, "amount": amount, "mode": self._mode},
+            mode=self._mode,
+        )
+        result = await self.orders.tap_buy(
+            market, self.data.books, self._mode, self.runtime.get(), side, amount, request_id
+        )
+        reasons = {
+            "market_ended": "this market has ended: wait for the next one",
+            "tap_cooldown": "second tap ignored: wait one second between taps",
+            "tap_in_flight": "a one-tap buy is already in progress",
+            "duplicate_request": "this tap was already received",
+            "no_ask": "no ask in the order book right now",
+            "stale_book": "the order book is out of date: try again in a moment",
+            "bot_not_accepting_orders": "the bot is not accepting orders right now",
+            "bad_side": "side must be UP or DOWN",
+        }
+        if result.status == "BLOCKED":
+            raise BotError(reasons.get(result.reason, f"buy blocked: {result.reason}"))
+        self._last_order = result.as_dict()
+        self._last_order["ts"] = iso_z(utcnow())
+        if result.latency_ms is not None:
+            self._latencies.append(result.latency_ms)
+        if result.status in {"REJECTED", "CANCELED"} and result.filled_size <= 0:
+            raise BotError(f"buy {result.status.lower()}: {result.error or 'no fill'}")
+        snapshot = await self._snapshot_and_publish()
+        snapshot["tap_buy"] = result.as_dict()
+        return snapshot
+
+    async def manual_sell_all(self, market_id: str, scope: str = "stages") -> dict:
+        """Operator "sell all": sell the shares of every stage (0-3) that holds any in the live market, at the market.
+
+        One-tap shares are NOT included: `scope="tap"` ("Sell all tap") sells those and only those.
 
         Same rules as `manual_sell` (instant, no confirmation, not held back by a risk halt, needs the bot
         running with an open market). Stages that hold nothing are skipped; if some stages cannot be sold
@@ -1415,11 +1477,13 @@ class TradingBot:
         self.logs.log(
             "WARNING",
             "system",
-            "manual SELL ALL requested",
-            payload={"market_id": market_id, "mode": self._mode},
+            "manual SELL ALL TAP requested" if scope == "tap" else "manual SELL ALL requested",
+            payload={"market_id": market_id, "mode": self._mode, "scope": scope},
             mode=self._mode,
         )
-        results = await self.orders.manual_sell_all(market, self.data.books, self._mode, self.runtime.get())
+        results = await self.orders.manual_sell_all(
+            market, self.data.books, self._mode, self.runtime.get(), scope
+        )
         if not results:
             raise BotError("nothing left to sell in this market")
         reasons = {
@@ -1930,7 +1994,9 @@ class TradingBot:
             local = session.execute(
                 select(Position).where(Position.mode == "live", Position.status == "open")
             ).scalars().all()
-            local_map = {(p.market_id.lower(), p.side): p.size for p in local}
+            local_map: dict[tuple[str, str], float] = {}
+            for p in local:  # the stage row and the one-tap row of one side hold shares of the same wallet position
+                local_map[(p.market_id.lower(), p.side)] = local_map.get((p.market_id.lower(), p.side), 0.0) + p.size
         mismatches = []
         for key, size in onchain.items():
             local_size = local_map.get(key, 0.0)
@@ -1981,6 +2047,9 @@ class TradingBot:
             marks = self._marks()
             unrealized = self.portfolio.unrealized_pnl(session, self._mode, marks)
             pnl = self.portfolio.pnl_summary(session, self._mode, unrealized)
+            # the daily limits (and the "risk halt" shown from them) only look at the strategy stages
+            unrealized_stages = self.portfolio.unrealized_pnl(session, self._mode, marks, include_tap=False)
+            pnl_limits = self.portfolio.pnl_summary(session, self._mode, unrealized_stages, include_tap=False)
             trades_today = self.portfolio.trades_today(session, self._mode)
             open_orders = session.execute(
                 select(Order).where(
@@ -2000,6 +2069,8 @@ class TradingBot:
                     "id": p.id,
                     "market_id": p.market_id,
                     "side": p.side,
+                    # "" = strategy stages 0-3, "tap" = one-tap buy
+                    "tag": p.tag or "",
                     "size": p.size,
                     "avg_price": p.avg_price,
                     "cost_basis": p.cost_basis,
@@ -2030,7 +2101,9 @@ class TradingBot:
                 for p in positions:
                     if p.market_id != market.market_id:
                         continue
-                    for stage in EXIT_STAGES:
+                    # a one-tap position is its own row: only the tap holding belongs to it, and the strategy's
+                    # stage holdings only to the untagged row of the same side
+                    for stage in ((TAP_STAGE,) if p.tag == TAP_TAG else EXIT_STAGES):
                         held = self.orders.stage0_holding_in_session(
                             session, self._mode, p.market_id, stage
                         )
@@ -2057,6 +2130,7 @@ class TradingBot:
                     "side": o.side,
                     "status": o.status,
                     "stage": self.orders._key_stage(o.order_key),
+                    "tap": self.orders._key_stage(o.order_key) == TAP_STAGE,
                     "action": self.orders._key_action(o.order_key),
                     "requested_notional": o.requested_notional,
                     "requested_price": o.requested_price,
@@ -2089,7 +2163,9 @@ class TradingBot:
                 "status": "active" if market.remaining_seconds() > 0 else "expired",
             }
 
-        limit_pnl = pnl["daily_pnl"] if self.settings.daily_limit_include_unrealized else pnl["realized_pnl"]
+        limit_pnl = (
+            pnl_limits["daily_pnl"] if self.settings.daily_limit_include_unrealized else pnl_limits["realized_pnl"]
+        )
         risk_halt = None
         if self._risk_halt_reason:
             risk_halt = self._risk_halt_reason
@@ -2200,6 +2276,12 @@ class TradingBot:
             "positions": position_rows,
             "open_orders": order_rows,
             "sellable": sellable_rows,
+            # limits of the one-tap buy (the dashboard / app offer amounts inside them)
+            "tap": {
+                "min_usdc": TAP_MIN_USDC,
+                "max_usdc": float(getattr(self.settings, "tap_buy_max_usdc", 100.0)),
+                "cooldown_ms": int(TAP_COOLDOWN_S * 1000),
+            },
             "last_order": self._last_order,
             "market_data": self.data.status,
             "btc": self.btc.snapshot(market),
@@ -2248,6 +2330,7 @@ class TradingBot:
                     "side": o.side,
                     "status": o.status,
                     "stage": self.orders._key_stage(o.order_key),
+                    "tap": self.orders._key_stage(o.order_key) == TAP_STAGE,
                     "action": self.orders._key_action(o.order_key),
                     "requested_notional": o.requested_notional,
                     "requested_price": o.requested_price,
@@ -2278,6 +2361,7 @@ class TradingBot:
                     "id": p.id,
                     "market_id": p.market_id,
                     "side": p.side,
+                    "tag": p.tag or "",
                     "size": p.size,
                     "avg_price": p.avg_price,
                     "cost_basis": p.cost_basis,

@@ -4,10 +4,11 @@ import { Card } from "../Card";
 import { BookLadder } from "../BookLadder";
 import { CandleChart, type BuyMarker } from "../CandleChart";
 import { LoadingPanel } from "../LoadingPanel";
+import { TapBuyPanel } from "./TapBuyPanel";
 import { useBot } from "../../hooks/BotContext";
 import { useBtcCandles, useBtcHistoryState } from "../../hooks/BtcTape";
 import { cx, fmtPx, fmtSignedPct, fmtHms, isNum, usdParts } from "../../lib/format";
-import type { StageId } from "../../lib/stages";
+import { isTapOrder, type StageId } from "../../lib/stages";
 
 const ROUND_MS = 300_000;
 const TF_KEY = "polybot.tape.timeframe";
@@ -40,6 +41,8 @@ export function BtcTapeCard({ orders, className }: { orders: OrderRow[]; classNa
   const start = Number.isFinite(startMs) ? startMs : null;
   const end = Number.isFinite(endMs) ? endMs : null;
   const [tfId, setTfId] = useState<TimeframeId>(readTimeframe);
+  // one-screen layout only: the two order books open over the chart (the tap panel keeps the right column)
+  const [showBook, setShowBook] = useState(false);
   const tf = TIMEFRAMES.find((item) => item.id === tfId) ?? TIMEFRAMES[0];
   const historyStart = start !== null ? start - HISTORY_ROUNDS * ROUND_MS : null;
   const tape = useBtcCandles(historyStart, end, tf.candleMs);
@@ -60,8 +63,17 @@ export function BtcTapeCard({ orders, className }: { orders: OrderRow[]; classNa
       if (order.action !== "BUY" || !(order.filled_size > 0)) continue;
       const t = Date.parse(order.created_at);
       if (!Number.isFinite(t)) continue;
-      const stage = Math.min(3, Math.max(0, order.stage ?? 1)) as StageId;
       const price = order.avg_fill_price ?? order.submitted_price ?? order.requested_price;
+      if (isTapOrder(order)) {
+        out.push({
+          key: String(order.id),
+          t,
+          stage: "tap",
+          label: `One-tap ${order.side} buy: ${order.filled_size.toFixed(1)} shares at ${fmtPx(price)}, ${fmtHms(order.created_at)}`,
+        });
+        continue;
+      }
+      const stage = Math.min(3, Math.max(0, order.stage ?? 1)) as StageId;
       out.push({
         key: String(order.id),
         t,
@@ -98,6 +110,15 @@ export function BtcTapeCard({ orders, className }: { orders: OrderRow[]; classNa
       className={cx("cq", className)}
       right={
         <span className="flex items-center gap-2">
+          <button
+            type="button"
+            className="tape-book-toggle"
+            aria-pressed={showBook}
+            onClick={() => setShowBook((open) => !open)}
+            title="Show the Up and Down order books"
+          >
+            Book
+          </button>
           <span className="inline-flex gap-0.5 rounded-lg border hairline bg-black/15 p-0.5" role="group" aria-label="Candle length">
             {TIMEFRAMES.map((item) => (
               <button
@@ -177,16 +198,25 @@ export function BtcTapeCard({ orders, className }: { orders: OrderRow[]; classNa
             </span>
             <span className="flex items-center gap-1.5">
               <span className="inline-block h-0 w-0 border-x-[5px] border-b-[8px] border-x-transparent border-b-slate-400" aria-hidden="true" />
-              Triangles mark buys, colored by stage
+              Triangles mark buys: stage colors, cyan = one-tap
             </span>
           </div>
         </div>
         </div>
 
-        <div className="tape-book grid min-w-0 grid-cols-2 gap-x-3 gap-y-2 self-start">
-          <BookLadder compact side="UP" book={snapshot.books.up} maxSize={maxSize} history={history.up} staleAfterMs={stale} />
-          <BookLadder compact side="DOWN" book={snapshot.books.down} maxSize={maxSize} history={history.down} staleAfterMs={stale} />
+        <div className="tape-side">
+          <TapBuyPanel />
+          <div className="tape-book grid min-w-0 grid-cols-2 gap-x-3 gap-y-2 self-start">
+            <BookLadder compact side="UP" book={snapshot.books.up} maxSize={maxSize} history={history.up} staleAfterMs={stale} />
+            <BookLadder compact side="DOWN" book={snapshot.books.down} maxSize={maxSize} history={history.down} staleAfterMs={stale} />
+          </div>
         </div>
+        {showBook ? (
+          <div className="tape-book-pop">
+            <BookLadder compact side="UP" book={snapshot.books.up} maxSize={maxSize} history={history.up} staleAfterMs={stale} />
+            <BookLadder compact side="DOWN" book={snapshot.books.down} maxSize={maxSize} history={history.down} staleAfterMs={stale} />
+          </div>
+        ) : null}
       </div>
     </Card>
   );

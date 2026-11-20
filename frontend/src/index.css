@@ -935,3 +935,144 @@ select:focus-visible,
   .login-chart-fill { animation-duration: 0.01ms; animation-delay: 0s; }
   .login-root { transition: opacity 0.2s ease; }
 }
+
+/* ---- One-tap buy panel (BTC tape card, right of the chart) ----
+   One row per side: [Up 64c] [$1] [$2] [$5]. Small on purpose: on the one-screen Overview it has to fit next to
+   the chart in a 280px card, and on a phone it must not push the positions off the screen. */
+.tap-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-tile);
+  background: rgba(255, 255, 255, 0.025);
+  padding: 9px 10px 8px;
+}
+.tap-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; white-space: nowrap; }
+.tap-title { display: flex; min-width: 0; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: var(--text); }
+.tap-name { overflow: hidden; text-overflow: ellipsis; }
+.tap-bolt { color: var(--tap); }
+.tap-live, .tap-paper {
+  flex: none;
+  border-radius: 999px;
+  padding: 1px 6px;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+.tap-live { background: var(--down-soft); color: #ff8fa0; border: 1px solid rgba(255, 107, 129, 0.4); }
+.tap-paper { background: rgba(255, 255, 255, 0.05); color: var(--muted); border: 1px solid var(--line); }
+.tap-sub { display: flex; flex: none; align-items: center; gap: 8px; font-size: 11.5px; color: var(--muted); }
+.tap-cash { font-variant-numeric: tabular-nums; }
+.tap-edit { background: none; border: 0; padding: 0; font-size: 11.5px; font-weight: 600; color: var(--text-2); cursor: pointer; }
+.tap-edit:hover { color: var(--text); text-decoration: underline; }
+.tap-grid { display: flex; flex-direction: column; gap: 6px; }
+.tap-row { display: grid; grid-template-columns: 54px repeat(3, minmax(0, 1fr)); gap: 6px; }
+.tap-side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  border-radius: 10px;
+  padding: 4px 2px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.15;
+}
+.tap-side b { font-size: 13px; font-variant-numeric: tabular-nums; }
+.tap-up .tap-side { background: var(--up-soft); color: var(--up); }
+.tap-down .tap-side { background: var(--down-soft); color: var(--down); }
+.tap-old { opacity: 0.45; text-decoration: line-through; }
+.tap-btn {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  min-height: 44px;
+  border-radius: 11px;
+  border: 1px solid var(--line-strong);
+  background: rgba(255, 255, 255, 0.035);
+  padding: 4px 2px;
+  color: var(--text);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background 0.08s, border-color 0.08s, transform 0.06s;
+}
+.tap-btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.08); }
+.tap-btn:active:not(:disabled) { transform: scale(0.97); }
+.tap-up .tap-btn:hover:not(:disabled) { border-color: var(--up); }
+.tap-down .tap-btn:hover:not(:disabled) { border-color: var(--down); }
+.tap-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.tap-btn.is-busy { opacity: 1; border-color: var(--tap); }
+.tap-amt { font-size: 15px; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.tap-win { max-width: 100%; overflow: hidden; text-overflow: clip; white-space: nowrap; font-size: 10px; font-weight: 600; color: var(--up); line-height: 1.1; }
+.tap-note { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10.5px; line-height: 1.2; color: var(--muted); }
+.tap-note.is-warn { color: var(--amber); font-weight: 600; }
+.tap-editor { display: flex; flex-direction: column; gap: 6px; }
+.tap-editor-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.tap-field {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  padding: 6px 8px;
+  color: var(--muted);
+  font-weight: 700;
+}
+.tap-field input { width: 100%; min-width: 0; background: none; border: 0; outline: 0; color: var(--text); font-size: 14px; font-weight: 700; }
+.tap-hint { margin: 0; font-size: 10.5px; color: var(--muted); }
+.tap-save { padding: 6px 10px; font-size: 12px; }
+
+/* the right column of the tape card: tap panel on top, the two books under it */
+.tape-side { display: flex; min-width: 0; flex-direction: column; gap: 10px; }
+.tape-book-toggle { display: none; }
+.tape-book-pop { display: none; }
+.ov-screen .tape-side { min-height: 0; align-self: stretch; }
+/* one screen: the card is short, so the tap panel gets the whole right column and the two books are one click
+   away (the "Book" button in the card header opens them over the chart) */
+.ov-screen .tape-body { position: relative; grid-template-columns: minmax(0, 1fr) 280px; }
+.ov-screen .tape-side .tape-book { display: none; }
+.ov-screen .tape-book-toggle {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.15);
+  padding: 1px 9px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.ov-screen .tape-book-toggle[aria-pressed="true"] { background: rgba(255, 255, 255, 0.1); color: var(--text); }
+.ov-screen .tape-book-pop {
+  position: absolute;
+  z-index: 5;
+  top: -9px;
+  bottom: 0;
+  left: 0;
+  right: 294px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 14px;
+  align-content: start;
+  border-radius: 12px;
+  background: rgba(9, 22, 28, 0.97);
+  padding: 0 4px;
+}
+.ov-screen .tape-book-pop .lvl { font-size: 11px; gap: 6px; }
+.ov-screen .tape-book-pop .lvl-bar { height: 15px; border-radius: 4px; }
+.ov-screen .tape-book-pop .lvl-bar > span { padding-right: 6px; line-height: 1; }
+.ov-screen .tape-book-pop > div > .space-y-1 > * + * { margin-top: 2px; }
+.ov-screen .tape-book-pop .lvl-spread { padding: 0; font-size: 10.5px; line-height: 1.25; }
+.ov-screen .tape-book-pop .lvl-head { margin-bottom: 4px; }
+.ov-screen .tape-book-pop .lvl-head span { font-size: 16px; line-height: 1.2; }
+.ov-screen .tape-book-pop .lvl-foot { margin-top: 3px; font-size: 10.5px; line-height: 1.2; }
+
+/* the position list scrolls inside its short card, so the one-tap rows are never cut off */
+.pos-list { min-height: 0; }
+.ov-screen .pos-list { overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.15) transparent; }

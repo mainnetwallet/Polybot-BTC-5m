@@ -17,15 +17,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mainnetwallet.polybot.data.ActionResult
+import com.mainnetwallet.polybot.data.TAP_IGNORED
+import com.mainnetwallet.polybot.data.store.DEFAULT_TAP_AMOUNTS
 import com.mainnetwallet.polybot.ui.LocalGraph
 import com.mainnetwallet.polybot.ui.LocalUi
 import com.mainnetwallet.polybot.ui.components.SkeletonCard
 import com.mainnetwallet.polybot.ui.theme.Space
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
- * Overview: hero (countdown, BTC and account numbers), UP/DOWN odds and the position box with instant Sell
- * buttons. The engine controls are in the top bar.
+ * Overview: hero (countdown, BTC and account numbers), UP/DOWN odds, the one-tap buy card and the position box
+ * with instant Sell buttons. The engine controls are in the top bar.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -36,6 +39,7 @@ fun OverviewScreen(modifier: Modifier = Modifier) {
     val snapshot by repo.snapshot.collectAsStateWithLifecycle()
     val marketEndMs by repo.marketEndLocalMs.collectAsStateWithLifecycle()
     val history by repo.history.collectAsStateWithLifecycle()
+    val prefs by graph.prefs.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
 
     var refreshing by remember { mutableStateOf(false) }
@@ -50,6 +54,26 @@ fun OverviewScreen(modifier: Modifier = Modifier) {
             val result = call()
             selling = selling - key
             ui.report(result)
+        }
+    }
+
+    // One-tap buy: the buttons lock for a second after every tap, so a double tap buys once (the repository and
+    // the server enforce the same rule). `tapBusy` is the button whose request is on its way.
+    var tapLocked by remember { mutableStateOf(false) }
+    var tapBusy by remember { mutableStateOf<String?>(null) }
+    fun tapBuy(side: String, amount: Double) {
+        if (tapLocked || tapBusy != null) return
+        tapLocked = true
+        tapBusy = "$side:$amount"
+        ui.tap()
+        scope.launch {
+            val result = repo.tapBuy(side, amount)
+            tapBusy = null
+            if (result.message != TAP_IGNORED) ui.report(result)
+        }
+        scope.launch {
+            delay(1000)
+            tapLocked = false
         }
     }
 
@@ -97,6 +121,19 @@ fun OverviewScreen(modifier: Modifier = Modifier) {
                     upHistory = history.up,
                     downHistory = history.down,
                 )
+                TapBuyCard(
+                    market = snap.market,
+                    bot = snap.bot,
+                    up = snap.books.up,
+                    down = snap.books.down,
+                    balance = snap.account.balance,
+                    amounts = prefs?.tapAmounts ?: DEFAULT_TAP_AMOUNTS,
+                    limits = snap.tap,
+                    locked = tapLocked,
+                    busyKey = tapBusy,
+                    onTap = { side, amount -> tapBuy(side, amount) },
+                    onSaveAmounts = { amounts -> scope.launch { graph.prefsStore.setTapAmounts(amounts) } },
+                )
                 PositionBoxCard(
                     marketId = snap.market?.marketId,
                     positions = snap.positions,
@@ -106,6 +143,7 @@ fun OverviewScreen(modifier: Modifier = Modifier) {
                     selling = selling,
                     onSell = { h -> sell(sellKey(h)) { repo.sellNow(h.marketId, h.side, h.stage) } },
                     onSellAll = { marketId -> sell(SELL_ALL_KEY) { repo.sellAll(marketId) } },
+                    onSellAllTap = { marketId -> sell(SELL_ALL_TAP_KEY) { repo.sellAll(marketId, tapOnly = true) } },
                 )
             }
         }
