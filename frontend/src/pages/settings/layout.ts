@@ -156,6 +156,11 @@ export const TABS: TabSpec[] = [
         title: "Daily limits",
         keys: ["max_daily_loss", "daily_profit_target", "max_trades_per_day", "max_open_positions"],
       },
+      {
+        title: "Buy guards (switch all buying off)",
+        description: "Volatility circuit breakers. When one trips, new buys stop and Telegram sends an alert; send \"Buy\" on Telegram (or press Buy ON) to resume.",
+        keys: ["buy_guard_gap_usd", "buy_guard_trend_usd", "buy_guard_trend_markets"],
+      },
       { title: "Data quality", keys: ["stale_data_max_age_ms"] },
     ],
   },

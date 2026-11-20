@@ -9,6 +9,7 @@ from sqlalchemy import select
 
 from app.api.origin import build_cross_site_guard
 from app.api.schemas import (
+    BuysRequest,
     KillSwitchRequest,
     ManualSellAllRequest,
     ManualSellRequest,
@@ -111,6 +112,11 @@ def build_router(
             return await bot.set_kill_switch(request.active)
         except BotError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @router.post("/buys")
+    async def set_buys(request: BuysRequest) -> dict:
+        """Turn NEW buys on or off (all stages). Exits, settlement and market data are not affected."""
+        return await bot.set_buys(request.enabled, "dashboard")
 
     @router.post("/orders/sell")
     async def manual_sell(request: ManualSellRequest) -> dict:

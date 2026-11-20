@@ -49,6 +49,7 @@ interface BotContextValue {
   stop: () => Promise<ActionResult>;
   switchMode: (mode: Mode, phrase?: string) => Promise<ActionResult>;
   killSwitch: (active: boolean) => Promise<ActionResult>;
+  setBuys: (enabled: boolean) => Promise<ActionResult>;
   sellNow: (holding: SellableHolding) => Promise<ActionResult>;
   sellAll: (marketId: string) => Promise<ActionResult>;
   resetPaper: (balance: number) => Promise<ActionResult>;
@@ -396,6 +397,27 @@ export function BotProvider({ children }: { children: ReactNode }) {
     [applySnapshot, notify],
   );
 
+  const setBuys = useCallback(
+    async (enabled: boolean): Promise<ActionResult> => {
+      try {
+        applySnapshot(await api.setBuys(enabled));
+        notify(
+          enabled ? "info" : "warning",
+          enabled ? "Buying turned on" : "Buying turned off",
+          enabled
+            ? "New buys are allowed again."
+            : "No new buys in any stage. Take-profit, stop-loss and settlement keep running.",
+        );
+        return { ok: true };
+      } catch (error) {
+        const message = describeError(error);
+        notify("error", "Buy switch request failed", message);
+        return { ok: false, error: message };
+      }
+    },
+    [applySnapshot, notify],
+  );
+
   // Instant manual sell: no confirmation step, the request goes out the moment it is called.
   const sellNow = useCallback(
     async (holding: SellableHolding): Promise<ActionResult> => {
@@ -521,6 +543,7 @@ export function BotProvider({ children }: { children: ReactNode }) {
       stop,
       switchMode,
       killSwitch,
+      setBuys,
       sellNow,
       sellAll,
       resetPaper,
@@ -544,6 +567,7 @@ export function BotProvider({ children }: { children: ReactNode }) {
       stop,
       switchMode,
       killSwitch,
+      setBuys,
       sellNow,
       sellAll,
       resetPaper,

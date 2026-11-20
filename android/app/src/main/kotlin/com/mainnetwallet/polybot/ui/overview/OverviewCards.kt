@@ -58,6 +58,7 @@ import com.mainnetwallet.polybot.data.model.AccountState
 import com.mainnetwallet.polybot.data.model.BookSnapshot
 import com.mainnetwallet.polybot.data.model.BotState
 import com.mainnetwallet.polybot.data.model.BtcState
+import com.mainnetwallet.polybot.data.model.BuyGuardState
 import com.mainnetwallet.polybot.data.model.LiveReadiness
 import com.mainnetwallet.polybot.data.model.MarketSnapshot
 import com.mainnetwallet.polybot.data.model.Modes
@@ -593,12 +594,22 @@ private fun NoticeRow(text: String, color: Color, container: Color) {
 
 /** Risk halt, kill switch and "live not ready" messages for the Overview. Draws nothing when there is none. */
 @Composable
-fun EngineNotices(bot: BotState, live: LiveReadiness, modifier: Modifier = Modifier) {
+fun EngineNotices(
+    bot: BotState,
+    live: LiveReadiness,
+    modifier: Modifier = Modifier,
+    buyGuard: BuyGuardState? = null,
+) {
     val c = Poly.colors
     val hasRisk = !bot.riskHalt.isNullOrBlank()
     val liveNotReady = !live.ready && live.reasons.isNotEmpty()
-    if (!hasRisk && !bot.killSwitch && !liveNotReady) return
+    val buysOff = buyGuard != null && !buyGuard.buysEnabled
+    if (!hasRisk && !bot.killSwitch && !liveNotReady && !buysOff) return
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Space.sm)) {
+        if (buyGuard != null && buysOff) {
+            val why = buyGuard.reason?.takeIf { it.isNotBlank() }?.let { ": $it" } ?: ""
+            NoticeRow("Buying is OFF (${buyGuard.offLabel})$why. Exits keep running. Tap BUY to turn it on.", c.down, c.downContainer)
+        }
         if (hasRisk) {
             NoticeRow("Risk halt: ${bot.riskHalt}", c.warn, c.warnContainer)
         } else if (bot.killSwitch) {
@@ -612,6 +623,31 @@ fun EngineNotices(bot: BotState, live: LiveReadiness, modifier: Modifier = Modif
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
+        }
+    }
+}
+
+/** Buy switch: shows BUY ON while buying is allowed and a highlighted BUY OFF while it is switched off. One tap flips it. */
+@Composable
+private fun BuyButton(buysOn: Boolean, enabled: Boolean, onToggle: (Boolean) -> Unit, modifier: Modifier = Modifier) {
+    val c = Poly.colors
+    val container = if (buysOn) MaterialTheme.colorScheme.surfaceVariant else c.down
+    val content = if (buysOn) MaterialTheme.colorScheme.onSurfaceVariant else Color.White
+    Surface(
+        modifier = modifier
+            .size(width = 52.dp, height = 40.dp)
+            .toggleable(value = buysOn, enabled = enabled, role = Role.Switch, onValueChange = onToggle),
+        shape = RoundedCornerShape(12.dp),
+        color = container,
+        contentColor = content,
+    ) {
+        Column(
+            Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Text("BUY", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+            Text(if (buysOn) "ON" else "OFF", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -654,6 +690,8 @@ fun EngineControlsRow(
     onMode: (String) -> Unit,
     onKill: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
+    buysOn: Boolean = true,
+    onBuys: (Boolean) -> Unit = {},
 ) {
     val c = Poly.colors
     Row(
@@ -696,6 +734,7 @@ fun EngineControlsRow(
             }
         }
         ModeToggle(selected = bot.mode, enabled = !busy, onSelect = onMode, modifier = Modifier.weight(1.5f), compact = true)
+        BuyButton(buysOn = buysOn, enabled = !busy, onToggle = onBuys)
         KillButton(active = bot.killSwitch, enabled = !busy, onToggle = onKill)
     }
 }

@@ -701,6 +701,8 @@ class OrderManager:
         if ctx is not None:
             if ctx.kill_switch:
                 return False
+            if ctx.buys_blocked:
+                return False  # buying is switched off (buy guard tripped / operator): no top-ups either
             if config.max_daily_loss > 0 and ctx.daily_pnl <= -config.max_daily_loss + 1e-9:
                 return False
             if config.daily_profit_target > 0 and ctx.daily_pnl >= config.daily_profit_target - 1e-9:

@@ -129,6 +129,31 @@ Most used keys:
 
 Settings page overrides (stored in SQLite): trigger, stage 1, max price, trade amount, daily loss/target, stale age, duplicate/conflict policy, paper slippage/fee, trades per day, open positions. Secrets and live switches are environment-only.
 
+## Buy guards and Telegram
+
+Two volatility circuit breakers switch **all new buys off** (every stage). The bot keeps running: take-profit,
+stop-loss, settlement and market data are not affected, so open positions are still managed.
+
+| Guard | Trips when | Setting (.env / dashboard) |
+| --- | --- | --- |
+| BTC gap | BTC is `BUY_GUARD_GAP_USD` (default 500) or more above **or** below the current window's price to beat | `BUY_GUARD_GAP_USD`, 0 = off |
+| BTC trend | BTC moved `BUY_GUARD_TREND_USD` (default 1000) or more up **or** down over the last `BUY_GUARD_TREND_MARKETS` (default 3) windows, current one included | `BUY_GUARD_TREND_USD`, `BUY_GUARD_TREND_MARKETS` |
+
+Both use the official Chainlink TWAP60 series the markets settle on. The trend guard needs real BTC history that
+reaches back that far (kept in `data/btc_ticks.csv`); until it has it, it waits instead of guessing.
+
+When a guard trips, Telegram gets an alert with the reason, and buying **stays off until you turn it on**:
+
+* send `Buy` to the Telegram bot (`Stop` turns it off, `Status` shows where things stand), or
+* press **Buy ON** in the web dashboard top bar / the **BUY** button in the Android app.
+
+You decide when to resume: if you turn buying on while the gap is still large, it stays on. That guard stays quiet
+until BTC is back inside its limit, then re-arms. The switch is saved, so a restart does not silently turn buying back on.
+
+Telegram setup: create a bot with @BotFather, set `TELEGRAM_BOT_TOKEN`, send the bot one message, open
+`https://api.telegram.org/bot<TOKEN>/getUpdates`, and put `chat.id` into `TELEGRAM_CHAT_ID`. Only that chat can
+send commands; commands sent while the backend was down are ignored. API: `POST /api/buys {"enabled": true|false}`.
+
 ## Live trading
 
 Off by default, never enabled automatically. All of these are required:

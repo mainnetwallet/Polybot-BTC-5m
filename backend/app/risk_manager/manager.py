@@ -36,6 +36,9 @@ class RiskContext:
     # Sides whose open position in this market is nothing but a Stage 0 holding. Stage 0 manages and
     # sells its own shares, so they do not count against max_open_positions for stages 1-3.
     stage0_pure_sides: frozenset[str] = frozenset()
+    # Non-empty = new buys are switched off (a buy guard tripped or the operator turned buying off); the text
+    # says why. Exits (take-profit / stop-loss) never go through the risk manager, so they keep running.
+    buys_blocked: str = ""
 
 
 class RiskManager:
@@ -91,6 +94,8 @@ class RiskManager:
     def check(self, signal: Signal, ctx: RiskContext, config: RuntimeSettings) -> RiskDecision:
         if ctx.kill_switch:
             return RiskDecision(False, "kill_switch", "emergency kill switch is active")
+        if ctx.buys_blocked:
+            return RiskDecision(False, "buys_off", ctx.buys_blocked)
         if not ctx.market_active:
             return RiskDecision(False, "market_inactive", "market is no longer active")
         if ctx.market_expired or ctx.remaining_seconds <= 0:

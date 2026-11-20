@@ -93,6 +93,12 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ market_id: marketId }),
     }),
+  /** Turn NEW buys on/off (all stages). Exits, settlement and market data keep running. */
+  setBuys: (enabled: boolean) =>
+    request<Snapshot>("/api/buys", {
+      method: "POST",
+      body: JSON.stringify({ enabled }),
+    }),
   killSwitch: (active: boolean) =>
     request<Snapshot>("/api/kill-switch", {
       method: "POST",

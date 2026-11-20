@@ -102,6 +102,9 @@ object SettingsSpec {
         SettingField("max_trades_per_day", "Max trades / day", "Hard cap on submitted entries per day.", num(1.0, 10_000.0, true)),
         SettingField("max_open_positions", "Max open positions", "Maximum concurrent open positions in the active mode.", num(0.0, 100.0, true)),
         SettingField("sell_floor_tolerance_ticks", "Take-profit floor tolerance", "Sells are FAK (partial fills allowed). A take-profit sell accepts a fill this many ticks (0.01 each) under the take-profit price, so a small bid dip during order latency still fills. 0 = exact price. Default 1. Stop-loss is not affected.", num(0.0, 5.0, true, "ticks")),
+        SettingField("buy_guard_gap_usd", "BTC gap guard", "If BTC is this many USD (or more) above OR below the window's price to beat, ALL new buys switch off and Telegram is told. Exits keep running. Turn buying back on with Buy on Telegram or the BUY button. 0 = guard off.", num(0.0, 1_000_000.0, suffix = "USD")),
+        SettingField("buy_guard_trend_usd", "BTC trend guard", "If BTC moved this many USD (or more) up OR down over the last N markets, ALL new buys switch off and Telegram is told. 0 = guard off. Waits until BTC history reaches back N markets.", num(0.0, 1_000_000.0, suffix = "USD")),
+        SettingField("buy_guard_trend_markets", "Trend guard markets", "How many 5-minute markets the trend guard looks back over, the current one included (default 3, about 15 minutes).", num(1.0, 12.0, true)),
         SettingField("stale_data_max_age_ms", "Stale data cap", "Quotes older than this are rejected before an order is built.", num(100.0, 60_000.0, true, "ms")),
 
         SettingField("paper_slippage_bps", "Paper slippage", "Simulated adverse slippage applied to walked ask levels.", num(0.0, 5_000.0, suffix = "bps")),
@@ -174,6 +177,8 @@ object SettingsSpec {
             SettingGroup("Sizing", null, listOf("trade_amount_usdc", "max_execution_price")),
             SettingGroup("Daily limits", null, listOf("max_daily_loss", "daily_profit_target", "max_trades_per_day", "max_open_positions")),
             SettingGroup("Order handling", "Applies to every stage.", listOf("duplicate_policy", "conflict_policy", "sell_floor_tolerance_ticks")),
+            SettingGroup("Buy guards", "Volatility circuit breakers: when one trips, all new buys stop and Telegram sends an alert. Send Buy on Telegram (or tap BUY) to resume.",
+                listOf("buy_guard_gap_usd", "buy_guard_trend_usd", "buy_guard_trend_markets")),
             SettingGroup("Data quality", null, listOf("stale_data_max_age_ms")),
         )),
         SettingSection("paper", "Paper", listOf(

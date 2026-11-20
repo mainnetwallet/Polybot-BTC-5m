@@ -45,6 +45,8 @@ STALE_AFTER_MS = 10_000
 FIRST_TICK_TIMEOUT_SECONDS = 8.0  # no BTC tick this long after subscribing -> try the next subscription form
 TICK_SILENCE_RECONNECT_SECONDS = 15.0  # stream was alive but went quiet -> reconnect
 RTDS_OPEN_TOLERANCE_MS = 1_000  # max distance between the window start and the RTDS tick used as its open
+TREND_ANCHOR_TOLERANCE_MS = 3_000  # same lookup for the trend guard's older window starts (ticks are ~1/s)
+TREND_ANCHOR_RETRY_MS = 5_000  # a missing anchor tick (no history yet) is looked up again after this long
 TICK_HISTORY = 7_300  # ~2 hours of one-per-second TWAP ticks: window-start lookups and the dashboard candle history
 TICK_FLUSH_SECONDS = 5.0  # how often new ticks are appended to the history file
 OPEN_LOOKUP_RETRY_SECONDS = 1.0  # keeps asking until the official value is published
@@ -98,6 +100,9 @@ class BtcPriceFeed:
         # recent RTDS TWAP60 ticks (ts_ms, price) and the window-start values read from them
         self._ticks: deque[tuple[int, float]] = deque(maxlen=TICK_HISTORY)
         self._rtds_opens: dict[str, tuple[float, str]] = {}
+        # (market_id, markets) -> TWAP60 price at the start of the oldest of the last `markets` windows
+        self._trend_anchors: dict[tuple[str, int], float] = {}
+        self._trend_anchor_retry_at: dict[tuple[str, int], int] = {}
         self._http: httpx.AsyncClient | None = None
         # real ticks are also kept on disk so the dashboard's candle history survives a restart
         path = (settings.btc_tick_history_file or "").strip()
@@ -173,6 +178,42 @@ class BtcPriceFeed:
         if beat is None:
             return latest[1], None, "price to beat is not available yet"
         return latest[1], beat[0], ""
+
+    def trend_anchor(self, market: MarketInfo | None, markets: int) -> float | None:
+        """TWAP60 price at the start of the oldest of the last `markets` windows (this one included).
+
+        Feeds the trend guard: current price minus this = how far BTC moved over those windows. It comes
+        from the real RTDS ticks the feed has seen (kept on disk when BTC_TICK_HISTORY_FILE is set), never
+        from a guess: None when the history does not reach back that far yet. The result is cached per
+        market, and a miss is retried every few seconds, so calling this on every book event stays cheap.
+        """
+        if market is None or markets < 1:
+            return None
+        if markets == 1:
+            beat = self.price_to_beat(market)
+            return beat[0] if beat else None
+        key = (market.market_id, markets)
+        cached = self._trend_anchors.get(key)
+        if cached is not None:
+            return cached
+        now = _now_ms()
+        if now < self._trend_anchor_retry_at.get(key, 0):
+            return None
+        window_start_ms = int(market.window_start.replace(tzinfo=timezone.utc).timestamp() * 1000)
+        start_ms = window_start_ms - (markets - 1) * int(market.duration_seconds * 1000)
+        best: tuple[int, float] | None = None
+        for ts_ms, price in self._ticks:
+            if start_ms <= ts_ms <= start_ms + TREND_ANCHOR_TOLERANCE_MS and (best is None or ts_ms < best[0]):
+                best = (ts_ms, price)
+        if best is None:
+            self._trend_anchor_retry_at[key] = now + TREND_ANCHOR_RETRY_MS
+            while len(self._trend_anchor_retry_at) > 24:
+                self._trend_anchor_retry_at.pop(next(iter(self._trend_anchor_retry_at)))
+            return None
+        self._trend_anchors[key] = best[1]
+        while len(self._trend_anchors) > 24:
+            self._trend_anchors.pop(next(iter(self._trend_anchors)))
+        return best[1]
 
     def _load_history(self) -> None:
         """Read the ticks saved by earlier runs (real ones only, newest ~2 hours) and rewrite the file compactly."""

@@ -37,6 +37,24 @@ class ModelsParsingTest {
         assertFalse(s.live.ready)
     }
 
+    @Test fun buyGuardParsesAndDefaultsToBuyingOn() {
+        val idle = snapshot("state_idle.json")
+        assertNull(idle.buyGuard) // an older backend sends no buy_guard: the app treats buying as on
+
+        val guard = snapshot("state_market.json").buyGuard!!
+        assertFalse(guard.buysEnabled)
+        assertEquals("gap_guard", guard.offBy)
+        assertEquals("BTC gap too large", guard.offLabel)
+        assertEquals(500.0, guard.gapLimitUsd, 0.0)
+        assertEquals(732.5, guard.gapNowUsd!!, 1e-9)
+        assertEquals(1000.0, guard.trendLimitUsd, 0.0)
+        assertEquals(3, guard.trendMarkets)
+        assertNull(guard.trendNowUsd)
+        assertTrue(guard.telegramEnabled)
+        assertEquals("BTC trend too large", BuyGuardState(buysEnabled = false, offBy = "trend_guard").offLabel)
+        assertEquals("Buying turned off", BuyGuardState(buysEnabled = false, offBy = "manual").offLabel)
+    }
+
     @Test fun stateWithMarketAndBooksParses() {
         val s = snapshot("state_market.json")
         val market = s.market!!

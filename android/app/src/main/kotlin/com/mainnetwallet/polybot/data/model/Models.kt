@@ -256,6 +256,33 @@ data class ManualSellAll(
     val failed: List<FailedRow> = emptyList(),
 )
 
+/**
+ * Buy switch and volatility guards. Off = no NEW buys in any stage; take-profit, stop-loss and settlement keep
+ * running. [offBy] is "gap_guard", "trend_guard" or "manual" while buying is off.
+ */
+@Serializable
+data class BuyGuardState(
+    @SerialName("buys_enabled") val buysEnabled: Boolean = true,
+    @SerialName("off_by") val offBy: String? = null,
+    val reason: String? = null,
+    val since: String? = null,
+    @SerialName("gap_limit_usd") val gapLimitUsd: Double = 0.0,
+    @SerialName("gap_now_usd") val gapNowUsd: Double? = null,
+    @SerialName("trend_limit_usd") val trendLimitUsd: Double = 0.0,
+    @SerialName("trend_markets") val trendMarkets: Int = 3,
+    @SerialName("trend_now_usd") val trendNowUsd: Double? = null,
+    val disarmed: List<String> = emptyList(),
+    @SerialName("telegram_enabled") val telegramEnabled: Boolean = false,
+) {
+    /** Short label for the reason buying is off ("BTC gap", "BTC trend", "turned off"). */
+    val offLabel: String
+        get() = when (offBy) {
+            "gap_guard" -> "BTC gap too large"
+            "trend_guard" -> "BTC trend too large"
+            else -> "Buying turned off"
+        }
+}
+
 @Serializable
 data class Snapshot(
     @SerialName("server_time") val serverTime: String = "",
@@ -271,6 +298,7 @@ data class Snapshot(
     @SerialName("last_order") val lastOrder: LastOrder? = null,
     @SerialName("market_data") val marketData: MarketDataState = MarketDataState(),
     val btc: BtcState? = null,
+    @SerialName("buy_guard") val buyGuard: BuyGuardState? = null,
     val live: LiveReadiness = LiveReadiness(),
     val config: Map<String, JsonElement> = emptyMap(),
 )

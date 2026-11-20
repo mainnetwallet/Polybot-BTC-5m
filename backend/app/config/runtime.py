@@ -81,6 +81,9 @@ OVERRIDABLE_KEYS = (
     "stage3_mid_stop_loss_pct",
     "stage3_last_seconds",
     "stage3_last_seconds_stop_loss_pct",
+    "buy_guard_gap_usd",
+    "buy_guard_trend_usd",
+    "buy_guard_trend_markets",
 )
 
 
@@ -196,6 +199,12 @@ class RuntimeSettings(BaseModel):
     stage3_mid_stop_loss_pct: float = Field(default=0.0, ge=0.0, le=99.0)
     stage3_last_seconds: int = Field(default=10, ge=0, le=300)
     stage3_last_seconds_stop_loss_pct: float = Field(default=0.0, ge=0.0, le=99.0)
+    # Buy guards (see app/risk_manager/buy_guard.py): new buys switch off when BTC is this many USD above or
+    # below the window's price to beat (gap), or moved this many USD over the last N windows (trend). 0 = off.
+    # Off by default when a RuntimeSettings is built directly; the app's Settings (.env) sets 500 / 1000 / 3.
+    buy_guard_gap_usd: float = Field(default=0.0, ge=0.0, le=1_000_000.0)
+    buy_guard_trend_usd: float = Field(default=0.0, ge=0.0, le=1_000_000.0)
+    buy_guard_trend_markets: int = Field(default=3, ge=1, le=12)
     paper_fill_ratio: float = Field(gt=0.0, le=1.0)
     paper_fee_exponent: float = Field(ge=0.0, le=5.0)
     paper_starting_balance: float = Field(gt=0.0)

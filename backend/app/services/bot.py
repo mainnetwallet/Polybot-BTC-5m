@@ -15,7 +15,7 @@ from sqlalchemy import select
 from app import clock
 from app.config.runtime import SettingsService
 from app.config.settings import Settings
-from app.database.models import AppState, Market, Order, Position, TriggerEvent, utcnow
+from app.database.models import AppState, BotSetting, Market, Order, Position, TriggerEvent, utcnow
 from app.database.session import session_scope
 from app.execution.base import ExecutionEngine
 from app.live_trading.engine import LiveExecutionEngine, LiveTradingUnavailable
@@ -28,8 +28,10 @@ from app.order_manager.manager import EXIT_STAGES, SELL_DUST, OrderManager, _flo
 from app.paper_trading.engine import PaperExecutionEngine
 from app.portfolio.analytics import AnalyticsService
 from app.portfolio.service import Portfolio
+from app.risk_manager import buy_guard
 from app.risk_manager.manager import RiskContext, RiskManager
 from app.services.order_outcomes import sell_outcomes
+from app.services.telegram import TelegramService
 from app.strategy.engine import Stage1Strategy
 from app.strategy.types import StrategyEvaluation
 
@@ -37,6 +39,11 @@ logger = logging.getLogger(__name__)
 
 
 RESET_SERVER_PHRASE = "RESET ALL"
+BUYS_STATE_KEY = "buys_state"  # bot_settings row holding the persisted buy on/off switch
+GUARD_TITLES = {
+    buy_guard.GAP_GUARD: "BTC gap too large",
+    buy_guard.TREND_GUARD: "BTC trend too large",
+}
 
 def evaluation_market_id(evaluation: StrategyEvaluation) -> str:
     return evaluation.signals[0].market_id if evaluation.signals else ""
@@ -131,6 +138,16 @@ class TradingBot:
         # market_id -> {"attempts": int, "next_at": monotonic seconds}
         self._redeem_queue: dict[str, dict] = {}
         self._redeem_notice_logged: set[str] = set()
+        # Buy switch. Off = no NEW buys in any stage; exits, settlement and market data keep running.
+        # Tripped by a buy guard (gap / trend) or turned off by the operator; only the operator turns it on again.
+        self._buys_off = False
+        self._buys_off_by = ""  # buy_guard.GAP_GUARD | TREND_GUARD | "manual"
+        self._buys_off_reason = ""
+        self._buys_off_since: datetime | None = None
+        # Guards the operator switched buying back on over: they stay quiet until their condition clears
+        # (then they re-arm), so "Buy" is not undone a moment later by the very condition the operator accepted.
+        self._guard_disarmed: set[str] = set()
+        self.telegram = TelegramService(settings, self._on_telegram_command)
 
     @property
     def status(self) -> str:
@@ -179,6 +196,7 @@ class TradingBot:
                 session.add(state)
             self._mode = state.mode if state.mode in {"paper", "live"} else "paper"
             self._kill_switch = bool(state.kill_switch)
+            self._load_buys_state(session)
             self._status = "STOPPED"
             self._started_at = None
             self._market = None
@@ -217,6 +235,7 @@ class TradingBot:
         await self.btc.start()
         await self.monitor.start()
         self.logs.start()
+        await self.telegram.start()
         self._tasks = [
             asyncio.create_task(self._state_broadcast_loop(), name="state-broadcast"),
             asyncio.create_task(self._maintenance_loop(), name="maintenance"),
@@ -259,6 +278,7 @@ class TradingBot:
                 await task
             except asyncio.CancelledError:
                 pass
+        await self.telegram.stop()
         await self.monitor.stop()
         await self.data.stop()
         await self.btc.stop()
@@ -467,6 +487,8 @@ class TradingBot:
             # BTC price / price to beat are read here on the event loop: the feed's tick buffer is
             # written by the websocket task, so it must not be iterated from the database thread.
             gap_inputs = self.btc.gap_inputs(market)
+            # A buy guard must trip BEFORE this pass can buy: the risk context below carries the switch.
+            self._check_buy_guards(market, config, gap_inputs)
         if evaluation.signals:
             evaluation = self._prefilter_stage0(evaluation, gap_inputs, config)
         if evaluation.signals or topup_pending:
@@ -660,6 +682,7 @@ class TradingBot:
             price_gap_issue=gap_issue,
             stage1_bought=stage1_bought,
             stage0_pure_sides=stage0_pure_sides,
+            buys_blocked=self._buys_block_reason(),
         )
 
     def _balance(self, session) -> float:
@@ -730,6 +753,232 @@ class TradingBot:
         self._background_pushes.add(task)
         task.add_done_callback(self._background_pushes.discard)
         return snapshot
+
+    # ------------------------------------------------------------------
+    # Buy switch and buy guards
+    # ------------------------------------------------------------------
+    def _load_buys_state(self, session) -> None:
+        row = session.get(BotSetting, BUYS_STATE_KEY)
+        value = row.value if row is not None and isinstance(row.value, dict) else {}
+        self._buys_off = bool(value.get("off", False))
+        self._buys_off_by = str(value.get("by") or "") if self._buys_off else ""
+        self._buys_off_reason = str(value.get("reason") or "") if self._buys_off else ""
+        since = value.get("since")
+        try:
+            self._buys_off_since = datetime.fromisoformat(str(since).replace("Z", "+00:00")).replace(tzinfo=None) if (self._buys_off and since) else None
+        except ValueError:
+            self._buys_off_since = None
+        self._guard_disarmed = set()
+
+    def _persist_buys_state(self) -> None:
+        """Save the switch so a restart keeps buying off (a restart must never silently switch buys back on)."""
+        value = {
+            "off": self._buys_off,
+            "by": self._buys_off_by,
+            "reason": self._buys_off_reason,
+            "since": iso_z(self._buys_off_since),
+        }
+        try:
+            with session_scope() as session:
+                row = session.get(BotSetting, BUYS_STATE_KEY)
+                if row is None:
+                    session.add(BotSetting(key=BUYS_STATE_KEY, value=value))
+                else:
+                    row.value = value
+        except Exception as exc:  # the in-memory switch already applies; never break trading over a failed save
+            logger.warning("buy switch not persisted: %s", exc)
+
+    def _buys_block_reason(self) -> str:
+        """Why new buys are off right now ('' = buying is on). Goes into the risk context."""
+        if not self._buys_off:
+            return ""
+        title = GUARD_TITLES.get(self._buys_off_by, "Buying turned off")
+        return f"{title}: {self._buys_off_reason}" if self._buys_off_reason else title
+
+    def _guard_readings(self, market: MarketInfo, config, gap_inputs: tuple | None = None):
+        """(tripped guards by code, BTC gap now, BTC move over the trend windows). None = no data."""
+        btc_price, price_to_beat, _issue = gap_inputs if gap_inputs is not None else self.btc.gap_inputs(market)
+        gap_now = btc_price - price_to_beat if btc_price is not None and price_to_beat is not None else None
+        trend_now = None
+        anchor = None
+        if config.buy_guard_trend_usd > 0 and btc_price is not None:
+            anchor = self.btc.trend_anchor(market, config.buy_guard_trend_markets)
+            if anchor is not None:
+                trend_now = btc_price - anchor
+        trips: dict[str, buy_guard.GuardTrip] = {}
+        gap = buy_guard.check_gap(btc_price, price_to_beat, config.buy_guard_gap_usd)
+        if gap is not None:
+            trips[gap.code] = gap
+        trend = buy_guard.check_trend(
+            btc_price, anchor, config.buy_guard_trend_usd, config.buy_guard_trend_markets
+        )
+        if trend is not None:
+            trips[trend.code] = trend
+        return trips, gap_now, trend_now
+
+    def _check_buy_guards(self, market: MarketInfo | None, config, gap_inputs: tuple | None = None) -> None:
+        """Switch buying off when a guard's limit is crossed. Only while running, only when buying is still on."""
+        if market is None or self._status != "RUNNING":
+            return
+        try:
+            trips, gap_now, trend_now = self._guard_readings(market, config, gap_inputs)
+        except Exception as exc:  # a guard bug must never stop the trading loop
+            logger.exception("buy guard check failed")
+            self.logs.log("ERROR", "error", f"buy guard check failed: {exc}", mode=self._mode)
+            return
+        # a guard the operator switched on over re-arms once its condition is gone (and only when it can be measured)
+        if buy_guard.GAP_GUARD not in trips and gap_now is not None:
+            self._guard_disarmed.discard(buy_guard.GAP_GUARD)
+        if buy_guard.TREND_GUARD not in trips and trend_now is not None:
+            self._guard_disarmed.discard(buy_guard.TREND_GUARD)
+        if self._buys_off:
+            return
+        for code in (buy_guard.GAP_GUARD, buy_guard.TREND_GUARD):
+            trip = trips.get(code)
+            if trip is not None and code not in self._guard_disarmed:
+                self._trip_buy_guard(trip)
+                return
+
+    def _trip_buy_guard(self, trip: buy_guard.GuardTrip) -> None:
+        self._buys_off = True
+        self._buys_off_by = trip.code
+        self._buys_off_reason = trip.message
+        self._buys_off_since = utcnow()
+        self._persist_buys_state()
+        title = GUARD_TITLES.get(trip.code, trip.code)
+        self.logs.log(
+            "CRITICAL",
+            "risk",
+            f"BUYING OFF: {title}. {trip.message}",
+            payload={"guard": trip.code, "move_usd": round(trip.value, 2), "limit_usd": trip.limit},
+            mode=self._mode,
+        )
+        self._notify_telegram(
+            f"\U0001F6D1 BUYING STOPPED: {title}\n"
+            f"{trip.message}\n\n"
+            "No new buys in any stage. The bot keeps running: open positions keep their take-profit / "
+            "stop-loss and settle normally.\n"
+            'Send "Buy" here to turn buying back on (or use the dashboard / app).'
+        )
+        self._schedule_broadcast()
+
+    def _schedule_broadcast(self) -> None:
+        """Push the new state to open dashboards from sync code (a guard trip runs inside the trading path)."""
+        try:
+            task = asyncio.get_running_loop().create_task(self._broadcast_state())
+        except RuntimeError:
+            return
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
+
+    def _notify_telegram(self, text: str) -> None:
+        if not self.telegram.enabled:
+            return
+        try:
+            task = asyncio.get_running_loop().create_task(self.telegram.send(text))
+        except RuntimeError:
+            return
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
+
+    async def _change_buys(self, enabled: bool, source: str) -> bool:
+        """Turn buying on/off. Returns True when the state actually changed."""
+        changed = False
+        if enabled:
+            if self._buys_off:
+                market = self._market
+                if market is not None:
+                    try:
+                        trips, _gap, _trend = self._guard_readings(market, self.runtime.get())
+                        # the operator accepts today's conditions: these guards stay quiet until they clear
+                        self._guard_disarmed.update(trips)
+                    except Exception:
+                        logger.exception("buy guard disarm failed")
+                self._buys_off = False
+                self._buys_off_by = ""
+                self._buys_off_reason = ""
+                self._buys_off_since = None
+                changed = True
+        elif not self._buys_off:
+            self._buys_off = True
+            self._buys_off_by = "manual"
+            self._buys_off_reason = f"turned off by {source}"
+            self._buys_off_since = utcnow()
+            changed = True
+        if changed:
+            self._persist_buys_state()
+            self.orders.reset_trigger_cache()
+            self.logs.log(
+                "WARNING",
+                "risk",
+                f"buying turned {'ON' if enabled else 'OFF'} by {source}",
+                payload={"enabled": enabled, "source": source},
+                mode=self._mode,
+            )
+            if source != "telegram":
+                self._notify_telegram(
+                    f"{'✅ Buying turned ON' if enabled else '⛔ Buying turned OFF'} from {source}."
+                )
+            await self._broadcast_state()
+        return changed
+
+    async def set_buys(self, enabled: bool, source: str = "dashboard") -> dict:
+        await self._change_buys(enabled, source)
+        return await self.snapshot()
+
+    def buy_guard_status(self, market: MarketInfo | None, config) -> dict:
+        gap_now = trend_now = None
+        if market is not None:
+            try:
+                _trips, gap_now, trend_now = self._guard_readings(market, config)
+            except Exception:
+                logger.debug("buy guard readings failed", exc_info=True)
+        return {
+            "buys_enabled": not self._buys_off,
+            "off_by": self._buys_off_by or None,
+            "reason": self._buys_off_reason or None,
+            "since": iso_z(self._buys_off_since),
+            "gap_limit_usd": config.buy_guard_gap_usd,
+            "gap_now_usd": None if gap_now is None else round(gap_now, 2),
+            "trend_limit_usd": config.buy_guard_trend_usd,
+            "trend_markets": config.buy_guard_trend_markets,
+            "trend_now_usd": None if trend_now is None else round(trend_now, 2),
+            "disarmed": sorted(self._guard_disarmed),
+            "telegram_enabled": self.telegram.enabled,
+        }
+
+    async def _on_telegram_command(self, command: str) -> str | None:
+        """Plain-text commands from the owner's Telegram chat: Buy / Stop / Status."""
+        if command == "buy":
+            changed = await self._change_buys(True, "telegram")
+            text = "✅ Buying is ON." if changed else "Buying was already ON."
+            if self._kill_switch:
+                text += " The kill switch is active, so nothing buys until it is cleared."
+            elif self._status != "RUNNING":
+                text += " The bot itself is STOPPED: start it from the dashboard / app."
+            if changed:
+                text += " The guard that stopped buying stays quiet until BTC is back inside its limit."
+            return text
+        if command == "stop":
+            changed = await self._change_buys(False, "telegram")
+            if changed:
+                return '⛔ Buying is OFF. Exits keep running. Send "Buy" to turn it on again.'
+            return f'Buying was already OFF ({self._buys_block_reason()}). Send "Buy" to turn it on.'
+        if command == "status":
+            status = self.buy_guard_status(self._market, self.runtime.get())
+            lines = [
+                f"Bot: {self._status} ({self._mode})",
+                "Buying: ON" if status["buys_enabled"] else f"Buying: OFF - {self._buys_block_reason()}",
+            ]
+            if status["gap_now_usd"] is not None:
+                lines.append(f"BTC vs price to beat: {status['gap_now_usd']:+,.2f} USD (limit {status['gap_limit_usd']:,.0f})")
+            if status["trend_now_usd"] is not None:
+                lines.append(
+                    f"BTC over last {status['trend_markets']} markets: {status['trend_now_usd']:+,.2f} USD "
+                    f"(limit {status['trend_limit_usd']:,.0f})"
+                )
+            return "\n".join(lines)
+        return None
 
     # ------------------------------------------------------------------
     async def start_bot(self, confirm_live: bool = False, confirmation_phrase: str = "") -> dict:
@@ -858,6 +1107,12 @@ class TradingBot:
             self._redeem_queue.clear()
             self._redeem_notice_logged.clear()
             self._risk_halt_reason = None
+            self._buys_off = False
+            self._buys_off_by = ""
+            self._buys_off_reason = ""
+            self._buys_off_since = None
+            self._guard_disarmed = set()
+            self._persist_buys_state()
             self.orders.reset_trigger_cache()
             self.logs.log(
                 "WARNING",
@@ -1152,6 +1407,10 @@ class TradingBot:
             # Reconciling only costs a REST call per order that is still open.
             await asyncio.sleep(1.0)
             try:
+                # Guards are also judged once a second with no signal needed, so the Telegram alert goes out
+                # as soon as BTC crosses a limit, not only when a buy happens to be attempted.
+                if self._status == "RUNNING" and self._market is not None:
+                    self._check_buy_guards(self._market, self.runtime.get())
                 await self._expire_market_if_due()
                 now = time.monotonic()
                 if now - self._last_resolution_poll >= self.settings.resolution_poll_seconds:
@@ -1811,6 +2070,7 @@ class TradingBot:
             "last_order": self._last_order,
             "market_data": self.data.status,
             "btc": self.btc.snapshot(market),
+            "buy_guard": self.buy_guard_status(market, config),
             "live": self.live_readiness(),
             "config": {
                 **config.to_public_dict(),

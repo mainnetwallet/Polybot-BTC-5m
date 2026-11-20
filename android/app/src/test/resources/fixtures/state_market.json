@@ -138,6 +138,19 @@
   "ws_mode": 0,
   "price_to_beat_error": null
  },
+ "buy_guard": {
+  "buys_enabled": false,
+  "off_by": "gap_guard",
+  "reason": "BTC 100,732.50 is 732.50 USD above the price to beat 100,000.00 (limit 500 USD)",
+  "since": "2026-11-15T03:09:30.000000Z",
+  "gap_limit_usd": 500.0,
+  "gap_now_usd": 732.5,
+  "trend_limit_usd": 1000.0,
+  "trend_markets": 3,
+  "trend_now_usd": null,
+  "disarmed": [],
+  "telegram_enabled": true
+ },
  "live": {
   "live_enabled": false,
   "geo_verified": false,

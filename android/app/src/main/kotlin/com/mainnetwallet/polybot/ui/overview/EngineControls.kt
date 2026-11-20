@@ -29,6 +29,7 @@ fun EngineControls(modifier: Modifier = Modifier) {
     val ui = LocalUi.current
     val repo = graph.repository
     val botState by repo.snapshot.collectSelectedAsState { it?.bot }
+    val buysOn by repo.snapshot.collectSelectedAsState { it?.buyGuard?.buysEnabled ?: true }
     val scope = rememberCoroutineScope()
 
     var busy by remember { mutableStateOf(false) }
@@ -66,6 +67,12 @@ fun EngineControls(modifier: Modifier = Modifier) {
             ui.tap()
             // Engaging is one tap on purpose (it is the emergency stop); clearing asks first.
             if (active) perform { repo.killSwitch(true) } else dialog = EngineDialog.ClearKill
+        },
+        buysOn = buysOn,
+        // One tap either way: switching buying off is a safety action, and switching it on is the operator's call.
+        onBuys = { enabled ->
+            ui.tap()
+            perform { repo.setBuys(enabled) }
         },
         modifier = modifier.fillMaxWidth(),
     )

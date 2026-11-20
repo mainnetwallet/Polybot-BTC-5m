@@ -195,6 +195,24 @@ export interface BtcState {
   price_to_beat_error?: string | null;
 }
 
+/** Buy switch + volatility guards. Off = no NEW buys in any stage; exits and settlement keep running. */
+export interface BuyGuardState {
+  buys_enabled: boolean;
+  /** "gap_guard" | "trend_guard" | "manual" while buying is off */
+  off_by: string | null;
+  reason: string | null;
+  since: string | null;
+  gap_limit_usd: number;
+  /** BTC minus the price to beat right now (signed), null without data */
+  gap_now_usd: number | null;
+  trend_limit_usd: number;
+  trend_markets: number;
+  /** BTC move over the last trend_markets windows (signed), null until enough history */
+  trend_now_usd: number | null;
+  disarmed: string[];
+  telegram_enabled: boolean;
+}
+
 export interface Snapshot {
   server_time: string;
   bot: {
@@ -225,6 +243,7 @@ export interface Snapshot {
     last_error: string | null;
   };
   btc?: BtcState;
+  buy_guard?: BuyGuardState;
   live: LiveReadiness;
   config: Record<string, number | string | boolean | null>;
 }
@@ -296,6 +315,9 @@ export interface SettingsState {
   min_price_gap_usd: number;
   stage2_min_price_gap_usd: number;
   stage3_min_price_gap_usd: number;
+  buy_guard_gap_usd: number;
+  buy_guard_trend_usd: number;
+  buy_guard_trend_markets: number;
   stage0_enabled: boolean;
   stage0_start_seconds: number;
   stage0_end_seconds: number;

@@ -336,6 +336,12 @@ class BotRepository(
     suspend fun killSwitch(active: Boolean): ActionResult =
         act({ if (active) "Kill switch engaged. Bot stopped." else "Kill switch cleared." }) { api.killSwitch(active) }
 
+    suspend fun setBuys(enabled: Boolean): ActionResult =
+        act({
+            if (enabled) "Buying is ON. New buys are allowed again."
+            else "Buying is OFF. Take-profit, stop-loss and settlement keep running."
+        }) { api.setBuys(enabled) }
+
     suspend fun sellNow(marketId: String, side: String, stage: Int): ActionResult {
         val result = act({ "Stage $stage $side shares sold at the market." }) { api.sellNow(marketId, side, stage) }
         if (!result.ok) refresh()

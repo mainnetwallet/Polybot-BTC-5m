@@ -20,6 +20,10 @@ class KillSwitchRequest(BaseModel):
     active: bool
 
 
+class BuysRequest(BaseModel):
+    enabled: bool
+
+
 class ResetPaperRequest(BaseModel):
     balance: float = Field(gt=0, le=100000)
     confirm: bool = False
@@ -114,6 +118,9 @@ class SettingsPatch(BaseModel):
     stage3_mid_stop_loss_pct: float | None = Field(default=None, ge=0, le=99)
     stage3_last_seconds: int | None = Field(default=None, ge=0, le=300)
     stage3_last_seconds_stop_loss_pct: float | None = Field(default=None, ge=0, le=99)
+    buy_guard_gap_usd: float | None = Field(default=None, ge=0, le=1_000_000)
+    buy_guard_trend_usd: float | None = Field(default=None, ge=0, le=1_000_000)
+    buy_guard_trend_markets: int | None = Field(default=None, ge=1, le=12)
 
     def changes(self) -> dict:
         return {k: v for k, v in self.model_dump().items() if v is not None}

@@ -30,7 +30,7 @@ function Pill({ tone, label, value, title }: { tone: "up" | "amber" | "down" | "
 }
 
 export function Topbar({ page, onNavigate, onOpenMode, onStartLive, onOpenKill }: TopbarProps) {
-  const { snapshot, feedState, start, stop, killSwitch: setKillSwitch, clockOffsetMs } = useBot();
+  const { snapshot, feedState, start, stop, killSwitch: setKillSwitch, setBuys, clockOffsetMs } = useBot();
   const { authRequired, username, logout } = useAuth();
   const meta = PAGE_META[page];
   const bot = snapshot?.bot;
@@ -38,6 +38,8 @@ export function Topbar({ page, onNavigate, onOpenMode, onStartLive, onOpenKill }
   const killActive = bot ? bot.kill_switch : null;
   const mode = bot?.mode;
   const live = mode === "live";
+  const guard = snapshot?.buy_guard;
+  const buysOn = guard ? guard.buys_enabled : null;
 
   const market = snapshot?.market ?? null;
   const btc = snapshot?.btc;
@@ -123,12 +125,39 @@ export function Topbar({ page, onNavigate, onOpenMode, onStartLive, onOpenKill }
         <div className="flex w-full flex-wrap items-center gap-2 xl:ml-auto xl:w-auto xl:shrink-0 xl:flex-nowrap">
           <div className="flex w-full flex-wrap items-center gap-2 xl:w-auto xl:flex-nowrap">{pills}</div>
 
+          {buysOn === false ? (
+            <span
+              className="chip border-down/35 bg-down/10 text-down"
+              title={guard?.reason ?? "New buys are switched off"}
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-down" aria-hidden="true" />
+              Buying off
+              {guard?.off_by === "gap_guard" ? " · BTC gap" : guard?.off_by === "trend_guard" ? " · BTC trend" : ""}
+            </span>
+          ) : null}
+
           {killActive ? (
             <span className="chip border-down/35 bg-down/10 text-down">
               <span className="h-1.5 w-1.5 rounded-full bg-down" aria-hidden="true" />
               Kill switch on
             </span>
           ) : null}
+
+          <button
+            type="button"
+            onClick={() => void setBuys(!buysOn)}
+            disabled={buysOn === null}
+            className={cx("btn h-10", buysOn === false ? "btn-primary" : "btn-ghost")}
+            title={
+              buysOn === false
+                ? `Buying is off${guard?.reason ? `: ${guard.reason}` : ""}. Click to turn it on (the same as sending "Buy" on Telegram).`
+                : "Turn off all new buys. Take-profit, stop-loss and settlement keep running."
+            }
+            aria-label={buysOn === false ? "Turn buying on" : "Turn buying off"}
+          >
+            <IconZap size={13} />
+            <span>{buysOn === false ? "Buy ON" : "Buy OFF"}</span>
+          </button>
 
           {running ? (
             <button type="button" onClick={() => void stop()} className="btn btn-stop h-10">

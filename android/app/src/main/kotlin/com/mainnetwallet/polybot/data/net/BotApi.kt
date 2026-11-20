@@ -66,6 +66,10 @@ class BotApi(private val client: ApiClient) {
     suspend fun killSwitch(active: Boolean): Snapshot =
         call("POST", "/api/kill-switch", Snapshot.serializer(), buildJsonObject { put("active", active) })
 
+    /** Turn NEW buys on/off for every stage. Exits and settlement are not affected. */
+    suspend fun setBuys(enabled: Boolean): Snapshot =
+        call("POST", "/api/buys", Snapshot.serializer(), buildJsonObject { put("enabled", enabled) })
+
     suspend fun sellNow(marketId: String, side: String, stage: Int): Snapshot =
         call(
             "POST", "/api/orders/sell", Snapshot.serializer(),

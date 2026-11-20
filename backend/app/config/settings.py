@@ -221,6 +221,24 @@ class Settings(BaseSettings):
     daily_limit_include_unrealized: bool = False
     max_trades_per_day: int = 600
 
+    # --- buy guards (volatility circuit breakers) -------------------------
+    # Both guards only switch off NEW buys (every stage); exits (take-profit / stop-loss), settlement and
+    # market monitoring keep running. A tripped guard stays off until the operator sends "Buy" on Telegram
+    # or turns buying on in the web dashboard / Android app.
+    # Gap guard: BTC is this many USD (or more) above OR below the current window's price to beat. 0 = off.
+    buy_guard_gap_usd: float = 500.0
+    # Trend guard: BTC moved this many USD (or more) up OR down over the last `buy_guard_trend_markets`
+    # 5-minute windows (current window included), measured from the price to beat of the oldest of them. 0 = off.
+    buy_guard_trend_usd: float = 1000.0
+    buy_guard_trend_markets: int = Field(default=3, ge=1, le=12)
+
+    # --- telegram -------------------------------------------------------
+    # Alerts go to TELEGRAM_CHAT_ID; messages from that chat only ("Buy" / "Stop" / "Status") control buying.
+    # Create the bot with @BotFather, send it one message, then read your chat id from
+    # https://api.telegram.org/bot<token>/getUpdates. Either value empty = Telegram off.
+    telegram_bot_token: str = ""
+    telegram_chat_id: str = ""
+
     # --- paper ----------------------------------------------------------
     paper_starting_balance: float = 100.0
     paper_fill_ratio: float = 1.0
@@ -283,6 +301,10 @@ class Settings(BaseSettings):
     @property
     def live_credentials_present(self) -> bool:
         return bool(self.polymarket_private_key.strip())
+
+    @property
+    def telegram_enabled(self) -> bool:
+        return bool(self.telegram_bot_token.strip() and self.telegram_chat_id.strip())
 
 
 @lru_cache
