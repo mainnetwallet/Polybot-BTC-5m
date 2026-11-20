@@ -196,10 +196,6 @@ export function BtcTapeCard({ orders, className }: { orders: OrderRow[]; classNa
                   : `${tape.candles.length} candles from ${fmtHms(firstTick)}. Drag the chart to see older ones`
                 : "Waiting for the first price"}
             </span>
-            <span className="flex items-center gap-1.5">
-              <span className="inline-block h-0 w-0 border-x-[5px] border-b-[8px] border-x-transparent border-b-slate-400" aria-hidden="true" />
-              Triangles mark buys: stage colors, cyan = one-tap
-            </span>
           </div>
         </div>
         </div>

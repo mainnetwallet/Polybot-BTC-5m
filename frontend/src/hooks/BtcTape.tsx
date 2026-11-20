@@ -13,6 +13,8 @@ export const CANDLE_MS = 5000;
 const MAX_TICKS = 7300; // about 2 hours of one-per-second ticks
 const MIN_TICK_GAP_MS = 250; // two ticks closer than this are the same published price
 const STORAGE_KEY = "polybot.btcTicks.v2";
+const KEEP_CANDLES = 300; // after a cleanup this many 5 s candles stay
+const MAX_CANDLES = 400; // once the history grows to this many, the oldest (MAX - KEEP = 100) are deleted
 
 export interface BtcTick {
   /** when the price was published, on the server clock (ms) */
@@ -45,10 +47,25 @@ function readStored(): BtcTick[] {
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
     const cutoff = Date.now() - 125 * 60_000;
-    return parsed.filter(isTick).filter((row) => row.t > cutoff).slice(-MAX_TICKS);
+    return capCandles(parsed.filter(isTick).filter((row) => row.t > cutoff).slice(-MAX_TICKS));
   } catch {
     return [];
   }
+}
+
+/** Keeps 300 candles: waits until there are 400, then drops the oldest 100 (whole 5 s candles, never half of one). */
+function capCandles(ticks: BtcTick[]): BtcTick[] {
+  const starts: number[] = [];
+  let lastBucket = -1;
+  for (let i = 0; i < ticks.length; i++) {
+    const bucket = Math.floor(ticks[i].t / CANDLE_MS);
+    if (bucket !== lastBucket) {
+      starts.push(i);
+      lastBucket = bucket;
+    }
+  }
+  if (starts.length < MAX_CANDLES) return ticks;
+  return ticks.slice(starts[starts.length - KEEP_CANDLES]);
 }
 
 /** Sorted by time, one tick per published price. */
@@ -63,7 +80,7 @@ function mergeTicks(a: BtcTick[], b: BtcTick[]): BtcTick[] {
     }
     out.push(tick);
   }
-  return out.length > MAX_TICKS ? out.slice(out.length - MAX_TICKS) : out;
+  return capCandles(out.length > MAX_TICKS ? out.slice(out.length - MAX_TICKS) : out);
 }
 
 export function BtcTapeProvider({ children }: { children: ReactNode }) {
