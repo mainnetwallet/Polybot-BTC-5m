@@ -91,11 +91,11 @@ export function TapBuyPanel({ className }: { className?: string }) {
       <header className="tap-head">
         <div className="tap-title">
           <span className="tap-bolt" aria-hidden="true">⚡</span>
-          One-tap buy
+          <span className="tap-name">One-tap buy</span>
           {live ? <span className="tap-live">LIVE</span> : <span className="tap-paper">PAPER</span>}
         </div>
         <div className="tap-sub">
-          <span>{fmtUsdGrouped(snapshot.account.balance)} cash</span>
+          <span className="tap-cash" title="Cash available">{fmtUsdGrouped(snapshot.account.balance)}</span>
           <button type="button" className="tap-edit" onClick={editing ? () => setEditing(false) : beginEdit}>
             {editing ? "Cancel" : "Edit"}
           </button>
@@ -125,17 +125,15 @@ export function TapBuyPanel({ className }: { className?: string }) {
           </button>
         </div>
       ) : (
-        <div className="tap-cols">
+        <div className="tap-grid">
           {(["UP", "DOWN"] as const).map((side) => {
             const { ask, old } = sideInfo(side);
             const noAsk = !isNum(ask);
             return (
-              <div key={side} className={cx("tap-col", side === "UP" ? "tap-up" : "tap-down")}>
-                <div className="tap-side">
+              <div key={side} className={cx("tap-row", side === "UP" ? "tap-up" : "tap-down")}>
+                <div className="tap-side" title={old ? "Order book is out of date" : "Best ask"}>
                   <span>{side === "UP" ? "Up" : "Down"}</span>
-                  <b className={old ? "tap-old" : undefined} title={old ? "Order book is out of date" : "Best ask"}>
-                    {noAsk ? "--" : cents(ask)}
-                  </b>
+                  <b className={old ? "tap-old" : undefined}>{noAsk ? "--" : cents(ask)}</b>
                 </div>
                 {amounts.map((amount) => {
                   const key = `${side}:${amount}`;
@@ -161,7 +159,7 @@ export function TapBuyPanel({ className }: { className?: string }) {
       )}
 
       <p className={cx("tap-note", blocked && "is-warn")}>
-        {blocked ?? "One click = one buy. Held to settlement or sold by hand: no take profit, no stop loss."}
+        {blocked ?? "One click = one buy · no take profit or stop loss"}
       </p>
     </section>
   );

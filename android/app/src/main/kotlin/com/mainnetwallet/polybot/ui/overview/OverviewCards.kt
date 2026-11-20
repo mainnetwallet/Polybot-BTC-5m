@@ -886,7 +886,7 @@ fun PositionBoxCard(
                     horizontalArrangement = Arrangement.spacedBy(Space.sm),
                 ) {
                     SidePill(p.side)
-                    if (isTap) Pill("ONE-TAP", Poly.colors.up, Poly.colors.upContainer)
+                    if (isTap) Pill("ONE-TAP", Poly.colors.info, Poly.colors.info.copy(alpha = 0.16f))
                     Text(
                         "${Fmt.num(p.size, 2)} sh",
                         style = Mono.small,

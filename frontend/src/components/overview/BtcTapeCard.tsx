@@ -41,6 +41,8 @@ export function BtcTapeCard({ orders, className }: { orders: OrderRow[]; classNa
   const start = Number.isFinite(startMs) ? startMs : null;
   const end = Number.isFinite(endMs) ? endMs : null;
   const [tfId, setTfId] = useState<TimeframeId>(readTimeframe);
+  // one-screen layout only: the two order books open over the chart (the tap panel keeps the right column)
+  const [showBook, setShowBook] = useState(false);
   const tf = TIMEFRAMES.find((item) => item.id === tfId) ?? TIMEFRAMES[0];
   const historyStart = start !== null ? start - HISTORY_ROUNDS * ROUND_MS : null;
   const tape = useBtcCandles(historyStart, end, tf.candleMs);
@@ -108,6 +110,15 @@ export function BtcTapeCard({ orders, className }: { orders: OrderRow[]; classNa
       className={cx("cq", className)}
       right={
         <span className="flex items-center gap-2">
+          <button
+            type="button"
+            className="tape-book-toggle"
+            aria-pressed={showBook}
+            onClick={() => setShowBook((open) => !open)}
+            title="Show the Up and Down order books"
+          >
+            Book
+          </button>
           <span className="inline-flex gap-0.5 rounded-lg border hairline bg-black/15 p-0.5" role="group" aria-label="Candle length">
             {TIMEFRAMES.map((item) => (
               <button
@@ -200,6 +211,12 @@ export function BtcTapeCard({ orders, className }: { orders: OrderRow[]; classNa
             <BookLadder compact side="DOWN" book={snapshot.books.down} maxSize={maxSize} history={history.down} staleAfterMs={stale} />
           </div>
         </div>
+        {showBook ? (
+          <div className="tape-book-pop">
+            <BookLadder compact side="UP" book={snapshot.books.up} maxSize={maxSize} history={history.up} staleAfterMs={stale} />
+            <BookLadder compact side="DOWN" book={snapshot.books.down} maxSize={maxSize} history={history.down} staleAfterMs={stale} />
+          </div>
+        ) : null}
       </div>
     </Card>
   );

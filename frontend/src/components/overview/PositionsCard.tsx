@@ -199,7 +199,7 @@ export function PositionsCard({ orders, className }: { orders: OrderRow[]; class
             hint="Filled buys of the live market appear here, one row per stage (and one-tap), with their take profit and stop loss."
           />
         ) : (
-          <ul className="divide-y divide-white/[0.06]">
+          <ul className="pos-list divide-y divide-white/[0.06]">
             {rows.map((row) => {
               const stage = row.tap || row.stage === null ? null : (Math.min(3, Math.max(0, row.stage)) as StageId);
               const tp = stage === null ? null : takeProfitPrice(stage, row.entry, strategy);
