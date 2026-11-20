@@ -54,7 +54,8 @@ interface BotContextValue {
   sellNow: (holding: SellableHolding) => Promise<ActionResult>;
   /** One-tap buy of `amount` USDC on `side` in the live market. A second tap within one second is ignored. */
   tapBuy: (side: Side, amount: number) => Promise<ActionResult>;
-  sellAll: (marketId: string) => Promise<ActionResult>;
+  /** "stages" = Sell all (strategy stages only), "tap" = Sell all tap (one-tap shares only) */
+  sellAll: (marketId: string, scope?: "stages" | "tap") => Promise<ActionResult>;
   resetPaper: (balance: number) => Promise<ActionResult>;
   resetDaily: () => Promise<ActionResult>;
   clearOrderHistory: () => Promise<ActionResult>;
@@ -493,9 +494,10 @@ export function BotProvider({ children }: { children: ReactNode }) {
 
   // Instant "sell all": every stage that holds shares in this market is sold at the market, no confirmation step.
   const sellAll = useCallback(
-    async (marketId: string): Promise<ActionResult> => {
+    async (marketId: string, scope: "stages" | "tap" = "stages"): Promise<ActionResult> => {
+      const what = scope === "tap" ? "one-tap position" : "stage";
       try {
-        const next = await api.sellAll(marketId);
+        const next = await api.sellAll(marketId, scope);
         applySnapshot(next);
         const failed = next.manual_sell_all?.failed ?? [];
         const sold = next.manual_sell_all?.sold ?? [];
@@ -506,12 +508,16 @@ export function BotProvider({ children }: { children: ReactNode }) {
             failed.map((f) => `${f.side}: ${f.message}`).join(" · "),
           );
         } else {
-          notify("success", "Sell all sent", `${sold.length} stage${sold.length === 1 ? "" : "s"} sold at the market.`);
+          notify(
+            "success",
+            scope === "tap" ? "Sell all tap sent" : "Sell all sent",
+            `${sold.length} ${what}${sold.length === 1 ? "" : "s"} sold at the market.`,
+          );
         }
         return { ok: true };
       } catch (error) {
         const message = describeError(error);
-        notify("error", "Sell all failed", message);
+        notify("error", scope === "tap" ? "Sell all tap failed" : "Sell all failed", message);
         void refresh();
         return { ok: false, error: message };
       }

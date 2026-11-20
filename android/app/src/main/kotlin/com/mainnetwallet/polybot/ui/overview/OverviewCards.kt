@@ -776,6 +776,9 @@ fun EngineControlsRow(
 /** Key used in the "selling" set while a Sell all request is on its way. */
 internal const val SELL_ALL_KEY = "__all__"
 
+/** Key used in the "selling" set while a Sell all tap request is on its way. */
+internal const val SELL_ALL_TAP_KEY = "__tap__"
+
 /** Key of one stage row in the "selling" set, used to block a second tap on the same row while its request is on the way. */
 internal fun sellKey(h: SellableHolding): String = "${h.marketId}:${h.side}:${h.stage}"
 
@@ -810,7 +813,7 @@ internal fun stagePct(entry: Double?, bid: Double?): String? {
 /**
  * Position box: what is held in the live market, one block per side (shares and total PnL) with one card per
  * stage under it: its shares, what it paid (Entry), the best Bid and its own live PnL (green gain, red loss),
- * and its own Sell button. Sell all is in the header.
+ * and its own Sell button. Sell all (strategy stages only) and Sell all tap (one-tap shares only) are in the header.
  * A tap sells at the market right away: there is no confirm dialog or sheet and no extra delay. `selling`
  * only disables a button while its own request is on the way, so a double tap cannot send it twice.
  */
@@ -824,6 +827,7 @@ fun PositionBoxCard(
     selling: Set<String>,
     onSell: (SellableHolding) -> Unit,
     onSellAll: (String) -> Unit,
+    onSellAllTap: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -836,11 +840,22 @@ fun PositionBoxCard(
             .sortedWith(compareBy<PositionRow>({ it.tag == "tap" }, { !it.side.equals("UP", ignoreCase = true) }))
     }
     val sellableHere = if (marketId == null) emptyList() else sellable.filter { it.marketId == marketId }
+    // "Sell all" = the strategy stages only; the one-tap shares have their own "Sell all tap" button
+    val stagesHere = sellableHere.filter { it.stage != TAP_STAGE }
+    val tapHere = sellableHere.filter { it.stage == TAP_STAGE }
     val sellingAll = SELL_ALL_KEY in selling
+    val sellingTap = SELL_ALL_TAP_KEY in selling
 
     CompactCard(modifier) {
         CardHeader("Position") {
-            if (marketId != null && sellableHere.isNotEmpty()) {
+            if (marketId != null && tapHere.isNotEmpty()) {
+                SellButton(
+                    label = if (sellingTap) "Selling\u2026" else "Sell all tap",
+                    enabled = !sellingTap,
+                    onClick = { onSellAllTap(marketId) },
+                )
+            }
+            if (marketId != null && stagesHere.isNotEmpty()) {
                 SellButton(
                     label = if (sellingAll) "Selling\u2026" else "Sell all",
                     enabled = !sellingAll,

@@ -143,6 +143,7 @@ fun OverviewScreen(modifier: Modifier = Modifier) {
                     selling = selling,
                     onSell = { h -> sell(sellKey(h)) { repo.sellNow(h.marketId, h.side, h.stage) } },
                     onSellAll = { marketId -> sell(SELL_ALL_KEY) { repo.sellAll(marketId) } },
+                    onSellAllTap = { marketId -> sell(SELL_ALL_TAP_KEY) { repo.sellAll(marketId, tapOnly = true) } },
                 )
             }
         }

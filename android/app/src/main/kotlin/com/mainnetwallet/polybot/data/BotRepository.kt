@@ -403,18 +403,21 @@ class BotRepository(
         return result
     }
 
-    suspend fun sellAll(marketId: String): ActionResult {
+    /** [tapOnly] false = "Sell all" (strategy stages only); true = "Sell all tap" (one-tap shares only). */
+    suspend fun sellAll(marketId: String, tapOnly: Boolean = false): ActionResult {
+        val what = if (tapOnly) "one-tap position" else "stage"
+        val title = if (tapOnly) "Sell all tap" else "Sell all"
         val result = act(
             { next ->
                 val failed = next.manualSellAll?.failed.orEmpty()
                 val sold = next.manualSellAll?.sold.orEmpty()
                 if (failed.isEmpty()) {
-                    "Sell all sent: ${sold.size} stage${if (sold.size == 1) "" else "s"} sold."
+                    "$title sent: ${sold.size} $what${if (sold.size == 1) "" else "s"} sold."
                 } else {
                     "Sold ${sold.size}, ${failed.size} not sold: " + failed.joinToString(" | ") { "${it.side}: ${it.message}" }
                 }
             },
-        ) { api.sellAll(marketId) }
+        ) { api.sellAll(marketId, if (tapOnly) "tap" else "stages") }
         if (!result.ok) refresh()
         return result
     }

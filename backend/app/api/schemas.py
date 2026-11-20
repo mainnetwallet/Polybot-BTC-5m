@@ -46,6 +46,8 @@ class TapBuyRequest(BaseModel):
 
 class ManualSellAllRequest(BaseModel):
     market_id: str
+    # "stages" = the strategy stages 0-3 (default), "tap" = the one-tap shares only
+    scope: Literal["stages", "tap"] = "stages"
 
 
 class ResetDailyRequest(BaseModel):

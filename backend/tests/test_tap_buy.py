@@ -145,7 +145,7 @@ async def test_tap_shares_and_stage_shares_of_one_side_stay_separate():
     assert [o.reason for o in sell] == ["stage9_manual"]
 
 
-async def test_sell_all_sells_the_tap_shares_too():
+async def test_sell_all_leaves_the_tap_shares_and_sell_all_tap_leaves_the_stages():
     stack = build_stack(make_config(**STAGE0, trade_amount_usdc=4.0, paper_starting_balance=40.0))
     market = make_market(remaining=150)
     books = books_for(market, up_ask=0.80, down_ask=0.10)
@@ -154,10 +154,30 @@ async def test_sell_all_sells_the_tap_shares_too():
     _cooldown_over(manager)
     await manager.tap_buy(market, books, "paper", stack["config"], "UP", 3.0)
     books[market.up_token_id].bids = {0.78: 1000.0}
-    results = await manager.manual_sell_all(market, books, "paper", stack["config"])
-    assert len(results) == 2 and all(r.status == "FILLED" for r in results)
+
+    results = await manager.manual_sell_all(market, books, "paper", stack["config"])  # "Sell all"
+    assert len(results) == 1 and results[0].status == "FILLED"
+    assert manager.load_stage0_holding("paper", market.market_id, 0) is None
+    assert manager.load_stage0_holding("paper", market.market_id, 9) is not None  # tap shares still held
     with session_scope() as session:
-        assert {p.status for p in session.execute(select(Position)).scalars()} == {"closed"}
+        rows = session.execute(select(Position).order_by(Position.id)).scalars().all()
+    assert [(p.tag, p.status) for p in rows] == [("", "closed"), ("tap", "open")]
+
+    results = await manager.manual_sell_all(market, books, "paper", stack["config"], "tap")  # "Sell all tap"
+    assert len(results) == 1 and results[0].status == "FILLED"
+    assert manager.load_stage0_holding("paper", market.market_id, 9) is None
+    assert await manager.manual_sell_all(market, books, "paper", stack["config"], "tap") == []  # nothing left
+
+
+async def test_sell_all_tap_does_not_touch_the_stages():
+    stack = build_stack(make_config(**STAGE0, trade_amount_usdc=4.0, paper_starting_balance=40.0))
+    market = make_market(remaining=150)
+    books = books_for(market, up_ask=0.80, down_ask=0.10)
+    await _stage0_buy(stack, market, books)
+    manager = stack["manager"]
+    books[market.up_token_id].bids = {0.78: 1000.0}
+    assert await manager.manual_sell_all(market, books, "paper", stack["config"], "tap") == []
+    assert manager.load_stage0_holding("paper", market.market_id, 0) is not None
 
 
 async def test_a_working_tap_order_does_not_block_a_strategy_entry_under_policy_allow():

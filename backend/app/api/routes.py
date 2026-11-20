@@ -137,9 +137,9 @@ def build_router(
 
     @router.post("/orders/sell-all")
     async def manual_sell_all(request: ManualSellAllRequest) -> dict:
-        """Sell what every stage still holds in this market, right now, at the market (no confirmation step)."""
+        """Sell what every stage (or, with scope "tap", the one-tap shares) still holds in this market, right now, at the market."""
         try:
-            return await bot.manual_sell_all(request.market_id)
+            return await bot.manual_sell_all(request.market_id, request.scope)
         except BotError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 

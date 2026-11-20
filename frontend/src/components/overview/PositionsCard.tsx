@@ -44,7 +44,7 @@ export function PositionsCard({ orders, className }: { orders: OrderRow[]; class
   const remaining = useRemainingSeconds();
   const [selling, setSelling] = useState<Set<string>>(new Set());
   const [confirmSells] = useConfirmSells();
-  const [pending, setPending] = useState<{ kind: "one"; row: StageHolding } | { kind: "all" } | null>(null);
+  const [pending, setPending] = useState<{ kind: "one"; row: StageHolding } | { kind: "all" } | { kind: "tap" } | null>(null);
   const marketId = snapshot?.market?.market_id ?? null;
 
   if (!snapshot) return <LoadingPanel className={className} />;
@@ -114,19 +114,24 @@ export function PositionsCard({ orders, className }: { orders: OrderRow[]; class
     else sell(row);
   };
 
-  const sellableRows = rows.filter((row) => row.holding);
+  // "Sell all" = the strategy stages only; the one-tap shares have their own "Sell all tap" button
+  const sellableRows = rows.filter((row) => row.holding && !row.tap);
+  const tapRows = rows.filter((row) => row.holding && row.tap);
   const sellingAll = selling.has("__all__");
-  const sellEverything = () => {
-    if (!marketId || sellableRows.length === 0 || sellingAll) return;
-    setSelling((prev) => new Set(prev).add("__all__"));
-    void Promise.resolve(sellAll(marketId)).finally(() =>
+  const sellingTap = selling.has("__tap__");
+  const sellGroup = (key: "__all__" | "__tap__", scope: "stages" | "tap") => {
+    if (!marketId || selling.has(key)) return;
+    setSelling((prev) => new Set(prev).add(key));
+    void Promise.resolve(sellAll(marketId, scope)).finally(() =>
       setSelling((prev) => {
         const next = new Set(prev);
-        next.delete("__all__");
+        next.delete(key);
         return next;
       }),
     );
   };
+  const sellEverything = () => sellGroup("__all__", "stages");
+  const sellAllTap = () => sellGroup("__tap__", "tap");
 
   const requestSellAll = () => {
     if (!marketId || sellableRows.length === 0 || sellingAll) return;
@@ -134,11 +139,18 @@ export function PositionsCard({ orders, className }: { orders: OrderRow[]; class
     else sellEverything();
   };
 
+  const requestSellAllTap = () => {
+    if (!marketId || tapRows.length === 0 || sellingTap) return;
+    if (confirmSells) setPending({ kind: "tap" });
+    else sellAllTap();
+  };
+
   const runPending = () => {
     const action = pending;
     setPending(null);
     if (action?.kind === "one") sell(action.row);
     else if (action?.kind === "all") sellEverything();
+    else if (action?.kind === "tap") sellAllTap();
   };
 
   const live = snapshot.bot.mode === "live";
@@ -156,10 +168,22 @@ export function PositionsCard({ orders, className }: { orders: OrderRow[]; class
                 type="button"
                 onClick={requestSellAll}
                 disabled={sellingAll}
-                title={`Sell every stage that holds shares (${sellableRows.length}) now at the market`}
+                title={`Sell every strategy stage that holds shares (${sellableRows.length}) now at the market. One-tap shares are not included.`}
                 className="btn btn-danger !px-3 !py-1 !text-[12px]"
               >
                 {sellingAll ? "Selling…" : "Sell all"}
+              </button>
+            ) : null}
+            {tapRows.length > 0 ? (
+              <button
+                type="button"
+                onClick={requestSellAllTap}
+                disabled={sellingTap}
+                title={`Sell every one-tap position (${tapRows.length}) now at the market. The strategy stages are not touched.`}
+                className="btn !px-3 !py-1 !text-[12px]"
+                style={{ color: TAP_COLOR, borderColor: "color-mix(in srgb, var(--tap) 45%, transparent)" }}
+              >
+                {sellingTap ? "Selling…" : "Sell all tap"}
               </button>
             ) : null}
             <span>This round</span>
@@ -242,11 +266,19 @@ export function PositionsCard({ orders, className }: { orders: OrderRow[]; class
         open={pending !== null}
         onClose={() => setPending(null)}
         eyebrow={live ? "Live sell" : "Paper sell"}
-        title={pending?.kind === "all" ? "Sell every stage at the market?" : "Sell this position at the market?"}
+        title={
+          pending?.kind === "all"
+            ? "Sell every stage at the market?"
+            : pending?.kind === "tap"
+              ? "Sell all one-tap positions at the market?"
+              : "Sell this position at the market?"
+        }
         subtitle={
           pending?.kind === "one"
             ? `${pending.row.side} · ${pending.row.tap ? "one-tap" : pending.row.stage === null ? "position" : `stage ${pending.row.stage}`} · ${fmtNum(pending.row.size, 2)} shares`
-            : `${sellableRows.length} ${sellableRows.length === 1 ? "stage holds" : "stages hold"} shares in this market`
+            : pending?.kind === "tap"
+              ? `${tapRows.length} one-tap ${tapRows.length === 1 ? "position" : "positions"} in this market`
+              : `${sellableRows.length} ${sellableRows.length === 1 ? "stage holds" : "stages hold"} shares in this market`
         }
         danger={live}
         maxWidth="max-w-md"
@@ -256,7 +288,7 @@ export function PositionsCard({ orders, className }: { orders: OrderRow[]; class
               Cancel
             </button>
             <button type="button" className="btn btn-danger" onClick={runPending}>
-              {pending?.kind === "all" ? "Sell all" : "Sell"}
+              {pending?.kind === "all" ? "Sell all" : pending?.kind === "tap" ? "Sell all tap" : "Sell"}
             </button>
           </>
         }

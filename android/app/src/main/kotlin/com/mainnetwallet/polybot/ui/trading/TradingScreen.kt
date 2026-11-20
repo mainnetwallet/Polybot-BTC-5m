@@ -90,7 +90,7 @@ import kotlinx.coroutines.launch
 
 private sealed interface SellTarget {
     data class Stage(val marketId: String, val side: String, val stage: Int, val size: Double) : SellTarget
-    data class All(val marketId: String, val stages: Int) : SellTarget
+    data class All(val marketId: String, val stages: Int, val tapOnly: Boolean = false) : SellTarget
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -119,7 +119,7 @@ fun TradingScreen(modifier: Modifier = Modifier) {
 
     suspend fun send(t: SellTarget): ActionResult = when (t) {
         is SellTarget.Stage -> repo.sellNow(t.marketId, t.side, t.stage)
-        is SellTarget.All -> repo.sellAll(t.marketId)
+        is SellTarget.All -> repo.sellAll(t.marketId, t.tapOnly)
     }
 
     fun execute(t: SellTarget) {
@@ -247,7 +247,7 @@ fun TradingScreen(modifier: Modifier = Modifier) {
                                     busy = busy,
                                     live = live,
                                     onSellStage = { h -> request(SellTarget.Stage(h.marketId, h.side, h.stage, h.size)) },
-                                    onSellAll = { marketId, stages -> request(SellTarget.All(marketId, stages)) },
+                                    onSellAll = { marketId, stages, tapOnly -> request(SellTarget.All(marketId, stages, tapOnly)) },
                                 )
                             }
                         }
@@ -296,12 +296,16 @@ fun TradingScreen(modifier: Modifier = Modifier) {
         val body: String
         when (pending) {
             is SellTarget.Stage -> {
-                title = "Sell ${pending.side} stage ${pending.stage}"
+                title = if (pending.stage == TAP_STAGE) "Sell ${pending.side} one-tap" else "Sell ${pending.side} stage ${pending.stage}"
                 body = "Sell ${Fmt.num(pending.size, 2)} shares at the market now."
             }
             is SellTarget.All -> {
-                title = "Sell everything"
-                body = "Sell every stage that holds shares in this market (${pending.stages}) at the market now."
+                title = if (pending.tapOnly) "Sell all tap" else "Sell all stages"
+                body = if (pending.tapOnly) {
+                    "Sell every one-tap position in this market (${pending.stages}) at the market now. The strategy stages are not touched."
+                } else {
+                    "Sell every strategy stage that holds shares in this market (${pending.stages}) at the market now. One-tap shares are not included."
+                }
             }
         }
         if (live) {
@@ -412,7 +416,7 @@ private fun QuickSell(
     busy: Boolean,
     live: Boolean,
     onSellStage: (SellableHolding) -> Unit,
-    onSellAll: (String, Int) -> Unit,
+    onSellAll: (String, Int, Boolean) -> Unit,
 ) {
     val c = Poly.colors
     Column(verticalArrangement = Arrangement.spacedBy(Space.md)) {
@@ -433,7 +437,11 @@ private fun QuickSell(
                     ) {
                         SidePill(h.side)
                         Column(Modifier.weight(1f)) {
-                            Text("Stage ${h.stage}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                if (h.stage == TAP_STAGE) "One-tap" else "Stage ${h.stage}",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                            )
                             Text(
                                 "${Fmt.num(h.size, 2)} sh  ·  entry ${Fmt.cents(h.entryPrice)}",
                                 style = Mono.small,
@@ -443,15 +451,31 @@ private fun QuickSell(
                         OutlinedButton(onClick = { onSellStage(h) }, enabled = !busy) { Text("Sell now") }
                     }
                 }
-                Button(
-                    onClick = { onSellAll(marketId, group.size) },
-                    enabled = !busy,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer,
-                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
-                    ),
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text("Sell all (${group.size} stage${if (group.size == 1) "" else "s"})") }
+                // "Sell all" = the strategy stages only; the one-tap shares have their own "Sell all tap" button
+                val stageCount = group.count { it.stage != TAP_STAGE }
+                val tapCount = group.count { it.stage == TAP_STAGE }
+                if (stageCount > 0) {
+                    Button(
+                        onClick = { onSellAll(marketId, stageCount, false) },
+                        enabled = !busy,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                            contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("Sell all ($stageCount stage${if (stageCount == 1) "" else "s"})") }
+                }
+                if (tapCount > 0) {
+                    Button(
+                        onClick = { onSellAll(marketId, tapCount, true) },
+                        enabled = !busy,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                            contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("Sell all tap ($tapCount position${if (tapCount == 1) "" else "s"})") }
+                }
             }
         }
     }

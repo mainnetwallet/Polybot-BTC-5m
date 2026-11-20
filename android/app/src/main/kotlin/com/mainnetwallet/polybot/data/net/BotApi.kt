@@ -88,8 +88,12 @@ class BotApi(private val client: ApiClient) {
             },
         )
 
-    suspend fun sellAll(marketId: String): Snapshot =
-        call("POST", "/api/orders/sell-all", Snapshot.serializer(), buildJsonObject { put("market_id", marketId) })
+    /** [scope] "stages" = Sell all (strategy stages 0-3, never the one-tap shares), "tap" = Sell all tap. */
+    suspend fun sellAll(marketId: String, scope: String = "stages"): Snapshot =
+        call(
+            "POST", "/api/orders/sell-all", Snapshot.serializer(),
+            buildJsonObject { put("market_id", marketId); put("scope", scope) },
+        )
 
     // ---- settings --------------------------------------------------------------------------------------------
 

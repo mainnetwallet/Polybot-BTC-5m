@@ -1460,8 +1460,10 @@ class TradingBot:
         snapshot["tap_buy"] = result.as_dict()
         return snapshot
 
-    async def manual_sell_all(self, market_id: str) -> dict:
-        """Operator "sell all": sell the shares of every stage that holds any in the live market, at the market.
+    async def manual_sell_all(self, market_id: str, scope: str = "stages") -> dict:
+        """Operator "sell all": sell the shares of every stage (0-3) that holds any in the live market, at the market.
+
+        One-tap shares are NOT included: `scope="tap"` ("Sell all tap") sells those and only those.
 
         Same rules as `manual_sell` (instant, no confirmation, not held back by a risk halt, needs the bot
         running with an open market). Stages that hold nothing are skipped; if some stages cannot be sold
@@ -1475,11 +1477,13 @@ class TradingBot:
         self.logs.log(
             "WARNING",
             "system",
-            "manual SELL ALL requested",
-            payload={"market_id": market_id, "mode": self._mode},
+            "manual SELL ALL TAP requested" if scope == "tap" else "manual SELL ALL requested",
+            payload={"market_id": market_id, "mode": self._mode, "scope": scope},
             mode=self._mode,
         )
-        results = await self.orders.manual_sell_all(market, self.data.books, self._mode, self.runtime.get())
+        results = await self.orders.manual_sell_all(
+            market, self.data.books, self._mode, self.runtime.get(), scope
+        )
         if not results:
             raise BotError("nothing left to sell in this market")
         reasons = {

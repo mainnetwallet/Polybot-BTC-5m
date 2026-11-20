@@ -1246,20 +1246,27 @@ class OrderManager:
         return results[0] if results else OrderResult(None, side, "BLOCKED", "no_holding")
 
     async def manual_sell_all(
-        self, market: MarketInfo, books: dict[str, OrderBook], mode: str, config
+        self, market: MarketInfo, books: dict[str, OrderBook], mode: str, config, scope: str = "stages"
     ) -> list[OrderResult]:
-        """Operator "sell all": sell what every stage (0-3) still holds in this market, right now.
+        """Operator "sell all": sell what the stages still hold in this market, right now.
 
-        Each stage that really holds shares gets its own manual sell, run side by side exactly like the
+        `scope="stages"` (default) is the strategy's stages 0-3 only: one-tap shares are never touched by it.
+        `scope="tap"` is the one-tap shares only.
+
+        Each holding that really holds shares gets its own manual sell, run side by side exactly like the
         per-stage exits (separate locks), so one slow stage never delays another. Stages with nothing
         held are skipped. Returns one result per stage that held shares (empty = nothing to sell).
         """
         if market.remaining_seconds() <= 0:
             return [OrderResult(None, "", "BLOCKED", "market_ended")]
+        if scope == "tap":
+            stages = tuple(stage for stage in SELLABLE_STAGES if stage == TAP_STAGE)
+        else:
+            stages = tuple(stage for stage in SELLABLE_STAGES if stage != TAP_STAGE)
         held = await asyncio.gather(
-            *(asyncio.to_thread(self.load_stage0_holding, mode, market.market_id, stage) for stage in SELLABLE_STAGES)
+            *(asyncio.to_thread(self.load_stage0_holding, mode, market.market_id, stage) for stage in stages)
         )
-        targets = [(stage, holding.side) for stage, holding in zip(SELLABLE_STAGES, held) if holding is not None]
+        targets = [(stage, holding.side) for stage, holding in zip(stages, held) if holding is not None]
         if not targets:
             return []
         return list(
