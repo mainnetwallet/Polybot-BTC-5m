@@ -53,8 +53,10 @@ export function TapBuyPanel({ className }: { className?: string }) {
   const limits = snapshot.tap ?? { min_usdc: 1, max_usdc: 100, cooldown_ms: LOCK_MS };
   const market = snapshot.market;
   const cash = snapshot.account.balance;
-  // below the 1 USDC minimum nothing can be bought; exactly 1 or more is fine
+  // below the 1 USDC minimum nothing can be bought (exactly 1 or more is fine);
+  // above it, a button whose amount is more than the cash stays off
   const lowCash = isNum(cash) && cash < limits.min_usdc;
+  const noCash = (amount: number) => isNum(cash) && amount > cash;
   const ended = !market || market.remaining_seconds <= 0;
   const stale = typeof snapshot.config.stale_data_max_age_ms === "number" ? snapshot.config.stale_data_max_age_ms : null;
 
@@ -73,7 +75,7 @@ export function TapBuyPanel({ className }: { className?: string }) {
   };
 
   const tap = (side: Side, amount: number) => {
-    if (!enabled || locked || busy !== null || blocked) return;
+    if (!enabled || locked || busy !== null || blocked || noCash(amount)) return;
     setLocked(true);
     setBusy(`${side}:${amount}`);
     window.clearTimeout(timer.current);
@@ -136,7 +138,7 @@ export function TapBuyPanel({ className }: { className?: string }) {
               </div>
               {amounts.map((amount) => {
                 const key = `${side}:${amount}`;
-                const off = !enabled || Boolean(blocked) || noAsk || old || locked || busy !== null;
+                const off = !enabled || Boolean(blocked) || noAsk || old || locked || busy !== null || noCash(amount);
                 return (
                   <button
                     key={key}
