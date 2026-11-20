@@ -55,6 +55,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mainnetwallet.polybot.data.ActionResult
+import com.mainnetwallet.polybot.data.model.TAP_STAGE
 import com.mainnetwallet.polybot.data.model.OrderRow
 import com.mainnetwallet.polybot.data.model.PositionRow
 import com.mainnetwallet.polybot.data.model.SellableHolding
@@ -572,7 +573,7 @@ private fun OrderRowItem(order: OrderRow, onClick: () -> Unit) {
                     )
                     SidePill(order.side)
                     if (order.stage != null) {
-                        Text("S${order.stage}", style = Mono.small, color = scheme.onSurfaceVariant)
+                        Text(if (order.stage == TAP_STAGE) "TAP" else "S${order.stage}", style = Mono.small, color = scheme.onSurfaceVariant)
                     }
                     // A buy that went through the order proxy gets a tag (direct / paper orders get none).
                     if (order.route == "proxy") ToneChip("PROXY", Tone.Info)
@@ -686,7 +687,7 @@ private fun OrderDetailSheet(order: OrderRow, onDismiss: () -> Unit) {
 
             ProCard {
                 Label("Reference")
-                KeyValueRow("Stage", order.stage?.toString() ?: "—")
+                KeyValueRow("Stage", if (order.stage == TAP_STAGE) "One-tap" else order.stage?.toString() ?: "—")
                 KeyValueRow("Market", Fmt.shortId(order.marketId, 10, 6))
                 KeyValueRow("Exchange id", Fmt.shortId(order.exchangeOrderId, 14, 6))
                 KeyValueRow("Result", order.result ?: "—")

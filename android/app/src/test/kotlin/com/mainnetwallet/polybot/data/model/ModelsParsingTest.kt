@@ -190,4 +190,33 @@ class ModelsParsingTest {
         )
         assertEquals("proxy", order.route)
     }
+
+    @Test fun positionAndOrderCarryTheOneTapTag() {
+        val position = AppJson.decodeFromString(
+            PositionRow.serializer(),
+            """{"id":1,"market_id":"0xm","side":"UP","size":3.5,"tag":"tap","status":"open"}""",
+        )
+        assertEquals("tap", position.tag)
+        val plain = AppJson.decodeFromString(PositionRow.serializer(), """{"id":2,"market_id":"0xm","side":"UP"}""")
+        assertEquals("", plain.tag) // an older server sends no tag: a strategy row
+        val order = AppJson.decodeFromString(
+            OrderRow.serializer(),
+            """{"id":9,"market_id":"0xm","side":"DOWN","stage":9,"tap":true,"action":"BUY","status":"FILLED"}""",
+        )
+        assertTrue(order.tap)
+        assertEquals(TAP_STAGE, order.stage)
+    }
+
+    @Test fun snapshotCarriesTapLimitsAndTheBuyResult() {
+        val s = AppJson.decodeFromString(
+            Snapshot.serializer(),
+            """{"tap":{"min_usdc":1,"max_usdc":100,"cooldown_ms":1000},
+                "tap_buy":{"status":"FILLED","side":"UP","filled_size":3.2,"avg_price":0.31}}""",
+        )
+        assertEquals(100.0, s.tap!!.maxUsdc, 0.0)
+        assertEquals(1000, s.tap!!.cooldownMs)
+        assertEquals(3.2, s.tapBuy!!.filledSize, 0.0)
+        assertEquals(0.31, s.tapBuy!!.avgPrice!!, 0.0)
+        assertNull(AppJson.decodeFromString(Snapshot.serializer(), "{}").tap)
+    }
 }

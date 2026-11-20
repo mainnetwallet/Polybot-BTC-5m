@@ -66,6 +66,7 @@ import com.mainnetwallet.polybot.data.model.Modes
 import com.mainnetwallet.polybot.data.model.PositionRow
 import com.mainnetwallet.polybot.data.model.SellableHolding
 import com.mainnetwallet.polybot.data.model.StrategyState
+import com.mainnetwallet.polybot.data.model.TAP_STAGE
 import com.mainnetwallet.polybot.domain.ringStage
 import com.mainnetwallet.polybot.ui.Fmt
 import com.mainnetwallet.polybot.ui.components.Dot
@@ -831,7 +832,8 @@ fun PositionBoxCard(
     } else {
         positions
             .filter { it.marketId == marketId && it.status == "open" && it.size > 0 }
-            .sortedByDescending { it.side.equals("UP", ignoreCase = true) }
+            // strategy rows first, one-tap rows last; UP before DOWN inside each group
+            .sortedWith(compareBy<PositionRow>({ it.tag == "tap" }, { !it.side.equals("UP", ignoreCase = true) }))
     }
     val sellableHere = if (marketId == null) emptyList() else sellable.filter { it.marketId == marketId }
     val sellingAll = SELL_ALL_KEY in selling
@@ -855,16 +857,21 @@ fun PositionBoxCard(
         } else {
             open.forEach { p ->
                 val bid = (if (p.side.equals("UP", ignoreCase = true)) upBook else downBook)?.bestBid
-                val stages = sellableHere.filter { it.side.equals(p.side, ignoreCase = true) }
+                val isTap = p.tag == "tap"
+                // the one-tap row and the strategy row of one side are separate positions: each only gets its own holdings
+                val stages = sellableHere.filter { it.side.equals(p.side, ignoreCase = true) && (it.stage == TAP_STAGE) == isTap }
+                // one stage card already says the side: its card then carries the side pill and the header line is dropped
+                val showHeader = stages.size != 1
                 // Live PnL per stage: (best bid now - what this stage paid) x its shares. It follows every book update.
                 val stagePnl = stages.map { stagePnl(it.entryPrice, bid, it.size) }
                 val total = if (stages.isNotEmpty() && stagePnl.all { it != null }) stagePnl.sumOf { it ?: 0.0 } else p.unrealizedPnl
-                Row(
+                if (showHeader) Row(
                     Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(Space.sm),
                 ) {
                     SidePill(p.side)
+                    if (isTap) Pill("ONE-TAP", Poly.colors.up, Poly.colors.upContainer)
                     Text(
                         "${Fmt.num(p.size, 2)} sh",
                         style = Mono.small,
@@ -894,7 +901,12 @@ fun PositionBoxCard(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(Space.sm),
                         ) {
-                            Text("Stage ${h.stage}", style = Mono.small, color = scheme.onSurfaceVariant)
+                            if (!showHeader) SidePill(p.side)
+                            Text(
+                                if (h.stage == TAP_STAGE) "One-tap" else "Stage ${h.stage}",
+                                style = Mono.small,
+                                color = scheme.onSurfaceVariant,
+                            )
                             Text("${Fmt.num(h.size, 2)} sh", style = Mono.small, modifier = Modifier.weight(1f))
                             SellButton(
                                 label = if (busy) "\u2026" else "Sell",

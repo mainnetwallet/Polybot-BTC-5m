@@ -50,3 +50,65 @@ export function useConfirmSells(): [boolean, (enabled: boolean) => void] {
   const value = useSyncExternalStore(subscribe, currentConfirmSells, () => false);
   return [value, setConfirmSells];
 }
+
+// ---- One-tap buy amounts (the three dollar buttons of the one-tap panel) ----
+
+const TAP_AMOUNTS_KEY = "polybot.tapAmounts";
+export const DEFAULT_TAP_AMOUNTS: readonly [number, number, number] = [1, 2, 5];
+const tapListeners = new Set<() => void>();
+let tapAmountsRaw: string | null = null;
+
+function readTapAmountsRaw(): string {
+  try {
+    return window.localStorage.getItem(TAP_AMOUNTS_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function currentTapAmountsRaw(): string {
+  if (tapAmountsRaw === null) tapAmountsRaw = readTapAmountsRaw();
+  return tapAmountsRaw;
+}
+
+function parseTapAmounts(raw: string): number[] {
+  const parsed = raw
+    .split(",")
+    .map((part) => Number(part))
+    .filter((value) => Number.isFinite(value) && value >= 1 && value <= 100000);
+  return parsed.length === 3 ? parsed : [...DEFAULT_TAP_AMOUNTS];
+}
+
+/** Saves the three one-tap amounts (whole or decimal dollars, each at least $1). Kept in this browser only. */
+export function setTapAmounts(amounts: number[]): void {
+  const clean = amounts.slice(0, 3).map((value) => Math.round(value * 100) / 100);
+  if (clean.length !== 3 || clean.some((value) => !(value >= 1))) return;
+  tapAmountsRaw = clean.join(",");
+  try {
+    window.localStorage.setItem(TAP_AMOUNTS_KEY, tapAmountsRaw);
+  } catch {
+    // storage can be blocked; the choice then only lasts until the next refresh
+  }
+  tapListeners.forEach((listener) => listener());
+}
+
+function subscribeTap(listener: () => void): () => void {
+  tapListeners.add(listener);
+  const onStorage = (event: StorageEvent) => {
+    if (event.key !== null && event.key !== TAP_AMOUNTS_KEY) return;
+    tapAmountsRaw = readTapAmountsRaw();
+    listener();
+  };
+  window.addEventListener("storage", onStorage);
+  return () => {
+    tapListeners.delete(listener);
+    window.removeEventListener("storage", onStorage);
+  };
+}
+
+/** `[the three one-tap amounts, setter]`. Default $1, $2, $5. */
+export function useTapAmounts(): [number[], (amounts: number[]) => void] {
+  const raw = useSyncExternalStore(subscribeTap, currentTapAmountsRaw, () => "");
+  // the raw string is the stable snapshot; the array is derived from it
+  return [parseTapAmounts(raw), setTapAmounts];
+}

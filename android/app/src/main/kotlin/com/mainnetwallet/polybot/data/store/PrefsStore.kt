@@ -13,6 +13,14 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
 import java.io.IOException
 
+val DEFAULT_TAP_AMOUNTS: List<Double> = listOf(1.0, 2.0, 5.0)
+
+/** "1,2,5" -> [1.0, 2.0, 5.0]; anything that is not three numbers of at least 1 gives the defaults. */
+internal fun parseTapAmounts(raw: String?): List<Double> {
+    val parsed = raw.orEmpty().split(",").mapNotNull { it.trim().toDoubleOrNull() }.filter { it.isFinite() && it >= 1.0 }
+    return if (parsed.size == 3) parsed else DEFAULT_TAP_AMOUNTS
+}
+
 enum class ThemeMode { SYSTEM, DARK, LIGHT }
 
 /** Everything the app remembers between launches. [token] is decrypted on read. */
@@ -26,6 +34,8 @@ data class AppPrefs(
     val lastTunnelFor: String = "",
     /** The tunnel URL the Gist gave last time, tried first on the next launch. */
     val lastTunnelUrl: String = "",
+    /** The three dollar buttons of the one-tap buy card. */
+    val tapAmounts: List<Double> = DEFAULT_TAP_AMOUNTS,
 ) {
     val isConfigured: Boolean get() = pcUrl.isNotBlank() && token.isNotBlank()
 }
@@ -41,6 +51,7 @@ class PrefsStore(private val context: Context) {
         val confirmSells = booleanPreferencesKey("confirm_sells")
         val tunnelFor = stringPreferencesKey("tunnel_for")
         val tunnelUrl = stringPreferencesKey("tunnel_url")
+        val tapAmounts = stringPreferencesKey("tap_amounts")
     }
 
     val prefs: Flow<AppPrefs> = context.polyDataStore.data
@@ -57,6 +68,7 @@ class PrefsStore(private val context: Context) {
                 confirmSells = p[Keys.confirmSells] ?: false,
                 lastTunnelFor = p[Keys.tunnelFor].orEmpty(),
                 lastTunnelUrl = p[Keys.tunnelUrl].orEmpty(),
+                tapAmounts = parseTapAmounts(p[Keys.tapAmounts]),
             )
         }
 
@@ -92,5 +104,12 @@ class PrefsStore(private val context: Context) {
 
     suspend fun setConfirmSells(enabled: Boolean) {
         context.polyDataStore.edit { it[Keys.confirmSells] = enabled }
+    }
+
+    /** Saves the three one-tap amounts (each at least $1, rounded to cents). */
+    suspend fun setTapAmounts(amounts: List<Double>) {
+        if (amounts.size != 3 || amounts.any { !it.isFinite() || it < 1.0 }) return
+        val text = amounts.joinToString(",") { (Math.round(it * 100.0) / 100.0).toString() }
+        context.polyDataStore.edit { it[Keys.tapAmounts] = text }
     }
 }

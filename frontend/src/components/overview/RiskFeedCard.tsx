@@ -66,7 +66,7 @@ export function RiskFeedCard({ className }: { className?: string }) {
       </div>
 
       <div className="mt-2.5 grid grid-cols-2 gap-2">
-        <Row label="Open positions" value={String(snapshot.positions.length)} hint={`max ${String(config.max_open_positions ?? "—")}`} />
+        <Row label="Open positions" value={String(snapshot.positions.filter((p) => p.tag !== "tap").length)} hint={`max ${String(config.max_open_positions ?? "—")}`} />
         <Row label="Trades today" value={String(account.trades_today)} hint={`max ${String(config.max_trades_per_day ?? "—")} a day`} />
         <Row label="Last book message" value={age === null ? "—" : age < 1000 ? "now" : `${Math.round(age / 1000)} s ago`} hint={`${data.reconnects} reconnects`} />
         <Row

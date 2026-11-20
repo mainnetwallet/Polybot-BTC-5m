@@ -10,12 +10,14 @@ import { useBot } from "../../hooks/BotContext";
 import { useRemainingSeconds } from "../../hooks/useCountdown";
 import { cx, fmtNum, fmtPx, fmtSignedUsd } from "../../lib/format";
 import { useConfirmSells } from "../../lib/prefs";
-import { STAGE_VAR, stopLossPrice, takeProfitPrice, type StageId } from "../../lib/stages";
+import { STAGE_VAR, TAP_COLOR, TAP_STAGE, stopLossPrice, takeProfitPrice, type StageId } from "../../lib/stages";
 
 type StageHolding = {
   key: string;
   side: "UP" | "DOWN";
   stage: number | null;
+  /** a one-tap position: held to settlement or sold by hand, no take profit / stop loss */
+  tap: boolean;
   size: number;
   entry: number | null;
   bid: number | null;
@@ -54,13 +56,18 @@ export function PositionsCard({ orders, className }: { orders: OrderRow[]; class
     : [];
   for (const p of open) {
     const bid = (p.side === "UP" ? snapshot.books.up : snapshot.books.down)?.best_bid ?? null;
-    const stages = sellable.filter((h) => h.market_id === p.market_id && h.side === p.side);
+    const isTap = p.tag === "tap";
+    // the one-tap row and the strategy row of one side are separate positions: each only gets its own holdings
+    const stages = sellable.filter(
+      (h) => h.market_id === p.market_id && h.side === p.side && (h.stage === TAP_STAGE) === isTap,
+    );
     if (stages.length === 0) {
       // held, but nothing sellable right now (sell in flight, kill switch, ...): show the whole position
       rows.push({
         key: `${p.market_id}:${p.side}`,
         side: p.side,
         stage: null,
+        tap: isTap,
         size: p.size,
         entry: p.avg_price,
         bid,
@@ -76,6 +83,7 @@ export function PositionsCard({ orders, className }: { orders: OrderRow[]; class
         key: `${h.market_id}:${h.side}:${h.stage}`,
         side: p.side,
         stage: h.stage,
+        tap: isTap,
         size: h.size,
         entry,
         bid,
@@ -84,7 +92,8 @@ export function PositionsCard({ orders, className }: { orders: OrderRow[]; class
       });
     }
   }
-  rows.sort((x, y) => (x.stage ?? 99) - (y.stage ?? 99) || x.side.localeCompare(y.side));
+  // strategy stages first, one-tap rows last
+  rows.sort((x, y) => Number(x.tap) - Number(y.tap) || (x.stage ?? 99) - (y.stage ?? 99) || x.side.localeCompare(y.side));
 
   const sell = (row: StageHolding) => {
     if (!row.holding || selling.has(row.key)) return; // only blocks a double click while the request is on its way
@@ -163,15 +172,15 @@ export function PositionsCard({ orders, className }: { orders: OrderRow[]; class
             className="ov-empty"
             icon={<IconLayers size={22} />}
             title="No open position"
-            hint="Filled buys of the live market appear here, one row per stage, with their take profit and stop loss."
+            hint="Filled buys of the live market appear here, one row per stage (and one-tap), with their take profit and stop loss."
           />
         ) : (
           <ul className="divide-y divide-white/[0.06]">
             {rows.map((row) => {
-              const stage = row.stage === null ? null : (Math.min(3, Math.max(0, row.stage)) as StageId);
+              const stage = row.tap || row.stage === null ? null : (Math.min(3, Math.max(0, row.stage)) as StageId);
               const tp = stage === null ? null : takeProfitPrice(stage, row.entry, strategy);
               const sl = stage === null ? null : stopLossPrice(stage, row.entry, strategy, remaining);
-              const color = stage === null ? "var(--muted)" : STAGE_VAR[stage];
+              const color = row.tap ? TAP_COLOR : stage === null ? "var(--muted)" : STAGE_VAR[stage];
               return (
                 <li key={row.key} className="py-2 first:pt-0">
                   <div className="flex items-center justify-between gap-3">
@@ -208,9 +217,13 @@ export function PositionsCard({ orders, className }: { orders: OrderRow[]; class
                   <div className="mt-1 flex items-center justify-between gap-3 text-[12px] text-slate-500">
                     <span className="flex shrink-0 items-center gap-2">
                       <span className="inline-block h-2.5 w-2.5 rounded-[3px]" style={{ background: color }} aria-hidden="true" />
-                      {stage === null ? "Whole position" : `Stage ${stage}`} · bid {fmtPx(row.bid)}
+                      {row.tap ? "One-tap" : stage === null ? "Whole position" : `Stage ${stage}`} · bid {fmtPx(row.bid)}
                     </span>
-                    {stage === null ? (
+                    {row.tap ? (
+                      <span className="truncate" title="One-tap shares have no take profit or stop loss">
+                        pays ${fmtNum(row.size, 2)} if {row.side} wins · held to settlement
+                      </span>
+                    ) : stage === null ? (
                       <span className="truncate">No exit levels recorded</span>
                     ) : (
                       <ExitMeter inline entry={row.entry} bid={row.bid} stop={sl} takeProfit={tp} />
@@ -232,7 +245,7 @@ export function PositionsCard({ orders, className }: { orders: OrderRow[]; class
         title={pending?.kind === "all" ? "Sell every stage at the market?" : "Sell this position at the market?"}
         subtitle={
           pending?.kind === "one"
-            ? `${pending.row.side} · ${pending.row.stage === null ? "position" : `stage ${pending.row.stage}`} · ${fmtNum(pending.row.size, 2)} shares`
+            ? `${pending.row.side} · ${pending.row.tap ? "one-tap" : pending.row.stage === null ? "position" : `stage ${pending.row.stage}`} · ${fmtNum(pending.row.size, 2)} shares`
             : `${sellableRows.length} ${sellableRows.length === 1 ? "stage holds" : "stages hold"} shares in this market`
         }
         danger={live}
