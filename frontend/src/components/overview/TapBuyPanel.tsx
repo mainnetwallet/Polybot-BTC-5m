@@ -96,7 +96,7 @@ export function TapBuyPanel({ className }: { className?: string }) {
 
   return (
     <section
-      className={cx("tap-panel", !expanded && "is-folded", className)}
+      className={cx("tap-panel", !enabled && "is-off", !expanded && "is-folded", className)}
       aria-label="One-tap buy"
       style={{ ["--tap-accent" as string]: TAP_COLOR }}
     >
@@ -130,39 +130,37 @@ export function TapBuyPanel({ className }: { className?: string }) {
 
       {expanded ? (
         <>
-          {enabled ? (
-            <div className="tap-grid">
-              {(["UP", "DOWN"] as const).map((side) => {
-                const { ask, old } = sideInfo(side);
-                const noAsk = !isNum(ask);
-                return (
-                  <div key={side} className={cx("tap-row", side === "UP" ? "tap-up" : "tap-down")}>
-                    <div className="tap-side" title={old ? "Order book is out of date" : "Best ask"}>
-                      <span>{side === "UP" ? "Up" : "Down"}</span>
-                      <b className={old ? "tap-old" : undefined}>{noAsk ? "--" : cents(ask)}</b>
-                    </div>
-                    {amounts.map((amount) => {
-                      const key = `${side}:${amount}`;
-                      const off = !enabled || Boolean(blocked) || noAsk || old || locked || busy !== null;
-                      return (
-                        <button
-                          key={key}
-                          type="button"
-                          className={cx("tap-btn", busy === key && "is-busy")}
-                          disabled={off}
-                          onClick={() => tap(side, amount)}
-                          title={`Buy ${money(amount)} of ${side} at the market now`}
-                        >
-                          <span className="tap-amt">{busy === key ? "…" : money(amount)}</span>
-                          <span className="tap-win">win {winAmount(amount, ask)}</span>
-                        </button>
-                      );
-                    })}
+          <div className="tap-grid">
+            {(["UP", "DOWN"] as const).map((side) => {
+              const { ask, old } = sideInfo(side);
+              const noAsk = !isNum(ask);
+              return (
+                <div key={side} className={cx("tap-row", side === "UP" ? "tap-up" : "tap-down")}>
+                  <div className="tap-side" title={old ? "Order book is out of date" : "Best ask"}>
+                    <span>{side === "UP" ? "Up" : "Down"}</span>
+                    <b className={old ? "tap-old" : undefined}>{noAsk ? "--" : cents(ask)}</b>
                   </div>
-                );
-              })}
-            </div>
-          ) : null}
+                  {amounts.map((amount) => {
+                    const key = `${side}:${amount}`;
+                    const off = !enabled || Boolean(blocked) || noAsk || old || locked || busy !== null;
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        className={cx("tap-btn", busy === key && "is-busy")}
+                        disabled={off}
+                        onClick={() => tap(side, amount)}
+                        title={`Buy ${money(amount)} of ${side} at the market now`}
+                      >
+                        <span className="tap-amt">{busy === key ? "…" : money(amount)}</span>
+                        <span className="tap-win">win {winAmount(amount, ask)}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
 
           <footer className={cx("tap-foot", blocked && "is-warn")}>
             {blocked ? (
