@@ -129,6 +129,16 @@ Most used keys:
 
 Settings page overrides (stored in SQLite): trigger, stage 1, max price, trade amount, daily loss/target, stale age, duplicate/conflict policy, paper slippage/fee, trades per day, open positions. Secrets and live switches are environment-only.
 
+## One-tap buy
+
+A manual buy button next to the BTC tape chart (dashboard) and under the odds (Android app). Each side (Up / Down) has three dollar buttons (default $1, $2, $5; change them with **Edit**, saved in the browser / on the phone; limits $1 to `TAP_BUY_MAX_USDC`, default $100).
+
+- **One tap = one market buy.** No confirm step. A second tap within 1 s is ignored (client and server), a tap is refused while another is in flight, and every tap carries a request id so a retried request never buys twice.
+- **Separate from the strategy.** One-tap shares are their own position row, tagged **One-tap** (cyan). No take profit, no stop loss: they are held until the market settles or you sell them by hand. They never count towards max open positions, daily loss/profit or trades per day, and are never topped up.
+- **Selling.** Each one-tap row has its own Sell button. **Sell all** sells the strategy stages only; **Sell all tap** sells the one-tap shares only.
+- **Needs the bot RUNNING.** The kill switch, a stale or missing order book and the balance check still apply. It ignores the buy-guard switch because it is a manual buy.
+- API: `POST /api/orders/tap-buy` (`market_id`, `side`, `amount`, optional `request_id`).
+
 ## Buy guards and Telegram
 
 Two volatility circuit breakers switch **all new buys off** (every stage). The bot keeps running: take-profit,
