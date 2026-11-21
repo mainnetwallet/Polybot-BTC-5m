@@ -297,7 +297,7 @@ async def test_bot_tap_buy_ignores_the_buy_guard_switch_because_it_is_a_manual_b
 async def test_tap_up_and_tap_down_are_each_sellable_by_their_own_side():
     stack = build_stack(make_config(**STAGE0, trade_amount_usdc=4.0, paper_starting_balance=40.0))
     market = make_market(remaining=150)
-    books = books_for(market, up_ask=0.80, down_ask=0.30)
+    books = books_for(market, up_ask=0.80, down_ask=0.40)
     manager = _tap_ready(stack, market, books)
     assert (await manager.tap_buy(market, books, "paper", stack["config"], "UP", 3.0)).status == "FILLED"
     _cooldown_over(manager)
@@ -307,8 +307,8 @@ async def test_tap_up_and_tap_down_are_each_sellable_by_their_own_side():
     up = manager.load_stage0_holding("paper", market.market_id, 9, "UP")
     down = manager.load_stage0_holding("paper", market.market_id, 9, "DOWN")
     assert up is not None and up.side == "UP" and up.size == pytest.approx(3.0 / 0.80, rel=0.02)
-    assert down is not None and down.side == "DOWN" and down.size == pytest.approx(3.0 / 0.30, rel=0.02)
-    assert down.cost == pytest.approx(0.30, abs=0.01)
+    assert down is not None and down.side == "DOWN" and down.size == pytest.approx(3.0 / 0.40, rel=0.02)
+    assert down.cost == pytest.approx(0.40, abs=0.01)
 
     # selling DOWN by hand leaves the UP tap shares alone
     books[market.down_token_id].bids = {0.60: 1000.0}
@@ -324,7 +324,7 @@ async def test_tap_up_and_tap_down_are_each_sellable_by_their_own_side():
 async def test_sell_all_tap_sells_both_up_and_down_tap_shares():
     stack = build_stack(make_config(**STAGE0, trade_amount_usdc=4.0, paper_starting_balance=40.0))
     market = make_market(remaining=150)
-    books = books_for(market, up_ask=0.80, down_ask=0.30)
+    books = books_for(market, up_ask=0.80, down_ask=0.40)
     manager = _tap_ready(stack, market, books)
     await manager.tap_buy(market, books, "paper", stack["config"], "UP", 3.0)
     _cooldown_over(manager)
@@ -340,3 +340,34 @@ async def test_sell_all_tap_sells_both_up_and_down_tap_shares():
     with session_scope() as session:
         rows = session.execute(select(Position)).scalars().all()
     assert {(p.side, p.status) for p in rows} == {("UP", "closed"), ("DOWN", "closed")}
+
+
+# ---------------------------------------------------------------- a side under 40 cents cannot be tapped
+@pytest.mark.parametrize("ask", [0.01, 0.10, 0.39])
+async def test_tap_buy_is_blocked_when_the_ask_is_under_40_cents(ask):
+    stack = build_stack(make_config(paper_starting_balance=20.0))
+    market = make_market(remaining=150)
+    books = books_for(market, up_ask=0.80, down_ask=ask)
+    result = await _tap(stack, market, books, "DOWN", 1.0)
+    assert (result.status, result.reason) == ("BLOCKED", "ask_too_low")
+    with session_scope() as session:
+        assert session.execute(select(Order)).first() is None  # nothing was even reserved
+        assert stack["portfolio"].balance(session, "paper") == pytest.approx(20.0)
+
+
+async def test_a_refused_cheap_tap_does_not_start_the_cooldown_and_the_other_side_still_buys():
+    stack = build_stack(make_config(paper_starting_balance=20.0))
+    market = make_market(remaining=150)
+    books = books_for(market, up_ask=0.80, down_ask=0.01)
+    manager = _tap_ready(stack, market, books)
+    first = await manager.tap_buy(market, books, "paper", stack["config"], "DOWN", 1.0)
+    assert first.reason == "ask_too_low"
+    second = await manager.tap_buy(market, books, "paper", stack["config"], "UP", 1.0)  # right away: no cooldown
+    assert second.status == "FILLED"
+
+
+async def test_tap_buy_at_exactly_40_cents_is_allowed():
+    stack = build_stack(make_config(paper_starting_balance=20.0))
+    market = make_market(remaining=150)
+    books = books_for(market, up_ask=0.60, down_ask=0.40)
+    assert (await _tap(stack, market, books, "DOWN", 1.0)).status == "FILLED"

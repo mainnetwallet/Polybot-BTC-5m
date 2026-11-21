@@ -61,6 +61,10 @@ EXIT_STAGES = (0, 1, 2, 3)
 SELLABLE_STAGES = EXIT_STAGES + (TAP_STAGE,)
 # One-tap buy: any second tap inside this window is ignored (double-click / double-tap guard).
 TAP_COOLDOWN_S = 1.0
+# One-tap buy is off for a side whose best ask is below this price (40 cents): a share that cheap is a market that has
+# already gone the other way, and a stray tap on it would still be a real buy. The dashboard / app grey the buttons out
+# with the same number (`tap.min_ask` of the state snapshot); this is the server-side check behind them.
+TAP_MIN_ASK = 0.40
 # Worst price of a one-tap buy: this many ticks above the ask it was shown at, never above TAP_MAX_PRICE.
 TAP_SLIPPAGE_TICKS = 2
 TAP_MAX_PRICE = 0.99
@@ -1125,6 +1129,8 @@ class OrderManager:
         Double tap guard: a second tap within TAP_COOLDOWN_S of an accepted one (any side, any size) is
         refused, a tap is refused while another one is still on its way, and a request id that was already
         seen is refused (a retried request over a bad connection cannot buy twice).
+
+        A side whose best ask is below TAP_MIN_ASK (40 cents) cannot be bought with a tap at all.
         """
         if side not in ("UP", "DOWN"):
             return OrderResult(None, side, "BLOCKED", "bad_side")
@@ -1148,6 +1154,8 @@ class OrderManager:
                 return OrderResult(None, side, "BLOCKED", "no_ask")
             if book.age_ms() > config.stale_data_max_age_ms:
                 return OrderResult(None, side, "BLOCKED", "stale_book")
+            if ask < TAP_MIN_ASK - 1e-9:  # refused before it counts: it does not start the one-second cooldown
+                return OrderResult(None, side, "BLOCKED", "ask_too_low")
             # The tap counts from here on, even if the exchange refuses the order: no second try within 1 s.
             self._tap_last_s = now_s
             if request_id:

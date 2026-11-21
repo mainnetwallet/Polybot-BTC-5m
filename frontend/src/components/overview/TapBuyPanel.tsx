@@ -10,6 +10,9 @@ import { Modal } from "../Modal";
 /** how long all tap buttons stay locked after a tap (the server ignores a second tap in this window too) */
 const LOCK_MS = 1000;
 
+/** a side priced under this (40¢) cannot be bought with a tap; the server refuses it too (`tap.min_ask`) */
+const DEFAULT_MIN_ASK = 0.4;
+
 function cents(price: number | null | undefined): string {
   if (!isNum(price)) return "—";
   const c = price * 100;
@@ -51,6 +54,7 @@ export function TapBuyPanel({ className }: { className?: string }) {
   if (!snapshot) return null;
 
   const limits = snapshot.tap ?? { min_usdc: 1, max_usdc: 100, cooldown_ms: LOCK_MS };
+  const minAsk = isNum(limits.min_ask) ? limits.min_ask : DEFAULT_MIN_ASK;
   const market = snapshot.market;
   const cash = snapshot.account.balance;
   // below the 1 USDC minimum nothing can be bought (exactly 1 or more is fine);
@@ -71,11 +75,14 @@ export function TapBuyPanel({ className }: { className?: string }) {
     const book = side === "UP" ? snapshot.books.up : snapshot.books.down;
     const ask = book?.best_ask ?? null;
     const old = isNum(book?.age_ms) && stale !== null ? book.age_ms > stale : false;
-    return { ask, old };
+    // a very cheap side (the market already went the other way): its buttons stay off so a stray click cannot buy
+    const cheap = isNum(ask) && ask < minAsk - 1e-9;
+    return { ask, old, cheap };
   };
+  const cheapSides = (["UP", "DOWN"] as const).filter((side) => sideInfo(side).cheap);
 
   const tap = (side: Side, amount: number) => {
-    if (!enabled || locked || busy !== null || blocked || noCash(amount)) return;
+    if (!enabled || locked || busy !== null || blocked || noCash(amount) || sideInfo(side).cheap) return;
     setLocked(true);
     setBusy(`${side}:${amount}`);
     window.clearTimeout(timer.current);
@@ -128,17 +135,17 @@ export function TapBuyPanel({ className }: { className?: string }) {
 
       <div className="tap-grid">
         {(["UP", "DOWN"] as const).map((side) => {
-          const { ask, old } = sideInfo(side);
+          const { ask, old, cheap } = sideInfo(side);
           const noAsk = !isNum(ask);
           return (
             <div key={side} className={cx("tap-row", side === "UP" ? "tap-up" : "tap-down")}>
-              <div className="tap-side" title={old ? "Order book is out of date" : "Best ask"}>
+              <div className="tap-side" title={old ? "Order book is out of date" : cheap ? `Under ${cents(minAsk)}: buy is off` : "Best ask"}>
                 <span>{side === "UP" ? "Up" : "Down"}</span>
-                <b className={old ? "tap-old" : undefined}>{noAsk ? "--" : cents(ask)}</b>
+                <b className={old ? "tap-old" : cheap ? "tap-cheap" : undefined}>{noAsk ? "--" : cents(ask)}</b>
               </div>
               {amounts.map((amount) => {
                 const key = `${side}:${amount}`;
-                const off = !enabled || Boolean(blocked) || noAsk || old || locked || busy !== null || noCash(amount);
+                const off = !enabled || Boolean(blocked) || noAsk || old || cheap || locked || busy !== null || noCash(amount);
                 return (
                   <button
                     key={key}
@@ -146,7 +153,7 @@ export function TapBuyPanel({ className }: { className?: string }) {
                     className={cx("tap-btn", busy === key && "is-busy")}
                     disabled={off}
                     onClick={() => tap(side, amount)}
-                    title={`Buy ${money(amount)} of ${side} at the market now`}
+                    title={cheap ? `${side} is under ${cents(minAsk)}: buy is off` : `Buy ${money(amount)} of ${side} at the market now`}
                   >
                     <span className="tap-amt">{busy === key ? "…" : money(amount)}</span>
                     <span className="tap-win">win {winAmount(amount, ask)}</span>
@@ -158,12 +165,16 @@ export function TapBuyPanel({ className }: { className?: string }) {
         })}
       </div>
 
-      <footer className={cx("tap-foot", blocked && "is-warn")}>
+      <footer className={cx("tap-foot", (blocked || cheapSides.length > 0) && "is-warn")}>
         {blocked ? (
           <>
             {!enabled ? <IconLock size={12} /> : null}
             <span className="tap-foot-text">{blocked}</span>
           </>
+        ) : cheapSides.length > 0 ? (
+          <span className="tap-foot-text">
+            {cheapSides.map((side) => (side === "UP" ? "Up" : "Down")).join(" and ")} under {cents(minAsk)}: buy is off
+          </span>
         ) : (
           <span className="tap-foot-text">One click = one buy · no take profit or stop loss</span>
         )}

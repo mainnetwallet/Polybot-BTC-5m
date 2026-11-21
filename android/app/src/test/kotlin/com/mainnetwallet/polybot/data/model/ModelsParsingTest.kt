@@ -215,6 +215,12 @@ class ModelsParsingTest {
         )
         assertEquals(100.0, s.tap!!.maxUsdc, 0.0)
         assertEquals(1000, s.tap!!.cooldownMs)
+        assertEquals(0.40, s.tap!!.minAsk, 0.0) // an older server without min_ask: the 40-cent default
+        val withFloor = AppJson.decodeFromString(
+            Snapshot.serializer(),
+            """{"tap":{"min_usdc":1,"max_usdc":100,"cooldown_ms":1000,"min_ask":0.5}}""",
+        )
+        assertEquals(0.5, withFloor.tap!!.minAsk, 0.0)
         assertEquals(3.2, s.tapBuy!!.filledSize, 0.0)
         assertEquals(0.31, s.tapBuy!!.avgPrice!!, 0.0)
         assertNull(AppJson.decodeFromString(Snapshot.serializer(), "{}").tap)

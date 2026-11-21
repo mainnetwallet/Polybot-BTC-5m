@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.sp
 import com.mainnetwallet.polybot.data.model.BookSnapshot
 import com.mainnetwallet.polybot.data.model.BotState
 import com.mainnetwallet.polybot.data.model.MarketSnapshot
+import com.mainnetwallet.polybot.data.model.TAP_MIN_ASK_DEFAULT
 import com.mainnetwallet.polybot.data.model.TapLimits
 import com.mainnetwallet.polybot.ui.Fmt
 import com.mainnetwallet.polybot.ui.components.Label
@@ -69,6 +70,13 @@ internal fun tapWin(amount: Double, ask: Double?): String {
 internal fun tapSideSelection(current: String?, tapped: String): String? = if (current == tapped) null else tapped
 
 internal fun tapSideEnabled(selected: String?, side: String): Boolean = selected != null && selected == side
+
+/**
+ * A side whose best ask is under [minAsk] (40 cents) cannot be bought with a tap: its buy buttons stay off, so a
+ * stray tap on a nearly-lost side can never buy. The server refuses such a buy too.
+ */
+internal fun tapAskTooLow(ask: Double?, minAsk: Double): Boolean =
+    ask != null && !ask.isNaN() && ask < minAsk - 1e-9
 
 private fun tapMoney(amount: Double): String =
     if (amount == Math.floor(amount)) "$" + amount.toLong() else Fmt.usd(amount, 2)
@@ -104,6 +112,7 @@ fun TapBuyCard(
     var selectedSide by rememberSaveable { mutableStateOf<String?>(null) }
     val chevron by animateFloatAsState(if (expanded) 180f else 0f, label = "tapChevron")
     val ended = market == null || market.remainingSeconds <= 0.0
+    val minAsk = limits?.minAsk ?: TAP_MIN_ASK_DEFAULT
     val blocked: String? = when {
         !enabled -> "One-tap is OFF: tap the OFF button to turn it on"
         bot.killSwitch -> "Kill switch is on"
@@ -177,6 +186,7 @@ fun TapBuyCard(
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     listOf("UP" to up, "DOWN" to down).forEach { (side, book) ->
                         val ask = book?.bestAsk
+                        val tooLow = tapAskTooLow(ask, minAsk)
                         val isUp = side == "UP"
                         val tone = if (isUp) c.up else c.down
                         val container = if (isUp) c.upContainer else c.downContainer
@@ -211,16 +221,16 @@ fun TapBuyCard(
                                 Text(
                                     if (ask == null) "--" else Fmt.centsShort(ask),
                                     style = Mono.small.copy(fontSize = 12.sp),
-                                    color = scheme.onSurfaceVariant,
+                                    color = if (tooLow) scheme.tertiary else scheme.onSurfaceVariant,
                                     maxLines = 1,
                                 )
                             }
                             amounts.forEach { amount ->
                                 val key = "$side:$amount"
                                 Button(
-                                    onClick = { if (tapSideEnabled(selectedSide, side)) onTap(side, amount) },
+                                    onClick = { if (tapSideEnabled(selectedSide, side) && !tooLow) onTap(side, amount) },
                                     enabled = enabled && blocked == null && tapSideEnabled(selectedSide, side) &&
-                                        ask != null && !locked && busyKey == null,
+                                        ask != null && !tooLow && !locked && busyKey == null,
                                     shape = RoundedCornerShape(10.dp),
                                     contentPadding = PaddingValues(horizontal = 2.dp, vertical = 2.dp),
                                     colors = ButtonDefaults.buttonColors(containerColor = container, contentColor = tone),
@@ -246,8 +256,16 @@ fun TapBuyCard(
                         }
                     }
 
+                    val selectedLow = selectedSide != null &&
+                        tapAskTooLow(if (selectedSide == "UP") up?.bestAsk else down?.bestAsk, minAsk)
                     if (blocked != null) {
                         Text(blocked, style = MaterialTheme.typography.bodySmall, color = scheme.tertiary)
+                    } else if (selectedLow) {
+                        Text(
+                            "$selectedSide is under ${Fmt.centsShort(minAsk)}: buy is off",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = scheme.tertiary,
+                        )
                     } else if (selectedSide == null) {
                         Text(
                             "Tap UP or DOWN to choose a side, the buy buttons are locked until then",

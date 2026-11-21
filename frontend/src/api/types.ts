@@ -239,7 +239,7 @@ export interface Snapshot {
   /** shares the operator can sell right now (live market, bot running) */
   sellable?: SellableHolding[];
   /** limits of the one-tap buy */
-  tap?: { min_usdc: number; max_usdc: number; cooldown_ms: number };
+  tap?: { min_usdc: number; max_usdc: number; cooldown_ms: number; min_ask?: number };
   /** present only on the reply to a one-tap buy */
   tap_buy?: { status: string; side: string; filled_size: number; avg_price: number | null };
   /** present only on the reply to a "sell all": which stages went through and which could not be sold */

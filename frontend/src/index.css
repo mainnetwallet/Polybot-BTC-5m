@@ -1016,6 +1016,7 @@ select:focus-visible,
 .tap-up .tap-side { background: var(--up-soft); color: var(--up); }
 .tap-down .tap-side { background: var(--down-soft); color: var(--down); }
 .tap-old { opacity: 0.45; text-decoration: line-through; }
+.tap-cheap { opacity: 0.55; } /* ask under 40¢: the buy buttons of this side are off */
 .tap-btn {
   display: flex;
   min-width: 0;

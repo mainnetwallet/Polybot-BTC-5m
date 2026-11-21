@@ -148,12 +148,16 @@ data class PositionRow(
 /** Server stage number of one-tap buys: a manual trade, not one of the entry stages 0-3. */
 const val TAP_STAGE = 9
 
+/** A side priced under this (40 cents) cannot be bought with a tap; the server refuses it too. */
+const val TAP_MIN_ASK_DEFAULT = 0.40
+
 /** Limits of the one-tap buy (`tap` of the state snapshot). */
 @Serializable
 data class TapLimits(
     @SerialName("min_usdc") val minUsdc: Double = 1.0,
     @SerialName("max_usdc") val maxUsdc: Double = 100.0,
     @SerialName("cooldown_ms") val cooldownMs: Int = 1000,
+    @SerialName("min_ask") val minAsk: Double = TAP_MIN_ASK_DEFAULT,
 )
 
 /** Reply part of a one-tap buy (`tap_buy` of the state snapshot, only present on that reply). */

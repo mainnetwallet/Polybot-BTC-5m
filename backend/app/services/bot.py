@@ -24,7 +24,14 @@ from app.market_data.client import ClobMarketDataClient
 from app.market_discovery.service import MarketDiscovery, MarketMonitor
 from app.market_discovery.types import MarketInfo, ResolutionInfo
 from app.monitoring.logs import LogService, Publisher
-from app.order_manager.manager import EXIT_STAGES, SELL_DUST, TAP_COOLDOWN_S, OrderManager, _floor_shares
+from app.order_manager.manager import (
+    EXIT_STAGES,
+    SELL_DUST,
+    TAP_COOLDOWN_S,
+    TAP_MIN_ASK,
+    OrderManager,
+    _floor_shares,
+)
 from app.portfolio.service import TAP_STAGE, TAP_TAG
 from app.paper_trading.engine import PaperExecutionEngine
 from app.portfolio.analytics import AnalyticsService
@@ -1407,7 +1414,8 @@ class TradingBot:
         Manual and separate from the strategy: no stage rules, no risk limits of the strategy, no buy guard
         and no take-profit / stop-loss. The shares are tagged "tap" and stay until the market settles or the
         operator sells them from the positions list. The kill switch, a stopped bot and a missing / stale
-        order book still block it, and so does a second tap within one second.
+        order book still block it, and so does a second tap within one second. A side priced below
+        TAP_MIN_ASK (40 cents) is blocked too.
         """
         market = self._market
         if self._status != "RUNNING" or self._kill_switch:
@@ -1437,6 +1445,7 @@ class TradingBot:
             "tap_in_flight": "a one-tap buy is already in progress",
             "duplicate_request": "this tap was already received",
             "no_ask": "no ask in the order book right now",
+            "ask_too_low": f"this side is under {TAP_MIN_ASK * 100:.0f}\u00a2: one-tap buy is off for it",
             "stale_book": "the order book is out of date: try again in a moment",
             "bot_not_accepting_orders": "the bot is not accepting orders right now",
             "bad_side": "side must be UP or DOWN",
@@ -2275,6 +2284,7 @@ class TradingBot:
                 "min_usdc": TAP_MIN_USDC,
                 "max_usdc": float(getattr(self.settings, "tap_buy_max_usdc", 100.0)),
                 "cooldown_ms": int(TAP_COOLDOWN_S * 1000),
+                "min_ask": TAP_MIN_ASK,  # a side priced below this cannot be bought with a tap
             },
             "last_order": self._last_order,
             "market_data": self.data.status,

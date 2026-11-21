@@ -135,6 +135,7 @@ A manual buy button next to the BTC tape chart (dashboard) and under the odds (A
 
 - **One tap = one market buy.** No confirm step. A second tap within 1 s is ignored (client and server), a tap is refused while another is in flight, and every tap carries a request id so a retried request never buys twice.
 - **Separate from the strategy.** One-tap shares are their own position row, tagged **One-tap** (cyan). No take profit, no stop loss: they are held until the market settles or you sell them by hand. They never count towards max open positions, daily loss/profit or trades per day, and are never topped up.
+- **40¢ floor.** A side whose best ask is under 40¢ (for example a DOWN at 1¢ in a market that already went UP) cannot be bought with a tap: its buttons are greyed out on the dashboard and in the app ("Down under 40¢: buy is off"), and the server refuses the buy too (`ask_too_low`), so even a stale screen cannot buy it. Exactly 40¢ and above is allowed. The number is `TAP_MIN_ASK` in `backend/app/order_manager/manager.py` and is sent to the clients as `tap.min_ask`.
 - **Selling.** Each one-tap row has its own Sell button. **Sell all** sells the strategy stages only; **Sell all tap** sells the one-tap shares only.
 - **Needs the bot RUNNING.** The kill switch, a stale or missing order book and the balance check still apply. It ignores the buy-guard switch because it is a manual buy.
 - API: `POST /api/orders/tap-buy` (`market_id`, `side`, `amount`, optional `request_id`).
