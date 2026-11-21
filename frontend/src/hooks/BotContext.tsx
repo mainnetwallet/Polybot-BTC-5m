@@ -53,7 +53,8 @@ interface BotContextValue {
   setBuys: (enabled: boolean) => Promise<ActionResult>;
   sellNow: (holding: SellableHolding) => Promise<ActionResult>;
   /** One-tap buy of `amount` USDC on `side` in the live market. A second tap within one second is ignored. */
-  tapBuy: (side: Side, amount: number) => Promise<ActionResult>;
+  /** `minAsk` = lowest share price (0-0.99) the buy may be made at; the server refuses a cheaper side */
+  tapBuy: (side: Side, amount: number, minAsk?: number) => Promise<ActionResult>;
   /** "stages" = Sell all (strategy stages only), "tap" = Sell all tap (one-tap shares only) */
   sellAll: (marketId: string, scope?: "stages" | "tap") => Promise<ActionResult>;
   resetPaper: (balance: number) => Promise<ActionResult>;
@@ -452,7 +453,7 @@ export function BotProvider({ children }: { children: ReactNode }) {
   // here as well as on the server. Every tap carries its own id, so a request the network repeats buys once.
   const tapGate = useRef({ busy: false, last: 0 });
   const tapBuy = useCallback(
-    async (side: Side, amount: number): Promise<ActionResult> => {
+    async (side: Side, amount: number, minAsk?: number): Promise<ActionResult> => {
       const gate = tapGate.current;
       const now = Date.now();
       if (gate.busy || now - gate.last < TAP_LOCK_MS) return { ok: false, error: "ignored" };
@@ -468,7 +469,7 @@ export function BotProvider({ children }: { children: ReactNode }) {
           typeof crypto !== "undefined" && "randomUUID" in crypto
             ? crypto.randomUUID()
             : `${now.toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-        const next = await api.tapBuy(marketId, side, amount, requestId);
+        const next = await api.tapBuy(marketId, side, amount, requestId, minAsk);
         applySnapshot(next);
         const fill = next.tap_buy;
         notify(

@@ -21,6 +21,10 @@ internal fun parseTapAmounts(raw: String?): List<Double> {
     return if (parsed.size == 3) parsed else DEFAULT_TAP_AMOUNTS
 }
 
+/** "0.4" -> 0.4; nothing saved or not a price from 0 to 0.99 -> null (the server's default applies). 0 = no minimum. */
+internal fun parseTapMinAsk(raw: String?): Double? =
+    raw?.trim()?.toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0.0 && it <= 0.99 }
+
 enum class ThemeMode { SYSTEM, DARK, LIGHT }
 
 /** Everything the app remembers between launches. [token] is decrypted on read. */
@@ -40,6 +44,8 @@ data class AppPrefs(
     val tapExpanded: Boolean = true,
     /** One-tap buy switch. OFF by default so a stray tap can never buy; the buttons stay locked until it is turned on. */
     val tapEnabled: Boolean = false,
+    /** Lowest share price a one-tap buy is allowed at (0 to 0.99, 0 = none); null = not set, the server's 40 cents. */
+    val tapMinAsk: Double? = null,
 ) {
     val isConfigured: Boolean get() = pcUrl.isNotBlank() && token.isNotBlank()
 }
@@ -58,6 +64,7 @@ class PrefsStore(private val context: Context) {
         val tapAmounts = stringPreferencesKey("tap_amounts")
         val tapExpanded = booleanPreferencesKey("tap_expanded")
         val tapEnabled = booleanPreferencesKey("tap_enabled")
+        val tapMinAsk = stringPreferencesKey("tap_min_ask")
     }
 
     val prefs: Flow<AppPrefs> = context.polyDataStore.data
@@ -77,6 +84,7 @@ class PrefsStore(private val context: Context) {
                 tapAmounts = parseTapAmounts(p[Keys.tapAmounts]),
                 tapExpanded = p[Keys.tapExpanded] ?: true,
                 tapEnabled = p[Keys.tapEnabled] ?: false,
+                tapMinAsk = parseTapMinAsk(p[Keys.tapMinAsk]),
             )
         }
 
@@ -119,6 +127,12 @@ class PrefsStore(private val context: Context) {
         if (amounts.size != 3 || amounts.any { !it.isFinite() || it < 1.0 }) return
         val text = amounts.joinToString(",") { (Math.round(it * 100.0) / 100.0).toString() }
         context.polyDataStore.edit { it[Keys.tapAmounts] = text }
+    }
+
+    /** Saves the lowest share price (0 to 0.99, 0 = none) a one-tap buy is allowed at. */
+    suspend fun setTapMinAsk(price: Double) {
+        if (!price.isFinite() || price < 0.0 || price > 0.99) return
+        context.polyDataStore.edit { it[Keys.tapMinAsk] = (Math.round(price * 1000.0) / 1000.0).toString() }
     }
 
     suspend fun setTapExpanded(expanded: Boolean) {

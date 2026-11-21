@@ -77,7 +77,7 @@ class BotApi(private val client: ApiClient) {
         )
 
     /** One-tap buy of [amount] USDC. [requestId] makes a request the network repeats buy only once. */
-    suspend fun tapBuy(marketId: String, side: String, amount: Double, requestId: String): Snapshot =
+    suspend fun tapBuy(marketId: String, side: String, amount: Double, requestId: String, minAsk: Double? = null): Snapshot =
         call(
             "POST", "/api/orders/tap-buy", Snapshot.serializer(),
             buildJsonObject {
@@ -85,6 +85,8 @@ class BotApi(private val client: ApiClient) {
                 put("side", side)
                 put("amount", amount)
                 put("request_id", requestId)
+                // the owner's lowest share price (One-tap settings); the server refuses a cheaper side
+                if (minAsk != null) put("min_ask", minAsk)
             },
         )
 

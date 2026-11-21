@@ -1408,14 +1408,22 @@ class TradingBot:
         snapshot["manual_sell"] = result.as_dict()
         return snapshot
 
-    async def tap_buy(self, market_id: str, side: str, amount: float, request_id: str | None = None) -> dict:
+    async def tap_buy(
+        self,
+        market_id: str,
+        side: str,
+        amount: float,
+        request_id: str | None = None,
+        min_ask: float | None = None,
+    ) -> dict:
         """One-tap buy: buy `amount` USDC of `side` in the live market right now, at the market.
 
         Manual and separate from the strategy: no stage rules, no risk limits of the strategy, no buy guard
         and no take-profit / stop-loss. The shares are tagged "tap" and stay until the market settles or the
         operator sells them from the positions list. The kill switch, a stopped bot and a missing / stale
         order book still block it, and so does a second tap within one second. A side priced below
-        TAP_MIN_ASK (40 cents) is blocked too.
+        the floor is blocked too: `min_ask` (the owner's setting, sent with the tap) or TAP_MIN_ASK (40 cents)
+        when none is sent; a floor of 0 turns the check off.
         """
         market = self._market
         if self._status != "RUNNING" or self._kill_switch:
@@ -1437,7 +1445,7 @@ class TradingBot:
             mode=self._mode,
         )
         result = await self.orders.tap_buy(
-            market, self.data.books, self._mode, self.runtime.get(), side, amount, request_id
+            market, self.data.books, self._mode, self.runtime.get(), side, amount, request_id, min_ask
         )
         reasons = {
             "market_ended": "this market has ended: wait for the next one",
@@ -1445,7 +1453,7 @@ class TradingBot:
             "tap_in_flight": "a one-tap buy is already in progress",
             "duplicate_request": "this tap was already received",
             "no_ask": "no ask in the order book right now",
-            "ask_too_low": f"this side is under {TAP_MIN_ASK * 100:.0f}\u00a2: one-tap buy is off for it",
+            "ask_too_low": "this side is priced under your one-tap minimum: buy is off for it",
             "stale_book": "the order book is out of date: try again in a moment",
             "bot_not_accepting_orders": "the bot is not accepting orders right now",
             "bad_side": "side must be UP or DOWN",

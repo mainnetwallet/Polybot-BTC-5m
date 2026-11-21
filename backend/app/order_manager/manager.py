@@ -61,9 +61,10 @@ EXIT_STAGES = (0, 1, 2, 3)
 SELLABLE_STAGES = EXIT_STAGES + (TAP_STAGE,)
 # One-tap buy: any second tap inside this window is ignored (double-click / double-tap guard).
 TAP_COOLDOWN_S = 1.0
-# One-tap buy is off for a side whose best ask is below this price (40 cents): a share that cheap is a market that has
-# already gone the other way, and a stray tap on it would still be a real buy. The dashboard / app grey the buttons out
-# with the same number (`tap.min_ask` of the state snapshot); this is the server-side check behind them.
+# Default floor of the one-tap buy: a side whose best ask is below it (40 cents) cannot be tapped. A share that cheap is
+# a market that has already gone the other way, and a stray tap on it would still be a real buy. The owner can change
+# the floor in the One-tap settings (dashboard / app); the client sends it with every tap as `min_ask`, and this
+# number is what applies when it sends none (`tap.min_ask` of the state snapshot is the default shown there).
 TAP_MIN_ASK = 0.40
 # Worst price of a one-tap buy: this many ticks above the ask it was shown at, never above TAP_MAX_PRICE.
 TAP_SLIPPAGE_TICKS = 2
@@ -1119,6 +1120,7 @@ class OrderManager:
         side: str,
         notional: float,
         request_id: str | None = None,
+        min_ask: float | None = None,
     ) -> OrderResult:
         """One tap = one market BUY of `notional` USDC on `side` at the best ask.
 
@@ -1130,7 +1132,8 @@ class OrderManager:
         refused, a tap is refused while another one is still on its way, and a request id that was already
         seen is refused (a retried request over a bad connection cannot buy twice).
 
-        A side whose best ask is below TAP_MIN_ASK (40 cents) cannot be bought with a tap at all.
+        A side whose best ask is below the floor cannot be bought with a tap at all. The floor is `min_ask` (the
+        owner's One-tap setting, sent with the tap; 0 = none) or TAP_MIN_ASK (40 cents) when the client sends none.
         """
         if side not in ("UP", "DOWN"):
             return OrderResult(None, side, "BLOCKED", "bad_side")
@@ -1154,7 +1157,8 @@ class OrderManager:
                 return OrderResult(None, side, "BLOCKED", "no_ask")
             if book.age_ms() > config.stale_data_max_age_ms:
                 return OrderResult(None, side, "BLOCKED", "stale_book")
-            if ask < TAP_MIN_ASK - 1e-9:  # refused before it counts: it does not start the one-second cooldown
+            floor = TAP_MIN_ASK if min_ask is None else min_ask
+            if floor > 0 and ask < floor - 1e-9:  # refused before it counts: no one-second cooldown is started
                 return OrderResult(None, side, "BLOCKED", "ask_too_low")
             # The tap counts from here on, even if the exchange refuses the order: no second try within 1 s.
             self._tap_last_s = now_s

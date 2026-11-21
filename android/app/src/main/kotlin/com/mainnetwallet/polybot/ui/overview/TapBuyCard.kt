@@ -78,6 +78,12 @@ internal fun tapSideEnabled(selected: String?, side: String): Boolean = selected
 internal fun tapAskTooLow(ask: Double?, minAsk: Double): Boolean =
     ask != null && !ask.isNaN() && ask < minAsk - 1e-9
 
+/** 0.4 -> "40", 0.375 -> "37.5": the minimum share price is edited in cents. */
+internal fun tapCentsText(price: Double): String {
+    val cents = Math.round(price * 1000.0) / 10.0
+    return if (cents == Math.floor(cents)) cents.toLong().toString() else cents.toString()
+}
+
 private fun tapMoney(amount: Double): String =
     if (amount == Math.floor(amount)) "$" + amount.toLong() else Fmt.usd(amount, 2)
 
@@ -95,14 +101,16 @@ fun TapBuyCard(
     balance: Double,
     amounts: List<Double>,
     limits: TapLimits?,
+    /** The owner's own lowest share price (One-tap settings, saved on this phone); null = use the server's. */
+    minAskPref: Double?,
     locked: Boolean,
     busyKey: String?,
     enabled: Boolean,
     expanded: Boolean,
     onToggle: () -> Unit,
-    onTap: (side: String, amount: Double) -> Unit,
+    onTap: (side: String, amount: Double, minAsk: Double) -> Unit,
     onSetEnabled: (Boolean) -> Unit,
-    onSaveSettings: (amounts: List<Double>, enabled: Boolean) -> Unit,
+    onSaveSettings: (amounts: List<Double>, enabled: Boolean, minAsk: Double) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -112,7 +120,7 @@ fun TapBuyCard(
     var selectedSide by rememberSaveable { mutableStateOf<String?>(null) }
     val chevron by animateFloatAsState(if (expanded) 180f else 0f, label = "tapChevron")
     val ended = market == null || market.remainingSeconds <= 0.0
-    val minAsk = limits?.minAsk ?: TAP_MIN_ASK_DEFAULT
+    val minAsk = minAskPref ?: limits?.minAsk ?: TAP_MIN_ASK_DEFAULT
     val blocked: String? = when {
         !enabled -> "One-tap is OFF: tap the OFF button to turn it on"
         bot.killSwitch -> "Kill switch is on"
@@ -228,7 +236,7 @@ fun TapBuyCard(
                             amounts.forEach { amount ->
                                 val key = "$side:$amount"
                                 Button(
-                                    onClick = { if (tapSideEnabled(selectedSide, side) && !tooLow) onTap(side, amount) },
+                                    onClick = { if (tapSideEnabled(selectedSide, side) && !tooLow) onTap(side, amount, minAsk) },
                                     enabled = enabled && blocked == null && tapSideEnabled(selectedSide, side) &&
                                         ask != null && !tooLow && !locked && busyKey == null,
                                     shape = RoundedCornerShape(10.dp),
@@ -256,16 +264,8 @@ fun TapBuyCard(
                         }
                     }
 
-                    val selectedLow = selectedSide != null &&
-                        tapAskTooLow(if (selectedSide == "UP") up?.bestAsk else down?.bestAsk, minAsk)
                     if (blocked != null) {
                         Text(blocked, style = MaterialTheme.typography.bodySmall, color = scheme.tertiary)
-                    } else if (selectedLow) {
-                        Text(
-                            "$selectedSide is under ${Fmt.centsShort(minAsk)}: buy is off",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = scheme.tertiary,
-                        )
                     } else if (selectedSide == null) {
                         Text(
                             "Tap UP or DOWN to choose a side, the buy buttons are locked until then",
@@ -284,10 +284,11 @@ fun TapBuyCard(
             enabled = enabled,
             min = limits?.minUsdc ?: 1.0,
             max = limits?.maxUsdc ?: 100.0,
+            minAsk = minAsk,
             onDismiss = { editing = false },
-            onSave = { newAmounts, on ->
+            onSave = { newAmounts, on, newMinAsk ->
                 editing = false
-                onSaveSettings(newAmounts, on)
+                onSaveSettings(newAmounts, on, newMinAsk)
             },
         )
     }
@@ -300,13 +301,17 @@ private fun TapSettingsDialog(
     enabled: Boolean,
     min: Double,
     max: Double,
+    minAsk: Double,
     onDismiss: () -> Unit,
-    onSave: (List<Double>, Boolean) -> Unit,
+    onSave: (List<Double>, Boolean, Double) -> Unit,
 ) {
     var on by remember { mutableStateOf(enabled) }
+    var minCents by remember { mutableStateOf(tapCentsText(minAsk)) }
+    val minCentsValue = minCents.trim().toDoubleOrNull()
+    val minValid = minCentsValue != null && minCentsValue >= 0.0 && minCentsValue <= 99.0
     var drafts by remember { mutableStateOf(amounts.map { tapMoney(it).removePrefix("$") }) }
     val parsed = drafts.map { it.trim().toDoubleOrNull() }
-    val valid = parsed.all { it != null && it >= min && it <= max }
+    val valid = parsed.all { it != null && it >= min && it <= max } && minValid
     val scheme = MaterialTheme.colorScheme
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -353,10 +358,30 @@ private fun TapSettingsDialog(
                         color = scheme.onSurfaceVariant,
                     )
                 }
+                Column(verticalArrangement = Arrangement.spacedBy(Space.sm)) {
+                    Text("Lowest share price", style = MaterialTheme.typography.labelLarge)
+                    OutlinedTextField(
+                        value = minCents,
+                        onValueChange = { minCents = it },
+                        suffix = { Text("\u00A2") },
+                        singleLine = true,
+                        isError = !minValid,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        modifier = Modifier.width(140.dp),
+                    )
+                    Text(
+                        "The buttons of a side priced under this stay off (0 to 99, 0 = no minimum). Default 40.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = scheme.onSurfaceVariant,
+                    )
+                }
             }
         },
         confirmButton = {
-            TextButton(onClick = { onSave(parsed.map { it ?: 1.0 }, on) }, enabled = valid) { Text("Save") }
+            TextButton(
+                onClick = { onSave(parsed.map { it ?: 1.0 }, on, (minCentsValue ?: 40.0) / 100.0) },
+                enabled = valid,
+            ) { Text("Save") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )

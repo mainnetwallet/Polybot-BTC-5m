@@ -160,3 +160,61 @@ function createBoolPref(key: string, fallback: boolean): () => [boolean, (value:
 
 /** `[one-tap buy is on, setter]`. Default OFF: the tap buttons stay locked until it is switched on, so a stray click cannot buy. */
 export const useTapEnabled = createBoolPref("polybot.tapEnabled", false);
+
+// ---- One-tap buy: the minimum share price (this browser only) ----
+
+const TAP_MIN_ASK_KEY = "polybot.tapMinAsk";
+const minAskListeners = new Set<() => void>();
+let minAskRaw: string | null = null;
+
+function readMinAskRaw(): string {
+  try {
+    return window.localStorage.getItem(TAP_MIN_ASK_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function currentMinAskRaw(): string {
+  if (minAskRaw === null) minAskRaw = readMinAskRaw();
+  return minAskRaw;
+}
+
+/** "0.4" -> 0.4; empty / invalid -> null (nothing saved: the server's default applies). 0 is a real value: no minimum. */
+function parseMinAsk(raw: string): number | null {
+  if (raw.trim() === "") return null;
+  const value = Number(raw);
+  return Number.isFinite(value) && value >= 0 && value <= 0.99 ? value : null;
+}
+
+/** Saves the lowest share price (0 to 0.99, 0 = none) a one-tap buy is allowed at. Kept in this browser only. */
+export function setTapMinAsk(price: number): void {
+  if (!Number.isFinite(price) || price < 0 || price > 0.99) return;
+  minAskRaw = String(Math.round(price * 1000) / 1000);
+  try {
+    window.localStorage.setItem(TAP_MIN_ASK_KEY, minAskRaw);
+  } catch {
+    // storage can be blocked; the choice then only lasts until the next refresh
+  }
+  minAskListeners.forEach((listener) => listener());
+}
+
+function subscribeMinAsk(listener: () => void): () => void {
+  minAskListeners.add(listener);
+  const onStorage = (event: StorageEvent) => {
+    if (event.key !== null && event.key !== TAP_MIN_ASK_KEY) return;
+    minAskRaw = readMinAskRaw();
+    listener();
+  };
+  window.addEventListener("storage", onStorage);
+  return () => {
+    minAskListeners.delete(listener);
+    window.removeEventListener("storage", onStorage);
+  };
+}
+
+/** `[saved minimum share price as 0-0.99 or null when none was saved, setter]`. */
+export function useTapMinAsk(): [number | null, (price: number) => void] {
+  const raw = useSyncExternalStore(subscribeMinAsk, currentMinAskRaw, () => "");
+  return [parseMinAsk(raw), setTapMinAsk];
+}

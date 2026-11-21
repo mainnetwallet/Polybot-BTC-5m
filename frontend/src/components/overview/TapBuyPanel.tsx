@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Side } from "../../api/types";
 import { useBot } from "../../hooks/BotContext";
 import { cx, fmtUsdGrouped, isNum } from "../../lib/format";
-import { useTapAmounts, useTapEnabled } from "../../lib/prefs";
+import { useTapAmounts, useTapEnabled, useTapMinAsk } from "../../lib/prefs";
 import { TAP_COLOR } from "../../lib/stages";
 import { IconGear, IconLock } from "../Icons";
 import { Modal } from "../Modal";
@@ -10,8 +10,13 @@ import { Modal } from "../Modal";
 /** how long all tap buttons stay locked after a tap (the server ignores a second tap in this window too) */
 const LOCK_MS = 1000;
 
-/** a side priced under this (40¢) cannot be bought with a tap; the server refuses it too (`tap.min_ask`) */
+/** used when neither the saved setting nor the server gives a minimum: a side under 40¢ cannot be tapped */
 const DEFAULT_MIN_ASK = 0.4;
+
+/** 0.4 -> "40", 0.375 -> "37.5" (the minimum is shown in cents) */
+function centsText(price: number): string {
+  return String(Math.round(price * 1000) / 10);
+}
 
 function cents(price: number | null | undefined): string {
   if (!isNum(price)) return "—";
@@ -42,11 +47,13 @@ export function TapBuyPanel({ className }: { className?: string }) {
   const { snapshot, tapBuy } = useBot();
   const [amounts, setAmounts] = useTapAmounts();
   const [enabled, setEnabled] = useTapEnabled();
+  const [savedMinAsk, setSavedMinAsk] = useTapMinAsk();
   const [locked, setLocked] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [draft, setDraft] = useState<string[]>(["", "", ""]);
   const [draftOn, setDraftOn] = useState(false);
+  const [draftMin, setDraftMin] = useState("40");
   const timer = useRef<number | undefined>(undefined);
 
   useEffect(() => () => window.clearTimeout(timer.current), []);
@@ -54,7 +61,8 @@ export function TapBuyPanel({ className }: { className?: string }) {
   if (!snapshot) return null;
 
   const limits = snapshot.tap ?? { min_usdc: 1, max_usdc: 100, cooldown_ms: LOCK_MS };
-  const minAsk = isNum(limits.min_ask) ? limits.min_ask : DEFAULT_MIN_ASK;
+  // the owner's own minimum (saved in this browser) wins; without one, the server's default
+  const minAsk = savedMinAsk ?? (isNum(limits.min_ask) ? limits.min_ask : DEFAULT_MIN_ASK);
   const market = snapshot.market;
   const cash = snapshot.account.balance;
   // below the 1 USDC minimum nothing can be bought (exactly 1 or more is fine);
@@ -79,7 +87,6 @@ export function TapBuyPanel({ className }: { className?: string }) {
     const cheap = isNum(ask) && ask < minAsk - 1e-9;
     return { ask, old, cheap };
   };
-  const cheapSides = (["UP", "DOWN"] as const).filter((side) => sideInfo(side).cheap);
 
   const tap = (side: Side, amount: number) => {
     if (!enabled || locked || busy !== null || blocked || noCash(amount) || sideInfo(side).cheap) return;
@@ -87,21 +94,24 @@ export function TapBuyPanel({ className }: { className?: string }) {
     setBusy(`${side}:${amount}`);
     window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => setLocked(false), LOCK_MS);
-    void tapBuy(side, amount).finally(() => setBusy(null));
+    void tapBuy(side, amount, minAsk).finally(() => setBusy(null));
   };
 
   const openSettings = () => {
     setDraft(amounts.map(String));
     setDraftOn(enabled);
+    setDraftMin(centsText(minAsk));
     setSettingsOpen(true);
   };
   const draftValid = draft.every((value) => {
     const n = Number(value);
     return value.trim() !== "" && Number.isFinite(n) && n >= limits.min_usdc && n <= limits.max_usdc;
   });
+  const draftMinValid = draftMin.trim() !== "" && Number.isFinite(Number(draftMin)) && Number(draftMin) >= 0 && Number(draftMin) <= 99;
   const save = () => {
-    if (!draftValid) return;
+    if (!draftValid || !draftMinValid) return;
     setAmounts(draft.map((value) => Number(value)));
+    setSavedMinAsk(Number(draftMin) / 100);
     setEnabled(draftOn);
     setSettingsOpen(false);
   };
@@ -139,7 +149,7 @@ export function TapBuyPanel({ className }: { className?: string }) {
           const noAsk = !isNum(ask);
           return (
             <div key={side} className={cx("tap-row", side === "UP" ? "tap-up" : "tap-down")}>
-              <div className="tap-side" title={old ? "Order book is out of date" : cheap ? `Under ${cents(minAsk)}: buy is off` : "Best ask"}>
+              <div className="tap-side" title={old ? "Order book is out of date" : "Best ask"}>
                 <span>{side === "UP" ? "Up" : "Down"}</span>
                 <b className={old ? "tap-old" : cheap ? "tap-cheap" : undefined}>{noAsk ? "--" : cents(ask)}</b>
               </div>
@@ -153,7 +163,7 @@ export function TapBuyPanel({ className }: { className?: string }) {
                     className={cx("tap-btn", busy === key && "is-busy")}
                     disabled={off}
                     onClick={() => tap(side, amount)}
-                    title={cheap ? `${side} is under ${cents(minAsk)}: buy is off` : `Buy ${money(amount)} of ${side} at the market now`}
+                    title={`Buy ${money(amount)} of ${side} at the market now`}
                   >
                     <span className="tap-amt">{busy === key ? "…" : money(amount)}</span>
                     <span className="tap-win">win {winAmount(amount, ask)}</span>
@@ -165,16 +175,12 @@ export function TapBuyPanel({ className }: { className?: string }) {
         })}
       </div>
 
-      <footer className={cx("tap-foot", (blocked || cheapSides.length > 0) && "is-warn")}>
+      <footer className={cx("tap-foot", blocked && "is-warn")}>
         {blocked ? (
           <>
             {!enabled ? <IconLock size={12} /> : null}
             <span className="tap-foot-text">{blocked}</span>
           </>
-        ) : cheapSides.length > 0 ? (
-          <span className="tap-foot-text">
-            {cheapSides.map((side) => (side === "UP" ? "Up" : "Down")).join(" and ")} under {cents(minAsk)}: buy is off
-          </span>
         ) : (
           <span className="tap-foot-text">One click = one buy · no take profit or stop loss</span>
         )}
@@ -193,7 +199,7 @@ export function TapBuyPanel({ className }: { className?: string }) {
             <button type="button" className="btn btn-ghost" onClick={() => setSettingsOpen(false)}>
               Cancel
             </button>
-            <button type="button" className="btn btn-primary" onClick={save} disabled={!draftValid}>
+            <button type="button" className="btn btn-primary" onClick={save} disabled={!draftValid || !draftMinValid}>
               Save
             </button>
           </>
@@ -236,6 +242,24 @@ export function TapBuyPanel({ className }: { className?: string }) {
             </div>
             <p className="tap-set-sub">
               Each from ${limits.min_usdc} to ${limits.max_usdc}.
+            </p>
+          </div>
+
+          <div>
+            <div className="tap-set-title">Lowest share price (¢)</div>
+            <div className="tap-set-fields">
+              <label className="tap-field">
+                <input
+                  inputMode="decimal"
+                  value={draftMin}
+                  aria-label="Lowest share price in cents"
+                  onChange={(event) => setDraftMin(event.target.value)}
+                />
+                <span>¢</span>
+              </label>
+            </div>
+            <p className="tap-set-sub">
+              The buttons of a side priced under this stay off (0 to 99, 0 = no minimum). Default 40.
             </p>
           </div>
         </div>

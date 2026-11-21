@@ -371,3 +371,45 @@ async def test_tap_buy_at_exactly_40_cents_is_allowed():
     market = make_market(remaining=150)
     books = books_for(market, up_ask=0.60, down_ask=0.40)
     assert (await _tap(stack, market, books, "DOWN", 1.0)).status == "FILLED"
+
+
+async def test_the_owner_can_lower_or_remove_the_floor_with_min_ask():
+    stack = build_stack(make_config(paper_starting_balance=20.0))
+    market = make_market(remaining=150)
+    books = books_for(market, up_ask=0.80, down_ask=0.30)
+    manager = _tap_ready(stack, market, books)
+    # no min_ask sent: the 40 cent default applies
+    assert (await manager.tap_buy(market, books, "paper", stack["config"], "DOWN", 1.0)).reason == "ask_too_low"
+    # the owner set the floor to 25 cents: 30 cents is fine now
+    ok = await manager.tap_buy(market, books, "paper", stack["config"], "DOWN", 1.0, None, 0.25)
+    assert ok.status == "FILLED"
+    _cooldown_over(manager)
+    # ... and 20 cents is still under his floor
+    books[market.down_token_id].asks = {0.20: 1000.0}
+    low = await manager.tap_buy(market, books, "paper", stack["config"], "DOWN", 1.0, None, 0.25)
+    assert low.reason == "ask_too_low"
+    # a floor of 0 = no floor at all
+    assert (await manager.tap_buy(market, books, "paper", stack["config"], "DOWN", 1.0, None, 0.0)).status == "FILLED"
+
+
+async def test_min_ask_can_also_raise_the_floor():
+    stack = build_stack(make_config(paper_starting_balance=20.0))
+    market = make_market(remaining=150)
+    books = books_for(market, up_ask=0.45, down_ask=0.55)
+    manager = _tap_ready(stack, market, books)
+    blocked = await manager.tap_buy(market, books, "paper", stack["config"], "UP", 1.0, None, 0.50)
+    assert blocked.reason == "ask_too_low"
+
+
+def test_tap_buy_request_validates_min_ask():
+    from pydantic import ValidationError
+
+    from app.api.schemas import TapBuyRequest
+
+    base = {"market_id": "m", "side": "UP", "amount": 1}
+    assert TapBuyRequest(**base).min_ask is None
+    assert TapBuyRequest(**base, min_ask=0).min_ask == 0
+    assert TapBuyRequest(**base, min_ask=0.4).min_ask == 0.4
+    for bad in (-0.1, 1.0, 5):
+        with pytest.raises(ValidationError):
+            TapBuyRequest(**base, min_ask=bad)

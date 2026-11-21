@@ -360,7 +360,7 @@ class BotRepository(
      * inside one second, or while one is on its way, is ignored ([TAP_IGNORED]). Every tap has its own request id,
      * so a request the network repeats cannot buy twice.
      */
-    suspend fun tapBuy(side: String, amount: Double): ActionResult {
+    suspend fun tapBuy(side: String, amount: Double, minAsk: Double? = null): ActionResult {
         val marketId = _snapshot.value?.market?.marketId
             ?: return ActionResult(false, "There is no live market right now.")
         val allowed = synchronized(tapLock) {
@@ -385,7 +385,7 @@ class BotRepository(
                     ": order sent"
                 }
                 "One-tap $side bought$bought (" + "$" + String.format(Locale.US, "%.2f", amount) + ")"
-            }) { api.tapBuy(marketId, side, amount, requestId) }
+            }) { api.tapBuy(marketId, side, amount, requestId, minAsk) }
             if (!result.ok) refresh()
             result
         } finally {

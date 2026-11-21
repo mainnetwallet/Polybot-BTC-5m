@@ -42,6 +42,9 @@ class TapBuyRequest(BaseModel):
     amount: float = Field(ge=1, le=100000)
     # one id per tap: the same id sent twice (a retry over a bad connection) buys only once
     request_id: str | None = Field(default=None, max_length=64)
+    # the owner's own floor (One-tap settings, saved on the device): a side whose best ask is below it is not bought.
+    # Not sent = the server default (40 cents); 0 = no floor.
+    min_ask: float | None = Field(default=None, ge=0, le=0.99)
 
 
 class ManualSellAllRequest(BaseModel):

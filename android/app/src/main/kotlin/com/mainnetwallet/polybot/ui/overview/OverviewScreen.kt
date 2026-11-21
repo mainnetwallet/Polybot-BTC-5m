@@ -61,14 +61,14 @@ fun OverviewScreen(modifier: Modifier = Modifier) {
     // the server enforce the same rule). `tapBusy` is the button whose request is on its way.
     var tapLocked by remember { mutableStateOf(false) }
     var tapBusy by remember { mutableStateOf<String?>(null) }
-    fun tapBuy(side: String, amount: Double) {
+    fun tapBuy(side: String, amount: Double, minAsk: Double?) {
         if (prefs?.tapEnabled != true) return // the switch is OFF: a tap never buys
         if (tapLocked || tapBusy != null) return
         tapLocked = true
         tapBusy = "$side:$amount"
         ui.tap()
         scope.launch {
-            val result = repo.tapBuy(side, amount)
+            val result = repo.tapBuy(side, amount, minAsk)
             tapBusy = null
             if (result.message != TAP_IGNORED) ui.report(result)
         }
@@ -130,19 +130,21 @@ fun OverviewScreen(modifier: Modifier = Modifier) {
                     balance = snap.account.balance,
                     amounts = prefs?.tapAmounts ?: DEFAULT_TAP_AMOUNTS,
                     limits = snap.tap,
+                    minAskPref = prefs?.tapMinAsk,
                     locked = tapLocked,
                     busyKey = tapBusy,
                     enabled = prefs?.tapEnabled ?: false,
                     expanded = prefs?.tapExpanded ?: true,
                     onToggle = { scope.launch { graph.prefsStore.setTapExpanded(!(prefs?.tapExpanded ?: true)) } },
-                    onTap = { side, amount -> tapBuy(side, amount) },
+                    onTap = { side, amount, minAsk -> tapBuy(side, amount, minAsk) },
                     onSetEnabled = { on ->
                         ui.tap()
                         scope.launch { graph.prefsStore.setTapEnabled(on) }
                     },
-                    onSaveSettings = { amounts, enabled ->
+                    onSaveSettings = { amounts, enabled, minAsk ->
                         scope.launch {
                             graph.prefsStore.setTapAmounts(amounts)
+                            graph.prefsStore.setTapMinAsk(minAsk)
                             graph.prefsStore.setTapEnabled(enabled)
                         }
                     },

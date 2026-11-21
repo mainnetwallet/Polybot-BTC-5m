@@ -123,7 +123,9 @@ def build_router(
     async def tap_buy(request: TapBuyRequest) -> dict:
         """One-tap buy: one market buy of `amount` USDC, separate from the strategy stages (see TradingBot.tap_buy)."""
         try:
-            return await bot.tap_buy(request.market_id, request.side, request.amount, request.request_id)
+            return await bot.tap_buy(
+                request.market_id, request.side, request.amount, request.request_id, request.min_ask
+            )
         except BotError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
