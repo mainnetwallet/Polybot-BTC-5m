@@ -2,6 +2,9 @@ package com.mainnetwallet.polybot.ui.overview
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -31,9 +34,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -57,6 +62,14 @@ internal fun tapWin(amount: Double, ask: Double?): String {
     val win = amount / ask
     return "win " + if (win >= 1000.0) Fmt.usdGrouped(win, 0) else Fmt.usd(win, if (win >= 100.0) 0 else 2)
 }
+
+/**
+ * Side lock of the one-tap card: tapping UP or DOWN selects it, tapping the selected side again clears it.
+ * Only the buy buttons of the selected side work; with no side selected every buy button is off.
+ */
+internal fun tapSideSelection(current: String?, tapped: String): String? = if (current == tapped) null else tapped
+
+internal fun tapSideEnabled(selected: String?, side: String): Boolean = selected != null && selected == side
 
 private fun tapMoney(amount: Double): String =
     if (amount == Math.floor(amount)) "$" + amount.toLong() else Fmt.usd(amount, 2)
@@ -87,6 +100,8 @@ fun TapBuyCard(
     val scheme = MaterialTheme.colorScheme
     val c = Poly.colors
     var editing by remember { mutableStateOf(false) }
+    // "UP" / "DOWN" / null: only the selected side can buy; null (the start) = every buy button is off
+    var selectedSide by rememberSaveable { mutableStateOf<String?>(null) }
     val chevron by animateFloatAsState(if (expanded) 180f else 0f, label = "tapChevron")
     val ended = market == null || market.remainingSeconds <= 0.0
     val blocked: String? = when {
@@ -154,11 +169,24 @@ fun TapBuyCard(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
-                            Column(Modifier.width(52.dp)) {
+                            val selected = selectedSide == side
+                            // tap the side to select it (the other one is deselected); tap it again to deselect
+                            Column(
+                                Modifier
+                                    .width(52.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(if (selected) container else scheme.surfaceContainer)
+                                    .border(
+                                        BorderStroke(if (selected) 1.5.dp else 1.dp, if (selected) tone else scheme.outlineVariant),
+                                        RoundedCornerShape(8.dp),
+                                    )
+                                    .clickable { selectedSide = tapSideSelection(selectedSide, side) }
+                                    .padding(horizontal = 4.dp, vertical = 3.dp),
+                            ) {
                                 Text(
                                     if (isUp) "UP" else "DOWN",
                                     style = Mono.small.copy(fontWeight = FontWeight.Bold),
-                                    color = tone,
+                                    color = if (selected) tone else tone.copy(alpha = 0.6f),
                                 )
                                 Text(
                                     if (ask == null) "--" else Fmt.centsShort(ask),
@@ -169,8 +197,9 @@ fun TapBuyCard(
                             amounts.forEach { amount ->
                                 val key = "$side:$amount"
                                 Button(
-                                    onClick = { onTap(side, amount) },
-                                    enabled = enabled && blocked == null && ask != null && !locked && busyKey == null,
+                                    onClick = { if (tapSideEnabled(selectedSide, side)) onTap(side, amount) },
+                                    enabled = enabled && blocked == null && tapSideEnabled(selectedSide, side) &&
+                                        ask != null && !locked && busyKey == null,
                                     shape = RoundedCornerShape(10.dp),
                                     contentPadding = PaddingValues(horizontal = 2.dp, vertical = 3.dp),
                                     colors = ButtonDefaults.buttonColors(containerColor = container, contentColor = tone),
@@ -198,6 +227,12 @@ fun TapBuyCard(
 
                     if (blocked != null) {
                         Text(blocked, style = MaterialTheme.typography.bodySmall, color = scheme.tertiary)
+                    } else if (selectedSide == null) {
+                        Text(
+                            "Tap UP or DOWN to choose a side, the buy buttons are locked until then",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = scheme.onSurfaceVariant,
+                        )
                     }
                 }
             }
