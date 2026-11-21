@@ -51,7 +51,6 @@ import com.mainnetwallet.polybot.data.model.MarketSnapshot
 import com.mainnetwallet.polybot.data.model.TapLimits
 import com.mainnetwallet.polybot.ui.Fmt
 import com.mainnetwallet.polybot.ui.components.Label
-import com.mainnetwallet.polybot.ui.components.Pill
 import com.mainnetwallet.polybot.ui.theme.Mono
 import com.mainnetwallet.polybot.ui.theme.Poly
 import com.mainnetwallet.polybot.ui.theme.Space
@@ -94,6 +93,7 @@ fun TapBuyCard(
     expanded: Boolean,
     onToggle: () -> Unit,
     onTap: (side: String, amount: Double) -> Unit,
+    onSetEnabled: (Boolean) -> Unit,
     onSaveSettings: (amounts: List<Double>, enabled: Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -105,7 +105,7 @@ fun TapBuyCard(
     val chevron by animateFloatAsState(if (expanded) 180f else 0f, label = "tapChevron")
     val ended = market == null || market.remainingSeconds <= 0.0
     val blocked: String? = when {
-        !enabled -> "One-tap is OFF: open the settings (gear) to turn it on"
+        !enabled -> "One-tap is OFF: tap the OFF button to turn it on"
         bot.killSwitch -> "Kill switch is on"
         !bot.running -> "Start the bot to buy"
         ended -> "Waiting for the next market"
@@ -130,12 +130,28 @@ fun TapBuyCard(
                 horizontalArrangement = Arrangement.spacedBy(Space.sm),
             ) {
                 Label("One-tap buy", Modifier.weight(1f))
+                // The ON / OFF button of one-tap buy: one click turns it OFF, the next turns it ON.
+                // ON = tinted and outlined (green in paper, red in live), OFF = grey. The balance next to it stays plain text.
+                val modeTone = if (bot.isLive) scheme.error else c.up
                 Text(
-                    (if (bot.isLive) "LIVE" else "PAPER") + " \u00B7 " + Fmt.usdGrouped(balance),
+                    if (enabled) "ON" else "OFF",
+                    style = Mono.small.copy(fontWeight = FontWeight.Bold),
+                    color = if (enabled) modeTone else scheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (enabled) modeTone.copy(alpha = 0.16f) else scheme.surfaceContainerHighest)
+                        .border(
+                            BorderStroke(1.dp, if (enabled) modeTone else scheme.outlineVariant),
+                            RoundedCornerShape(8.dp),
+                        )
+                        .clickable { onSetEnabled(!enabled) }
+                        .padding(horizontal = 8.dp, vertical = 5.dp),
+                )
+                Text(
+                    Fmt.usdGrouped(balance),
                     style = Mono.small,
                     color = if (bot.isLive) scheme.error else scheme.onSurfaceVariant,
                 )
-                if (!enabled) Pill("OFF", scheme.onSurfaceVariant, scheme.surfaceContainerHighest)
                 if (expanded) {
                     Icon(
                         Icons.Filled.Settings,

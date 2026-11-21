@@ -136,6 +136,10 @@ fun OverviewScreen(modifier: Modifier = Modifier) {
                     expanded = prefs?.tapExpanded ?: true,
                     onToggle = { scope.launch { graph.prefsStore.setTapExpanded(!(prefs?.tapExpanded ?: true)) } },
                     onTap = { side, amount -> tapBuy(side, amount) },
+                    onSetEnabled = { on ->
+                        ui.tap()
+                        scope.launch { graph.prefsStore.setTapEnabled(on) }
+                    },
                     onSaveSettings = { amounts, enabled ->
                         scope.launch {
                             graph.prefsStore.setTapAmounts(amounts)
