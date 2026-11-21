@@ -544,3 +544,27 @@ async def test_if_the_order_row_cannot_be_saved_at_all_the_tap_still_answers_wit
     result = await manager.tap_buy(market, books, "paper", stack["config"], "UP", 2.0)  # must not raise
     assert result.reason == "order_row_missing" and result.filled_size > 0 and result.order_id is None
     assert result.error and "exchange" in result.error
+
+
+async def test_a_tap_buy_request_is_not_serialised_behind_the_order_lock():
+    stack = build_stack(make_config(paper_starting_balance=20.0))
+    market = make_market(remaining=150)
+    books = books_for(market, up_ask=0.40, down_ask=0.60)
+    manager = _tap_ready(stack, market, books)
+    seen = []
+    real_provider = manager._executor_provider
+
+    def spy_provider(mode):
+        executor = real_provider(mode)
+        real_place_buy = executor.place_buy
+
+        async def spy_place_buy(request):
+            seen.append(request.exclusive)
+            return await real_place_buy(request)
+
+        executor.place_buy = spy_place_buy  # type: ignore[method-assign]
+        return executor
+
+    manager._executor_provider = spy_provider
+    assert (await manager.tap_buy(market, books, "paper", stack["config"], "UP", 2.0)).status == "FILLED"
+    assert seen == [False]  # a tap asks for no lock; strategy buys keep the default (True)

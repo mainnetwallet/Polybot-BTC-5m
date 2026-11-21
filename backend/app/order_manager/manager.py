@@ -1206,6 +1206,7 @@ class OrderManager:
                 max_price=max_price,
                 observed_at_ms=clock.now_ms(),
                 asset_version=market.asset_version,
+                exclusive=False,  # a tap never waits behind the live order lock (its own guards are above)
             )
             self._logs.log(
                 "INFO",
