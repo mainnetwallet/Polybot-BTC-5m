@@ -1920,22 +1920,30 @@ class TradingBot:
     # that the exchange can no longer tell us about is stuck, not in flight.
     STALE_LIVE_ORDER_SECONDS = 300
 
-    async def _reconcile_open_live_orders(self) -> None:
+    @staticmethod
+    def _open_live_order_ids() -> list[int]:
         with session_scope() as session:
-            orders = session.execute(
-                select(Order).where(
-                    Order.mode == "live",
-                    Order.status.in_(["PENDING", "SUBMITTED", "PARTIALLY_FILLED"]),
-                    Order.exchange_order_id.is_not(None),
-                )
-            ).scalars().all()
-            order_ids = [o.id for o in orders]
+            return list(
+                session.execute(
+                    select(Order.id).where(
+                        Order.mode == "live",
+                        Order.status.in_(["PENDING", "SUBMITTED", "PARTIALLY_FILLED"]),
+                        Order.exchange_order_id.is_not(None),
+                    )
+                ).scalars().all()
+            )
+
+    async def _reconcile_open_live_orders(self) -> None:
+        # This runs every second: its database reads go to a worker thread so the event loop (and with it a
+        # one-tap click that arrives just now) never waits for a database round trip.
+        order_ids = await asyncio.to_thread(self._open_live_order_ids)
         for order_id in order_ids:
             try:
                 await self.orders.reconcile_live_order(order_id)
             except Exception as exc:
                 logger.warning("live reconciliation failed for order %s: %s", order_id, exc)
-        self._expire_stale_live_orders()
+        expired = await asyncio.to_thread(self._close_stale_live_orders)
+        self._log_stale_live_orders(expired)
 
     def _expire_stale_live_orders(self) -> int:
         """Close live orders that can never be reconciled by exchange id.
@@ -1946,6 +1954,12 @@ class TradingBot:
         touched, so nothing that could still be filling is cancelled. Any real fill
         that was missed will show up in the on-chain position reconciliation.
         """
+        expired = self._close_stale_live_orders()
+        self._log_stale_live_orders(expired)
+        return len(expired)
+
+    def _close_stale_live_orders(self) -> list[dict]:
+        """The database part of `_expire_stale_live_orders` (safe for a worker thread: it logs nothing)."""
         cutoff = utcnow() - timedelta(seconds=self.STALE_LIVE_ORDER_SECONDS)
         expired: list[dict] = []
         with session_scope() as session:
@@ -1965,6 +1979,9 @@ class TradingBot:
                     + "exchange outcome unknown; verify against on-chain positions"
                 )
                 expired.append({"order_id": order.id, "exchange_order_id": order.exchange_order_id})
+        return expired
+
+    def _log_stale_live_orders(self, expired: list[dict]) -> None:
         if expired:
             self.logs.log(
                 "WARNING",
@@ -1973,7 +1990,6 @@ class TradingBot:
                 payload={"orders": expired},
                 mode="live",
             )
-        return len(expired)
 
     async def _refresh_live_balance(self) -> None:
         balance = await self.live_engine.get_balance()
@@ -1982,9 +1998,12 @@ class TradingBot:
         changed = self._live_balance is None or abs(self._live_balance - balance) > 1e-9
         self._live_balance = balance
         self._live_balance_at = time.monotonic()
-        try:
+        def _cache() -> None:
             with session_scope() as session:
                 self.portfolio.set_cached_balance(session, "live", balance)
+
+        try:
+            await asyncio.to_thread(_cache)
         except Exception as exc:
             logger.debug("live balance cache failed: %s", exc)
         if changed:
@@ -2052,31 +2071,34 @@ class TradingBot:
             "balance": self._live_balance,
         }
 
-    async def snapshot(self) -> dict:
-        config = self.runtime.get()
-        market = self._market
-        now_ms = int(time.time() * 1000)
-        up_book = self.data.book_for("UP")
-        down_book = self.data.book_for("DOWN")
-        evaluation = (
-            self.strategy.evaluate(market, self.data.books, now_ms, config) if market else None
-        )
-        self._evaluation = evaluation
+    def _snapshot_db(self, mode: str, marks: dict, sellable_market_id: str | None) -> dict:
+        """Everything `snapshot()` reads from the database, in one go, for a WORKER THREAD.
 
+        It used to run on the event loop: with a hosted database every query is a network round trip, so
+        a snapshot (built twice a second for an open dashboard, and again for every tap / sell reply)
+        kept the loop busy for 100-400 ms. A one-tap click that arrived meanwhile was not even read, and
+        the order books, exits and other taps stood still. Nothing here touches loop-owned state:
+        `marks` and `sellable_market_id` are worked out on the loop and handed in.
+        """
+        live_balance = self._live_balance
         with session_scope() as session:
-            balance = self._balance(session)
-            account = self.portfolio.account(session, self._mode)
-            positions = self.portfolio.open_positions(session, self._mode)
-            marks = self._marks()
-            unrealized = self.portfolio.unrealized_pnl(session, self._mode, marks)
-            pnl = self.portfolio.pnl_summary(session, self._mode, unrealized)
+            balance = (
+                live_balance
+                if mode == "live" and live_balance is not None
+                else self.portfolio.balance(session, mode)
+            )
+            account = self.portfolio.account(session, mode)
+            starting_balance = account.starting_balance
+            positions = self.portfolio.open_positions(session, mode)
+            unrealized = self.portfolio.unrealized_pnl(session, mode, marks)
+            pnl = self.portfolio.pnl_summary(session, mode, unrealized)
             # the daily limits (and the "risk halt" shown from them) only look at the strategy stages
-            unrealized_stages = self.portfolio.unrealized_pnl(session, self._mode, marks, include_tap=False)
-            pnl_limits = self.portfolio.pnl_summary(session, self._mode, unrealized_stages, include_tap=False)
-            trades_today = self.portfolio.trades_today(session, self._mode)
+            unrealized_stages = self.portfolio.unrealized_pnl(session, mode, marks, include_tap=False)
+            pnl_limits = self.portfolio.pnl_summary(session, mode, unrealized_stages, include_tap=False)
+            trades_today = self.portfolio.trades_today(session, mode)
             open_orders = session.execute(
                 select(Order).where(
-                    Order.mode == self._mode,
+                    Order.mode == mode,
                     Order.status.in_(["PENDING", "SUBMITTED", "PARTIALLY_FILLED"]),
                 )
             ).scalars().all()
@@ -2115,21 +2137,26 @@ class TradingBot:
             ]
             # Shares the operator can sell right now: only the live market, only while the bot runs.
             sellable_rows: list[dict] = []
-            if (
-                market is not None
-                and market.remaining_seconds() > 0
-                and self._status == "RUNNING"
-                and not self._kill_switch
-            ):
+            if sellable_market_id is not None:
+                # one read of this market's orders and of its open positions serves every holding below
+                # (it used to be two queries per position and stage)
+                market_orders = session.execute(
+                    select(Order).where(Order.mode == mode, Order.market_id == sellable_market_id)
+                ).scalars().all()
+                market_positions = {
+                    (p.side, p.tag or ""): p for p in positions if p.market_id == sellable_market_id
+                }
                 for p in positions:
-                    if p.market_id != market.market_id:
+                    if p.market_id != sellable_market_id:
                         continue
                     # a one-tap position is its own row: only the tap holding belongs to it, and the strategy's
                     # stage holdings only to the untagged row of the same side
                     for stage in ((TAP_STAGE,) if p.tag == TAP_TAG else EXIT_STAGES):
                         held = self.orders.stage0_holding_in_session(
-                            session, self._mode, p.market_id, stage,
+                            session, mode, p.market_id, stage,
                             p.side if stage == TAP_STAGE else None,
+                            orders=market_orders,
+                            positions=market_positions,
                         )
                         if (
                             held is not None
@@ -2170,6 +2197,48 @@ class TradingBot:
                 }
                 for o in open_orders
             ]
+
+        return {
+            "balance": balance,
+            "starting_balance": starting_balance,
+            "pnl": pnl,
+            "pnl_limits": pnl_limits,
+            "trades_today": trades_today,
+            "position_rows": position_rows,
+            "sellable_rows": sellable_rows,
+            "order_rows": order_rows,
+        }
+
+    async def snapshot(self) -> dict:
+        config = self.runtime.get()
+        market = self._market
+        now_ms = int(time.time() * 1000)
+        up_book = self.data.book_for("UP")
+        down_book = self.data.book_for("DOWN")
+        evaluation = (
+            self.strategy.evaluate(market, self.data.books, now_ms, config) if market else None
+        )
+        self._evaluation = evaluation
+
+        mode = self._mode
+        marks = self._marks()  # touches loop-owned state, so it is done here, not in the thread
+        sellable_market_id = (
+            market.market_id
+            if market is not None
+            and market.remaining_seconds() > 0
+            and self._status == "RUNNING"
+            and not self._kill_switch
+            else None
+        )
+        db = await asyncio.to_thread(self._snapshot_db, mode, marks, sellable_market_id)
+        balance = db["balance"]
+        starting_balance = db["starting_balance"]
+        pnl = db["pnl"]
+        pnl_limits = db["pnl_limits"]
+        trades_today = db["trades_today"]
+        position_rows = db["position_rows"]
+        sellable_rows = db["sellable_rows"]
+        order_rows = db["order_rows"]
 
         latency_avg = round(sum(self._latencies) / len(self._latencies), 2) if self._latencies else None
         market_payload = None
@@ -2284,7 +2353,7 @@ class TradingBot:
             "account": {
                 "mode": self._mode,
                 "balance": round(balance, 6),
-                "starting_balance": round(account.starting_balance, 6),
+                "starting_balance": round(starting_balance, 6),
                 **pnl,
                 "trades_today": trades_today,
                 "positions_awaiting_settlement": sum(

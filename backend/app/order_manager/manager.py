@@ -975,11 +975,21 @@ class OrderManager:
     # ------------------------------------------------------------------
     @staticmethod
     def stage0_holding_in_session(
-        session, mode: str, market_id: str, stage: int = 0, side: str | None = None
+        session,
+        mode: str,
+        market_id: str,
+        stage: int = 0,
+        side: str | None = None,
+        *,
+        orders: list | None = None,
+        positions: dict | None = None,
     ) -> Stage0Holding | None:
-        orders = session.execute(
-            select(Order).where(Order.mode == mode, Order.market_id == market_id)
-        ).scalars().all()
+        """`orders` (this mode + market) and `positions` ({(side, tag): open Position}) may be handed in when the
+        caller already read them, so asking about several stages / sides costs no further queries."""
+        if orders is None:
+            orders = session.execute(
+                select(Order).where(Order.mode == mode, Order.market_id == market_id)
+            ).scalars().all()
         buys = [
             o for o in orders
             if o.order_key and _SELL_MARK not in o.order_key
@@ -996,14 +1006,18 @@ class OrderManager:
             and OrderManager._key_stage(o.order_key) == stage
         ]
         held = sum(o.filled_size for o in buys if o.side == side) - sum(o.filled_size for o in sells)
-        position = session.execute(
-            select(Position).where(
-                Position.mode == mode,
-                Position.market_id == market_id,
-                Position.side == side,
-                Position.tag == (TAP_TAG if stage == TAP_STAGE else ""),
-            )
-        ).scalar_one_or_none()
+        tag = TAP_TAG if stage == TAP_STAGE else ""
+        if positions is not None:
+            position = positions.get((side, tag))
+        else:
+            position = session.execute(
+                select(Position).where(
+                    Position.mode == mode,
+                    Position.market_id == market_id,
+                    Position.side == side,
+                    Position.tag == tag,
+                )
+            ).scalar_one_or_none()
         if position is None or position.status != "open":
             return None
         held = min(held, position.size)
