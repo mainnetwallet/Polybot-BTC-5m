@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import time
 from dataclasses import replace
 from datetime import timedelta, timezone
@@ -19,6 +20,7 @@ from app.market_data.btc_price import BtcPriceFeed
 from app.risk_manager import buy_guard
 from app.risk_manager.manager import RiskManager
 from app.services import bot as bot_module
+from app.services import telegram_format as tg
 from app.services.telegram import TelegramService, parse_command, parse_message, parse_minutes
 
 from .helpers import books_for, build_stack, make_config, make_ctx, make_market, stage_books
@@ -131,9 +133,11 @@ class FakeTelegram:
 
     def __init__(self):
         self.sent: list[str] = []
+        self.keyboards: list[dict | None] = []
 
-    async def send(self, text: str) -> bool:
+    async def send(self, text: str, keyboard: dict | None = None) -> bool:
         self.sent.append(text)
+        self.keyboards.append(keyboard)
         return True
 
     async def start(self): ...
@@ -179,7 +183,8 @@ async def test_gap_of_500_switches_buying_off_and_sends_one_telegram_alert(monke
     assert "BTC gap too large" in bot._buys_block_reason()
     assert len(bot.telegram.sent) == 1
     alert = bot.telegram.sent[0]
-    assert "BUYING STOPPED" in alert and "520.00 USD above" in alert and '"Buy"' in alert
+    assert "Buying stopped" in alert and "+520.00 USD (above)" in alert
+    assert bot.telegram.keyboards[0] == tg.MAIN_KEYBOARD  # the Buy / Off / Status buttons come with the alert
 
     bot._check_buy_guards(bot._market, config)  # still crossed: no second alert, no flapping
     await _drain(bot)
@@ -244,12 +249,12 @@ async def test_stop_and_status_commands(monkeypatch):
     state["price"] = 100_200.0
 
     status = await bot._on_telegram_command("status")
-    assert "Buying: ON" in status and "+200.00 USD" in status
+    assert re.search(r"Buying\s+ON", status) and "+200.00 USD" in status
 
     assert "Buying is OFF" in await bot._on_telegram_command("stop")
     assert bot._buys_off and bot._buys_off_by == "manual"
     assert "already OFF" in await bot._on_telegram_command("stop")
-    assert "Buying: OFF" in await bot._on_telegram_command("status")
+    assert re.search(r"Buying\s+OFF", await bot._on_telegram_command("status"))
 
     assert "Buying is ON" in await bot._on_telegram_command("buy")
     assert "already ON" in await bot._on_telegram_command("buy")
@@ -289,7 +294,8 @@ async def test_turning_buys_on_or_off_elsewhere_notifies_telegram(monkeypatch):
     await bot._change_buys(False, "dashboard")
     await bot._change_buys(True, "dashboard")
     await _drain(bot)
-    assert [("OFF" in m, "ON" in m) for m in bot.telegram.sent] == [(True, False), (False, True)]
+    assert ["turned off" in m for m in bot.telegram.sent] == [True, False]
+    assert "turned on" in bot.telegram.sent[1]
     # a change made from Telegram is answered in the chat itself, not announced a second time
     bot.telegram.sent.clear()
     await bot._on_telegram_command("stop")
@@ -323,14 +329,14 @@ async def test_trip_alert_tells_when_buying_comes_back_by_itself(monkeypatch):
     bot._check_buy_guards(bot._market, config)
     await _drain(bot)
     alert = bot.telegram.sent[0]
-    assert "turns back on by itself in 60 min" in alert and "re-armed" in alert and '"Delay 30"' in alert
+    assert "Auto-resume in <b>60 min</b>" in alert and "re-armed" in alert
 
     bot2, state2, config2 = _new_bot(monkeypatch)
     config2 = make_config(buy_guard_gap_usd=500.0, buy_guard_resume_minutes=0)
     state2["price"] = 100_700.0
     bot2._check_buy_guards(bot2._market, config2)
     await _drain(bot2)
-    assert "Auto-resume is off" in bot2.telegram.sent[0]
+    assert "Auto-resume is <b>off</b>" in bot2.telegram.sent[0]
 
 
 async def test_buying_switches_itself_back_on_after_the_delay_and_the_guards_reset(monkeypatch):
@@ -346,7 +352,7 @@ async def test_buying_switches_itself_back_on_after_the_delay_and_the_guards_res
     bot._guard_disarmed = {buy_guard.GAP_GUARD}
     bot._buys_off_since = utcnow() - timedelta(minutes=61)
     text = bot._maybe_auto_resume(config)
-    assert text is not None and "back ON by itself" in text and "60 min" in text
+    assert text is not None and "Buying resumed" in text and "60 min" in text
     assert not bot._buys_off and bot._buys_block_reason() == "" and bot._guard_disarmed == set()
     with session_scope() as session:
         assert session.get(BotSetting, bot_module.BUYS_STATE_KEY).value["off"] is False
@@ -366,7 +372,7 @@ async def test_after_the_auto_resume_the_guard_trips_again_with_a_new_alert_if_b
     await _drain(bot)
     assert bot._buys_off and bot._buys_off_by == buy_guard.GAP_GUARD
     assert bot._buys_off_since > first_since  # a new wait starts
-    assert len(bot.telegram.sent) == 2 and "BUYING STOPPED" in bot.telegram.sent[1]
+    assert len(bot.telegram.sent) == 2 and "Buying stopped" in bot.telegram.sent[1]
 
     # BTC calmed down meanwhile: resume stays on and no alert
     bot._buys_off_since = utcnow() - timedelta(minutes=61)
@@ -393,7 +399,7 @@ async def test_changing_the_delay_applies_to_the_running_countdown(monkeypatch):
     bot._check_buy_guards(bot._market, config)
     bot._buys_off_since = utcnow() - timedelta(minutes=50)
     try:
-        assert "Auto-resume wait after a guard trip: 60 min" in await bot._on_telegram_command("delay")
+        assert "Wait after a guard trip: 60 min" in await bot._on_telegram_command("delay")
         reply = await bot._on_telegram_command("delay", "2h")
         assert "120 min" in reply and "comes back at" in reply
         assert bot.runtime.get().buy_guard_resume_minutes == 120
@@ -428,7 +434,7 @@ async def test_off_is_permanent_for_the_day_and_comes_back_the_next_day(monkeypa
     bot._buys_off_since = utcnow() - timedelta(days=1, minutes=1)
     bot._guard_disarmed = {buy_guard.GAP_GUARD}
     text = bot._maybe_auto_resume(config)
-    assert text is not None and "New day" in text
+    assert text is not None and "New trading day" in text
     assert not bot._buys_off and bot._guard_disarmed == set()
 
 
@@ -473,14 +479,14 @@ async def test_the_once_a_second_tick_resumes_buying_and_trips_the_guard_again_i
     bot._buy_switch_tick()  # hour over, BTC still 700 away: resumed and tripped again within one tick
     await _drain(bot)
     assert bot._buys_off and bot._buys_off_by == buy_guard.GAP_GUARD
-    assert len(bot.telegram.sent) == 2 and "BUYING STOPPED" in bot.telegram.sent[1]
-    assert not any("back ON by itself" in m for m in bot.telegram.sent)  # one message, not two
+    assert len(bot.telegram.sent) == 2 and "Buying stopped" in bot.telegram.sent[1]
+    assert not any("Buying resumed" in m for m in bot.telegram.sent)  # one message, not two
 
     bot._buys_off_since = utcnow() - timedelta(minutes=61)
     state["price"] = 100_050.0  # calm now
     bot._buy_switch_tick()
     await _drain(bot)
-    assert not bot._buys_off and "back ON by itself" in bot.telegram.sent[-1]
+    assert not bot._buys_off and "Buying resumed" in bot.telegram.sent[-1]
 
 
 async def test_a_stopped_bot_still_switches_buying_back_on_when_the_wait_is_over(monkeypatch):
@@ -621,3 +627,112 @@ async def test_commands_sent_while_the_backend_was_down_are_dropped():
     service = _telegram(handler, on_command)
     await service._skip_backlog()
     assert service._offset == 78 and received == []
+
+
+# --------------------------------------------------------------------------- Telegram layout, buttons, markup
+def test_start_shows_the_panel_and_never_switches_buying_on():
+    assert parse_command("/start") == "help"
+    assert parse_command("help") == "help" and parse_command("/menu") == "help"
+    assert parse_command("on") == "buy"  # an explicit word still works
+
+
+def test_callback_data_round_trips_and_rejects_unknown_actions():
+    assert tg.parse_callback("cmd:buy") == ("buy", "")
+    assert tg.parse_callback("cmd:delay:30") == ("delay", "30")
+    assert tg.parse_callback("cmd:delay:off") == ("delay", "off")
+    for bad in (None, "", "buy", "cmd:", "cmd:drop_tables", "x:buy"):
+        assert tg.parse_callback(bad) is None
+    # every button of both keyboards is understood by the parser
+    for keyboard in (tg.MAIN_KEYBOARD, tg.DELAY_KEYBOARD):
+        for row in keyboard["inline_keyboard"]:
+            for button in row:
+                assert tg.parse_callback(button["callback_data"]) is not None
+
+
+def test_table_aligns_and_escapes():
+    out = tg.table([("BTC", "1"), ("Price to beat", "<2>")])
+    assert out == "<pre>BTC            1\nPrice to beat  &lt;2&gt;</pre>"
+    assert tg.strip_tags("<b>Hi</b> &lt;x&gt;") == "Hi <x>"
+
+
+def test_guard_alert_layout():
+    text = tg.guard_alert("BTC gap too large", (("BTC", "1"), ("Gap", "+5 USD")), 60, "05:04")
+    assert text.startswith("🛑 <b>Buying stopped</b> · BTC gap too large")
+    assert "<pre>" in text and "~05:04 UTC" in text
+    assert "Auto-resume is <b>off</b>" in tg.guard_alert("x", (("a", "b"),), None, None)
+
+
+async def test_a_button_tap_runs_the_command_and_answers_the_query():
+    calls = []
+
+    async def on_command(command, arg=""):
+        calls.append((command, arg))
+        return f"ran {command} {arg}".strip()
+
+    bodies = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        bodies.append((request.url.path.rsplit("/", 1)[-1], request.read().decode()))
+        return httpx.Response(200, json={"ok": True})
+
+    service = _telegram(handler, on_command)
+    tap = {"callback_query": {"id": "cb1", "data": "cmd:delay:30", "message": {"chat": {"id": 42}}}}
+    await service._handle_update({"update_id": 1, **tap})
+    assert calls == [("delay", "30")]
+    assert [name for name, _ in bodies] == ["answerCallbackQuery", "sendMessage"]
+    assert "reply_markup" in bodies[1][1]
+
+    stranger = {"callback_query": {"id": "cb2", "data": "cmd:buy", "message": {"chat": {"id": 999}}}}
+    await service._handle_update({"update_id": 2, **stranger})  # not the owner: nothing runs, nothing is sent
+    assert calls == [("delay", "30")] and len(bodies) == 2
+
+    junk = {"callback_query": {"id": "cb3", "data": "cmd:nope", "message": {"chat": {"id": 42}}}}
+    await service._handle_update({"update_id": 3, **junk})
+    assert calls == [("delay", "30")]
+
+
+async def test_delay_without_a_number_offers_the_preset_buttons():
+    async def on_command(command, arg=""):
+        return "pick one"
+
+    bodies = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        bodies.append(request.read().decode())
+        return httpx.Response(200, json={"ok": True})
+
+    service = _telegram(handler, on_command)
+    await service._handle_update({"update_id": 1, "message": {"chat": {"id": 42}, "text": "Delay"}})
+    assert "cmd:delay:15" in bodies[0] and "cmd:delay:off" in bodies[0]
+
+
+async def test_send_uses_html_and_falls_back_to_plain_text_when_telegram_rejects_the_markup():
+    bodies = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = request.read().decode()
+        bodies.append(body)
+        if "parse_mode" in body:
+            return httpx.Response(400, json={"ok": False, "description": "can't parse entities"})
+        return httpx.Response(200, json={"ok": True})
+
+    service = _telegram(handler)
+    assert await service.send("<b>Hello</b> &amp; bye", tg.MAIN_KEYBOARD) is True
+    assert '"parse_mode":"HTML"' in bodies[0].replace(" ", "")
+    assert len(bodies) == 2 and "parse_mode" not in bodies[1] and "<b>" not in bodies[1]
+    assert "Hello" in bodies[1] and "reply_markup" in bodies[1]
+
+
+async def test_a_failing_command_reply_is_escaped():
+    async def on_command(command, arg=""):
+        raise RuntimeError("bad <thing> & more")
+
+    bodies = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        bodies.append(request.read().decode())
+        return httpx.Response(200, json={"ok": True})
+
+    service = _telegram(handler, on_command)
+    await service._handle_update({"update_id": 1, "message": {"chat": {"id": 42}, "text": "Buy"}})
+    assert "bad &lt;thing&gt; &amp; more" in bodies[0]

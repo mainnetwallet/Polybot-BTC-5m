@@ -3,7 +3,9 @@
 * ``send`` pushes an alert to TELEGRAM_CHAT_ID (never raises: a Telegram outage must not touch trading).
 * The poll loop long-polls ``getUpdates`` and hands plain-text commands from that one chat to the bot:
   ``Buy`` (buying on), ``Off`` / ``Stop`` (buying off for the rest of the day), ``Delay 30`` (change the
-  auto-resume wait, in minutes), ``Status``. Messages from any other chat are ignored.
+  auto-resume wait, in minutes), ``Status``, ``Help`` (also what ``/start`` shows). The same actions are inline
+  buttons under every alert / reply. Messages and button taps from any other chat are ignored.
+* Messages are HTML (see telegram_format.py). If Telegram ever rejects the markup the same text is re-sent plain.
 * Commands that were sent while the backend was down are dropped at start-up, so an old "Buy" can never
   switch buying on later.
 
@@ -19,6 +21,7 @@ from collections.abc import Awaitable, Callable
 import httpx
 
 from app.config.settings import Settings
+from app.services import telegram_format as fmt
 
 logger = logging.getLogger(__name__)
 
@@ -29,8 +32,10 @@ MAX_MESSAGE_CHARS = 4000  # Telegram's hard limit is 4096
 # command word -> canonical command. Matched on the first word, case-insensitive, with an optional leading "/".
 COMMANDS = {
     "buy": "buy",
-    "start": "buy",
     "on": "buy",
+    "start": "help",  # Telegram sends /start when the chat is opened: show the panel, never switch buying on
+    "help": "help",
+    "menu": "help",
     "stop": "stop",
     "off": "stop",
     "permanent": "stop",
@@ -143,8 +148,11 @@ class TelegramService:
         if client is not None:
             await client.aclose()
 
-    async def send(self, text: str) -> bool:
-        """Send `text` to the configured chat. Returns False (and logs) on any failure; never raises."""
+    async def send(self, text: str, keyboard: dict | None = None) -> bool:
+        """Send HTML `text` (and optional inline `keyboard`) to the configured chat.
+
+        Returns False (and logs) on any failure; never raises.
+        """
         if not self._enabled:
             return False
         client = self._client
@@ -153,14 +161,19 @@ class TelegramService:
             client = httpx.AsyncClient(timeout=httpx.Timeout(15.0, connect=10.0))
             close_after = True
         try:
-            response = await client.post(
-                self._url("sendMessage"),
-                json={
-                    "chat_id": self._chat_id,
-                    "text": text[:MAX_MESSAGE_CHARS],
-                    "disable_web_page_preview": True,
-                },
-            )
+            payload: dict = {
+                "chat_id": self._chat_id,
+                "text": text[:MAX_MESSAGE_CHARS],
+                "parse_mode": "HTML",
+                "disable_web_page_preview": True,
+            }
+            if keyboard:
+                payload["reply_markup"] = keyboard
+            response = await client.post(self._url("sendMessage"), json=payload)
+            if response.status_code == 400:  # most likely the markup (cut in the middle of a tag, ...): go plain
+                payload["text"] = fmt.strip_tags(text)[:MAX_MESSAGE_CHARS]
+                payload.pop("parse_mode")
+                response = await client.post(self._url("sendMessage"), json=payload)
             response.raise_for_status()
             self.last_error = None
             return True
@@ -177,7 +190,7 @@ class TelegramService:
     # ------------------------------------------------------------------ polling
     async def _get_updates(self, timeout: int, offset: int | None) -> list[dict]:
         assert self._client is not None
-        params: dict = {"timeout": timeout, "allowed_updates": '["message"]'}
+        params: dict = {"timeout": timeout, "allowed_updates": '["message","callback_query"]'}
         if offset is not None:
             params["offset"] = offset
         response = await self._client.get(self._url("getUpdates"), params=params)
@@ -194,6 +207,18 @@ class TelegramService:
         if updates:
             self._offset = int(updates[-1]["update_id"]) + 1
 
+    async def _register_menu(self) -> None:
+        """Fill Telegram's "/" menu. Cosmetic: a failure is logged and ignored."""
+        assert self._client is not None
+        try:
+            commands = [{"command": name, "description": text} for name, text in fmt.BOT_MENU]
+            response = await self._client.post(self._url("setMyCommands"), json={"commands": commands})
+            response.raise_for_status()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning("telegram menu not set: %s", self._safe(f"{type(exc).__name__}: {exc}"))
+
     async def _poll_loop(self) -> None:
         backoff = 2.0
         backlog_skipped = False
@@ -202,6 +227,7 @@ class TelegramService:
                 if not backlog_skipped:
                     await self._skip_backlog()
                     backlog_skipped = True
+                    await self._register_menu()
                 updates = await self._get_updates(POLL_TIMEOUT_SECONDS, self._offset)
                 backoff = 2.0
                 self.last_error = None
@@ -217,6 +243,10 @@ class TelegramService:
                 backoff = min(backoff * 2, 60.0)
 
     async def _handle_update(self, update: dict) -> None:
+        callback = update.get("callback_query")
+        if isinstance(callback, dict):
+            await self._handle_callback(callback)
+            return
         message = update.get("message")
         if not isinstance(message, dict):
             return
@@ -224,15 +254,42 @@ class TelegramService:
         if str(chat.get("id", "")) != self._chat_id:
             return  # only the owner's chat may control the bot
         parsed = parse_message(message.get("text"))
-        if parsed is None or self._on_command is None:
+        if parsed is None:
             return
-        command, arg = parsed
+        await self._run_command(*parsed)
+
+    async def _handle_callback(self, callback: dict) -> None:
+        """A tap on an inline button. Same rules as a typed command: only the owner's chat."""
+        message = callback.get("message") or {}
+        chat = message.get("chat") or {}
+        if str(chat.get("id", "")) != self._chat_id:
+            return
+        await self._answer_callback(callback.get("id"))  # stops the button's loading spinner
+        parsed = fmt.parse_callback(callback.get("data"))
+        if parsed is None:
+            return
+        await self._run_command(*parsed)
+
+    async def _answer_callback(self, callback_id: str | None) -> None:
+        if not callback_id or self._client is None:
+            return
+        try:
+            await self._client.post(self._url("answerCallbackQuery"), json={"callback_query_id": callback_id})
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.debug("telegram answerCallbackQuery failed: %s", self._safe(str(exc)))
+
+    async def _run_command(self, command: str, arg: str) -> None:
+        if self._on_command is None:
+            return
         try:
             reply = await self._on_command(command, arg)
         except asyncio.CancelledError:
             raise
         except Exception as exc:
             logger.exception("telegram command %s failed", command)
-            reply = f"Command '{command}' failed: {exc}"
+            reply = fmt.error_reply(command, exc)
         if reply:
-            await self.send(reply)
+            keyboard = fmt.DELAY_KEYBOARD if command == "delay" and not arg.strip() else fmt.MAIN_KEYBOARD
+            await self.send(reply, keyboard)

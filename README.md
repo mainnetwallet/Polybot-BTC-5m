@@ -173,9 +173,15 @@ When a guard trips, Telegram gets an alert with the reason and buying goes off. 
 `Status` on Telegram shows the BTC gap / trend now and when buying comes back. The switch and its start time are
 saved, so a restart does not silently turn buying back on early or lose the countdown.
 
+**Telegram layout.** Every alert and reply has the same shape: a one-line bold headline, a small aligned table with
+the numbers, one or two plain sentences, and tap buttons under it (**Buy on**, **Off for today**, **Status**,
+**Auto-resume** with 15 min / 30 min / 1 h / 2 h / never presets). Typed commands still work exactly as before. The
+"/" menu lists `/status`, `/buy`, `/off`, `/delay`, `/help`; `/start` (and `/help`) shows the status panel and the
+command list and never changes the buy switch. The layout lives in `backend/app/services/telegram_format.py`.
+
 Telegram setup: create a bot with @BotFather, set `TELEGRAM_BOT_TOKEN`, send the bot one message, open
 `https://api.telegram.org/bot<TOKEN>/getUpdates`, and put `chat.id` into `TELEGRAM_CHAT_ID`. Only that chat can
-send commands (`Buy`, `Off`, `Delay <minutes>`, `Status`); commands sent while the backend was down are ignored.
+send commands or tap buttons (`Buy`, `Off`, `Delay <minutes>`, `Status`, `Help`); commands sent while the backend was down are ignored.
 API: `POST /api/buys {"enabled": true|false}` (`false` = off for the rest of the day); the wait is the
 `buy_guard_resume_minutes` setting (`PATCH /api/settings`).
 

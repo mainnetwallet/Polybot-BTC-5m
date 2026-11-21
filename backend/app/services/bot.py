@@ -32,6 +32,7 @@ from app.portfolio.service import Portfolio, start_of_day_utc
 from app.risk_manager import buy_guard
 from app.risk_manager.manager import RiskContext, RiskManager
 from app.services.order_outcomes import sell_outcomes
+from app.services import telegram_format as tg
 from app.services.telegram import TelegramService, parse_minutes
 from app.strategy.engine import Stage1Strategy
 from app.strategy.types import StrategyEvaluation
@@ -865,22 +866,14 @@ class TradingBot:
             mode=self._mode,
         )
         resume_at = self._buys_resume_at(config)
-        if resume_at is not None:
-            minutes = int(config.buy_guard_resume_minutes)
-            resume_line = (
-                f"If you do nothing, buying turns back on by itself in {minutes} min "
-                f"(~{resume_at:%H:%M} UTC), with the guards fully re-armed. "
-                'Send "Delay 30" to change the wait, "Off" to keep buying off until the next day.'
-            )
-        else:
-            resume_line = 'Auto-resume is off: buying stays off until you send "Buy" ("Delay 60" turns auto-resume on).'
         self._notify_telegram(
-            f"\U0001F6D1 BUYING STOPPED: {title}\n"
-            f"{trip.message}\n\n"
-            "No new buys in any stage. The bot keeps running: open positions keep their take-profit / "
-            "stop-loss and settle normally.\n"
-            'Send "Buy" here to turn buying back on now (or use the dashboard / app).\n'
-            f"{resume_line}"
+            tg.guard_alert(
+                title,
+                trip.details or (("Detail", trip.message),),
+                int(config.buy_guard_resume_minutes) if resume_at is not None else None,
+                f"{resume_at:%H:%M}" if resume_at is not None else None,
+            ),
+            tg.MAIN_KEYBOARD,
         )
         self._schedule_broadcast()
 
@@ -919,14 +912,11 @@ class TradingBot:
         self._persist_buys_state()
         self.orders.reset_trigger_cache()
         if by == MANUAL_OFF:
-            text = "\u2705 New day: buying is back ON. All guards are re-armed."
+            text = tg.auto_resumed(new_day=True, minutes=0, title=title)
             log = "buying turned ON automatically: the day it was switched off has ended"
         else:
             minutes = int(config.buy_guard_resume_minutes)
-            text = (
-                f"\u2705 Buying is back ON by itself: {minutes} min passed since \"{title}\" and you did not act. "
-                "All guards are re-armed: if BTC is still past a limit you get a new alert and buying switches off again."
-            )
+            text = tg.auto_resumed(new_day=False, minutes=minutes, title=title)
             log = f"buying turned ON automatically {minutes} min after: {title}"
         self.logs.log("WARNING", "risk", log, payload={"enabled": True, "source": "auto_resume", "was": by}, mode=self._mode)
         self._schedule_broadcast()
@@ -946,7 +936,7 @@ class TradingBot:
         if running:
             self._check_buy_guards(self._market, config)
         if resumed and not self._buys_off:
-            self._notify_telegram(resumed)
+            self._notify_telegram(resumed, tg.MAIN_KEYBOARD)
 
     def _schedule_broadcast(self) -> None:
         """Push the new state to open dashboards from sync code (a guard trip runs inside the trading path)."""
@@ -957,11 +947,11 @@ class TradingBot:
         self._background_tasks.add(task)
         task.add_done_callback(self._background_tasks.discard)
 
-    def _notify_telegram(self, text: str) -> None:
+    def _notify_telegram(self, text: str, keyboard: dict | None = None) -> None:
         if not self.telegram.enabled:
             return
         try:
-            task = asyncio.get_running_loop().create_task(self.telegram.send(text))
+            task = asyncio.get_running_loop().create_task(self.telegram.send(text, keyboard))
         except RuntimeError:
             return
         self._background_tasks.add(task)
@@ -1005,12 +995,7 @@ class TradingBot:
                 mode=self._mode,
             )
             if source != "telegram":
-                self._notify_telegram(
-                    f"✅ Buying turned ON from {source}."
-                    if enabled
-                    else f"⛔ Buying turned OFF from {source}. It stays off for the rest of the day (no auto-resume "
-                    "timer) and comes back at the next day's start; send Buy to turn it on earlier."
-                )
+                self._notify_telegram(tg.switched(enabled, source), tg.MAIN_KEYBOARD)
             await self._broadcast_state()
         return changed
 
@@ -1043,43 +1028,49 @@ class TradingBot:
         }
 
     async def _on_telegram_command(self, command: str, arg: str = "") -> str | None:
-        """Plain-text commands from the owner's Telegram chat: Buy / Off (Stop) / Delay <minutes> / Status."""
+        """Commands from the owner's Telegram chat (typed or tapped): Buy / Off / Status / Delay / Help.
+
+        Returns the reply as Telegram HTML (see telegram_format.py).
+        """
         if command == "buy":
             changed = await self._change_buys(True, "telegram")
-            text = "✅ Buying is ON." if changed else "Buying was already ON."
+            notes: list[str] = []
             if self._kill_switch:
-                text += " The kill switch is active, so nothing buys until it is cleared."
+                notes.append("⚠️ The kill switch is active, so nothing buys until it is cleared.")
             elif self._status != "RUNNING":
-                text += " The bot itself is STOPPED: start it from the dashboard / app."
+                notes.append("⚠️ The bot itself is STOPPED: start it from the dashboard / app.")
             if changed:
-                text += " The guard that stopped buying stays quiet until BTC is back inside its limit."
-            return text
+                notes.append("The guard that stopped buying stays quiet until BTC is back inside its limit.")
+            return tg.buy_reply(changed, notes)
         if command == "stop":
             changed = await self._change_buys(False, "telegram")
-            if changed:
-                return (
-                    "⛔ Buying is OFF for the rest of the day (no auto-resume timer). Exits keep running. "
-                    "It comes back by itself at the next day's start (00:00 UTC); send \"Buy\" to turn it on earlier."
-                )
-            return f'Buying was already OFF ({self._buys_block_reason()}). Send "Buy" to turn it on.'
+            return tg.stop_reply(changed, self._buys_block_reason())
         if command == "status":
-            status = self.buy_guard_status(self._market, self.runtime.get())
-            lines = [
-                f"Bot: {self._status} ({self._mode})",
-                "Buying: ON" if status["buys_enabled"] else f"Buying: OFF - {self._buys_block_reason()}",
-            ]
-            if status["gap_now_usd"] is not None:
-                lines.append(f"BTC vs price to beat: {status['gap_now_usd']:+,.2f} USD (limit {status['gap_limit_usd']:,.0f})")
-            if status["trend_now_usd"] is not None:
-                lines.append(
-                    f"BTC over last {status['trend_markets']} markets: {status['trend_now_usd']:+,.2f} USD "
-                    f"(limit {status['trend_limit_usd']:,.0f})"
-                )
-            lines.append(self._resume_line(status))
-            return "\n".join(lines)
+            return self._status_text()
+        if command == "help":
+            return tg.help_reply(self._status_text())
         if command == "delay":
             return await self._telegram_delay(arg)
         return None
+
+    def _status_text(self) -> str:
+        status = self.buy_guard_status(self._market, self.runtime.get())
+        gap = trend = None
+        if status["gap_now_usd"] is not None:
+            gap = f"{status['gap_now_usd']:+,.2f} USD (limit {status['gap_limit_usd']:,.0f})"
+        if status["trend_now_usd"] is not None:
+            trend = (
+                f"{status['trend_now_usd']:+,.2f} USD / {status['trend_markets']} markets "
+                f"(limit {status['trend_limit_usd']:,.0f})"
+            )
+        return tg.status_reply(
+            bot=f"{self._status} ({self._mode})",
+            buying_on=status["buys_enabled"],
+            gap=gap,
+            trend=trend,
+            off_reason=self._buys_block_reason(),
+            resume_line=self._resume_line(status),
+        )
 
     def _resume_line(self, status: dict) -> str:
         """One line about the auto-resume: when buying comes back (or how long the wait after a guard trip is)."""
@@ -1099,28 +1090,30 @@ class TradingBot:
         config = self.runtime.get()
         current = int(config.buy_guard_resume_minutes)
         if not arg.strip():
-            now = f"{current} min" if current > 0 else "off"
-            return (
-                f"Auto-resume wait after a guard trip: {now}.\n"
-                'Change it: "Delay 30" (minutes), "Delay 2h" (hours) or "Delay off" (never switch back on by itself).'
-            )
+            return tg.delay_reply(current)
         minutes = parse_minutes(arg)
         if minutes is None:
-            return 'I could not read that. Examples: "Delay 30", "Delay 90m", "Delay 2h", "Delay off" (max 24h).'
+            return (
+                "⚠️ I could not read that. Examples: "
+                "<code>Delay 30</code>, <code>Delay 90m</code>, <code>Delay 2h</code>, <code>Delay off</code> "
+                "(max 24 h)."
+            )
         if minutes != current:
             await self.update_settings({"buy_guard_resume_minutes": minutes})
-        if minutes == 0:
-            return "Auto-resume is OFF: after a guard trip buying stays off until you send \"Buy\"."
-        text = f"Auto-resume wait is now {minutes} min."
-        resume_at = self._buys_resume_at(self.runtime.get())
-        if resume_at is not None and self._buys_off_by != MANUAL_OFF:
-            if resume_at <= utcnow():
-                text += " The new wait has already passed, so buying turns back on within a second."
+        detail = ""
+        if minutes > 0:
+            resume_at = self._buys_resume_at(self.runtime.get())
+            if resume_at is not None and self._buys_off_by != MANUAL_OFF:
+                if resume_at <= utcnow():
+                    detail = "The new wait has already passed, so buying turns back on within a second."
+                else:
+                    detail = (
+                        f"Buying is off right now and comes back at ~{resume_at:%H:%M} UTC "
+                        "(counted from when it went off)."
+                    )
             else:
-                text += f" Buying is off right now and comes back at ~{resume_at:%H:%M} UTC (counted from when it went off)."
-        else:
-            text += " It applies to the next guard trip."
-        return text
+                detail = "It applies to the next guard trip."
+        return tg.delay_set_reply(minutes, detail)
 
     # ------------------------------------------------------------------
     async def start_bot(self, confirm_live: bool = False, confirmation_phrase: str = "") -> dict:

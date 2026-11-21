@@ -22,7 +22,8 @@ class GuardTrip:
     code: str
     value: float  # signed USD move (positive = up)
     limit: float
-    message: str
+    message: str  # one plain sentence: logs, the risk context and the dashboard
+    details: tuple[tuple[str, str], ...] = ()  # (label, value) rows for the Telegram table
 
 
 def _direction(value: float) -> str:
@@ -42,6 +43,12 @@ def check_gap(btc_price: float | None, price_to_beat: float | None, limit: float
         limit,
         f"BTC {btc_price:,.2f} is {abs(move):,.2f} USD {_direction(move)} the price to beat "
         f"{price_to_beat:,.2f} (limit {limit:,.0f} USD)",
+        (
+            ("BTC", f"{btc_price:,.2f}"),
+            ("Price to beat", f"{price_to_beat:,.2f}"),
+            ("Gap", f"{move:+,.2f} USD ({_direction(move)})"),
+            ("Limit", f"{limit:,.0f} USD"),
+        ),
     )
 
 
@@ -61,4 +68,11 @@ def check_trend(
         limit,
         f"BTC moved {move:+,.2f} USD over the last {markets} markets (~{minutes} min): "
         f"{anchor_price:,.2f} -> {btc_price:,.2f} (limit {limit:,.0f} USD)",
+        (
+            ("Window", f"last {markets} markets (~{minutes} min)"),
+            ("From", f"{anchor_price:,.2f}"),
+            ("Now", f"{btc_price:,.2f}"),
+            ("Move", f"{move:+,.2f} USD"),
+            ("Limit", f"{limit:,.0f} USD"),
+        ),
     )
