@@ -451,6 +451,19 @@ class LiveExecutionEngine(ExecutionEngine):
         if not self._orders_allowed:
             return ExecutionReport(status="REJECTED", error="new live orders are blocked")
         entered_ms = clock.now_ms()
+        if not getattr(request, "exclusive", True):
+            # One-tap buy: no order lock, so it never waits for a strategy buy still in flight (its own
+            # double-tap guards live in OrderManager.tap_buy). The exchange checks the balance itself.
+            report = await self._place_buy_locked(request)
+            done_ms = clock.now_ms()
+            report.latency_ms = float(max(0, done_ms - request.observed_at_ms))
+            logger.info(
+                "buy latency split: pre_send=%dms lock_wait=0ms exchange_call=%dms total=%dms (no order lock)",
+                max(0, entered_ms - request.observed_at_ms),
+                max(0, done_ms - entered_ms),
+                max(0, done_ms - request.observed_at_ms),
+            )
+            return report
         async with self._order_lock:
             if not self._orders_allowed:
                 return ExecutionReport(status="REJECTED", error="new live orders are blocked")

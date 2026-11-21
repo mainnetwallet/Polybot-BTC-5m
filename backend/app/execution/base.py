@@ -23,6 +23,10 @@ class OrderRequest:
     max_price: float
     observed_at_ms: int
     asset_version: int = 1
+    # True = buys are sent one at a time (the live engine's order lock). A one-tap buy sets False: it has its
+    # own double-tap guards (request id, one-second cooldown, one in flight), so it never waits behind a
+    # strategy buy that is still on its way to the exchange.
+    exclusive: bool = True
 
 
 @dataclass
