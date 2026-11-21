@@ -145,6 +145,11 @@ class OrderManager:
         self._tap_last_s = 0.0
         self._tap_seen: OrderedDict[str, None] = OrderedDict()
         self._tap_holdings: dict[tuple[str, str], Stage0Holding | None] = {}
+        # One-tap shares of one side that are known exactly (a fully filled tap buy, loaded in the background):
+        # a manual sell takes it (once) instead of reading the database before it sends the order.
+        self._tap_ready: dict[tuple[str, str, str], Stage0Holding] = {}
+        self._background_tasks: set[asyncio.Future] = set()
+        self._tap_gen: dict[tuple[str, str, str], int] = {}
         self._trigger_seen: set[tuple[str, str, str, int]] = set()
         self._trigger_market: str | None = None
         self._retry_after: dict[int, float] = {}
@@ -959,6 +964,8 @@ class OrderManager:
         self._stage2_holdings.clear()
         self._stage3_holdings.clear()
         self._tap_holdings.clear()
+        self._tap_ready.clear()
+        self._tap_gen.clear()
         if len(self._sell_attempts) > 500:
             self._sell_attempts.clear()
             self._last_sell_ms.clear()
@@ -1090,6 +1097,16 @@ class OrderManager:
         side: str
         reason: str = "one-tap buy"
 
+    def _reserve_tap_order_once(
+        self, mode: str, market: MarketInfo, side: str, token_id: str, key: str, notional: float, ask: float
+    ) -> int:
+        """Retry of the order row after a failed parallel write: reuse the row if that write did land."""
+        with session_scope() as session:
+            existing = session.execute(select(Order.id).where(Order.order_key == key)).scalar_one_or_none()
+        if existing is not None:
+            return existing
+        return self._reserve_tap_order(mode, market, side, token_id, key, notional, ask)
+
     @staticmethod
     def _reserve_tap_order(
         mode: str, market: MarketInfo, side: str, token_id: str, key: str, notional: float, ask: float
@@ -1170,8 +1187,14 @@ class OrderManager:
             tick = float(getattr(market, "tick_size", 0.01) or 0.01)
             max_price = min(TAP_MAX_PRICE, round(ask + TAP_SLIPPAGE_TICKS * tick, 4))
             key = f"{mode}:{market.market_id}:{side}:tap:{uuid.uuid4().hex[:10]}:s{TAP_STAGE}"
-            order_id = await asyncio.to_thread(
-                self._reserve_tap_order, mode, market, side, token_id, key, notional, ask
+            # shares of this side are about to change: whatever was known about them is void
+            ready_key = (mode, market.market_id, side)
+            self._tap_ready.pop(ready_key, None)
+            self._tap_gen[ready_key] = self._tap_gen.get(ready_key, 0) + 1
+            # The order row is written while the buy is on its way to the exchange, not before it
+            # (same as the sells): no database round trip sits between the tap and the order.
+            reserve_task = asyncio.ensure_future(
+                asyncio.to_thread(self._reserve_tap_order, mode, market, side, token_id, key, notional, ask)
             )
             request = OrderRequest(
                 order_key=key,
@@ -1211,10 +1234,49 @@ class OrderManager:
                         else f"{type(exc).__name__}: {exc}"
                     ),
                 )
+            try:
+                order_id = await reserve_task
+            except Exception as exc:
+                # The row is written in parallel with the exchange call, so a failed write can now be found out
+                # after the order left. Never lose the fill: retry once (finding a row that was in fact written).
+                logger.error("one-tap order row write failed after the send (%s); retrying once", type(exc).__name__)
+                try:
+                    order_id = await asyncio.to_thread(
+                        self._reserve_tap_order_once, mode, market, side, token_id, key, notional, ask
+                    )
+                except Exception as exc2:
+                    logger.error("one-tap order row retry failed (%s)", type(exc2).__name__)
+                    self._logs.log(
+                        "ERROR",
+                        "error",
+                        f"TAP order {report.status} could not be saved: reconcile with the exchange",
+                        payload={
+                            "order_key": key,
+                            "side": side,
+                            "exchange_order_id": report.exchange_order_id,
+                            "filled_size": report.filled_size,
+                            "avg_price": report.avg_price,
+                        },
+                        mode=mode,
+                    )
+                    return OrderResult(
+                        None,
+                        side,
+                        report.status,
+                        "order_row_missing",
+                        report.filled_size,
+                        report.avg_price,
+                        report.latency_ms,
+                        report.exchange_order_id,
+                        "the order row could not be saved: check the exchange before retrying",
+                    )
             result = await asyncio.to_thread(
                 self._finalize_order, order_id, report, self._TapSignal(side), mode
             )
             self._tap_holdings.pop((mode, market.market_id), None)  # reload what is held
+            if report.status == "FILLED" and report.fills:
+                # fully filled: load the exact holding in the background so a quick "sell" needs no DB read
+                self._warm_tap_ready(mode, market.market_id, side)
             if report.fills:
                 self._logs.log(
                     "INFO",
@@ -1245,6 +1307,25 @@ class OrderManager:
                     mode=mode,
                 )
             return result
+
+    def _warm_tap_ready(self, mode: str, market_id: str, side: str) -> None:
+        """Background: read the one-tap holding of `side` once, right after a full fill, for the next manual sell."""
+        ready_key = (mode, market_id, side)
+        gen = self._tap_gen.get(ready_key, 0)
+
+        async def _run() -> None:
+            try:
+                holding = await asyncio.to_thread(self.load_stage0_holding, mode, market_id, TAP_STAGE, side)
+            except Exception as exc:  # best effort: the sell falls back to reading the database
+                logger.debug("tap holding warm-up failed (%s)", type(exc).__name__)
+                return
+            # a newer tap buy / sell started meanwhile: what was just read may already be out of date
+            if holding is not None and not holding.sell_in_flight and self._tap_gen.get(ready_key, 0) == gen:
+                self._tap_ready[ready_key] = holding
+
+        task = asyncio.ensure_future(_run())
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
 
     async def manual_sell(
         self, market: MarketInfo, books: dict[str, OrderBook], mode: str, config, side: str, stage: int
@@ -1324,7 +1405,16 @@ class OrderManager:
         async with self._exit_locks[stage]:
             if not manual and not self._submission_allowed(mode):
                 return []
-            if manual or reg_key not in holdings:
+            ready = None
+            if manual and stage == TAP_STAGE:
+                # known exactly (fully filled tap buy, read right after it) and used once; every tap buy / sell
+                # of this side voids it, anything else is read from the database as before
+                ready_key = (mode, market.market_id, manual_side)
+                ready = self._tap_ready.pop(ready_key, None)
+                self._tap_gen[ready_key] = self._tap_gen.get(ready_key, 0) + 1
+            if ready is not None:
+                holdings[reg_key] = ready
+            elif manual or reg_key not in holdings:
                 # a manual sell always reads what is really held, never a cached value
                 holdings[reg_key] = await asyncio.to_thread(
                     self.load_stage0_holding, mode, market.market_id, stage, tap_side

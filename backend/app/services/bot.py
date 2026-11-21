@@ -709,6 +709,18 @@ class TradingBot:
             return self._live_balance
         return self.portfolio.balance(session, self._mode)
 
+    async def _balance_fast(self) -> float:
+        """Balance for the one-tap pre-check without touching the database on the event loop."""
+        if self._mode == "live" and self._live_balance is not None:
+            return self._live_balance
+        mode = self._mode
+
+        def _read() -> float:
+            with session_scope() as session:
+                return self.portfolio.balance(session, mode)
+
+        return await asyncio.to_thread(_read)
+
     def _marks(self) -> dict[tuple[str, str], float]:
         market = self._market
         if market is None:
@@ -1433,8 +1445,9 @@ class TradingBot:
         limit = float(getattr(self.settings, "tap_buy_max_usdc", 100.0))
         if not (TAP_MIN_USDC <= amount <= limit):
             raise BotError(f"one-tap amount must be between ${TAP_MIN_USDC:g} and ${limit:g}")
-        with session_scope() as session:
-            balance = self._balance(session)
+        # No database round trip between the tap and the exchange call: live uses the cached balance,
+        # paper reads it in a worker thread so the event loop (order books, other taps) is never blocked.
+        balance = await self._balance_fast()
         if amount > balance + 1e-9:
             raise BotError(f"not enough balance: ${balance:.2f} available")
         self.logs.log(

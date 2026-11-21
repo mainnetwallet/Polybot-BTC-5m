@@ -413,3 +413,134 @@ def test_tap_buy_request_validates_min_ask():
     for bad in (-0.1, 1.0, 5):
         with pytest.raises(ValidationError):
             TapBuyRequest(**base, min_ask=bad)
+
+
+# ---------------------------------------------------------------- latency: nothing slow sits before the order
+async def test_the_order_row_is_written_while_the_buy_is_on_its_way_not_before_it():
+    """A slow database write must not delay the exchange call: both start together, the row still ends up saved."""
+    import time
+
+    stack = build_stack(make_config(paper_starting_balance=20.0))
+    market = make_market(remaining=150)
+    books = books_for(market, up_ask=0.40, down_ask=0.60)
+    manager = _tap_ready(stack, market, books)
+
+    events: list[str] = []
+    real_reserve = manager._reserve_tap_order
+
+    def slow_reserve(*args, **kwargs):
+        events.append("reserve_start")
+        time.sleep(0.2)  # a slow database
+        result = real_reserve(*args, **kwargs)
+        events.append("reserve_done")
+        return result
+
+    real_provider = manager._executor_provider
+
+    def spy_provider(mode):
+        executor = real_provider(mode)
+        real_place_buy = executor.place_buy
+
+        async def spy_place_buy(request):
+            events.append("exchange_call")
+            return await real_place_buy(request)
+
+        executor.place_buy = spy_place_buy  # type: ignore[method-assign]
+        return executor
+
+    manager._reserve_tap_order = slow_reserve  # type: ignore[method-assign]
+    manager._executor_provider = spy_provider
+    result = await manager.tap_buy(market, books, "paper", stack["config"], "UP", 2.0)
+
+    assert result.status == "FILLED"
+    assert events.index("exchange_call") < events.index("reserve_done")  # the order did not wait for the row
+    with session_scope() as session:
+        order = session.execute(select(Order)).scalar_one()
+        assert order.id == result.order_id and order.filled_size > 0  # and the row holds the fill
+
+
+async def test_a_sell_right_after_a_full_tap_fill_reads_no_database_before_it_sends():
+    stack = build_stack(make_config(paper_starting_balance=20.0))
+    market = make_market(remaining=150)
+    books = books_for(market, up_ask=0.40, down_ask=0.60)
+    manager = _tap_ready(stack, market, books)
+    assert (await manager.tap_buy(market, books, "paper", stack["config"], "UP", 2.0)).status == "FILLED"
+    await asyncio.gather(*manager._background_tasks)  # the background read right after the fill
+    assert ("paper", market.market_id, "UP") in manager._tap_ready
+
+    calls: list[str] = []
+    real_load = manager.load_stage0_holding
+
+    def spy_load(*args, **kwargs):
+        calls.append("load")
+        return real_load(*args, **kwargs)
+
+    manager.load_stage0_holding = spy_load  # type: ignore[method-assign]
+    books[market.up_token_id].bids = {0.38: 1000.0}
+    sold = await manager.manual_sell(market, books, "paper", stack["config"], "UP", 9)
+    assert sold.status in {"FILLED", "PARTIALLY_FILLED"} and sold.filled_size > 0
+    assert calls == ["load"]  # only the reload AFTER the sell: nothing was read before the order left
+    assert ("paper", market.market_id, "UP") not in manager._tap_ready  # used once
+
+
+async def test_a_new_tap_buy_or_sell_voids_the_ready_holding():
+    stack = build_stack(make_config(paper_starting_balance=50.0))
+    market = make_market(remaining=150)
+    books = books_for(market, up_ask=0.40, down_ask=0.60)
+    manager = _tap_ready(stack, market, books)
+    key = ("paper", market.market_id, "UP")
+    assert (await manager.tap_buy(market, books, "paper", stack["config"], "UP", 2.0)).status == "FILLED"
+    await asyncio.gather(*manager._background_tasks)
+    first_size = manager._tap_ready[key].size
+
+    _cooldown_over(manager)
+    assert (await manager.tap_buy(market, books, "paper", stack["config"], "UP", 2.0)).status == "FILLED"
+    await asyncio.gather(*manager._background_tasks)
+    assert manager._tap_ready[key].size == pytest.approx(first_size * 2, rel=0.05)  # re-read after the 2nd buy
+
+    # the sell sells everything that is really held (both buys), then nothing is left
+    books[market.up_token_id].bids = {0.38: 1000.0}
+    sold = await manager.manual_sell(market, books, "paper", stack["config"], "UP", 9)
+    assert sold.filled_size == pytest.approx(first_size * 2, rel=0.05)
+    again = await manager.manual_sell(market, books, "paper", stack["config"], "UP", 9)
+    assert (again.status, again.reason) == ("BLOCKED", "no_holding")
+
+
+async def test_a_failed_order_row_write_never_loses_the_fill():
+    """The row is written in parallel with the buy: if that write fails once, it is retried and the fill is saved."""
+    stack = build_stack(make_config(paper_starting_balance=20.0))
+    market = make_market(remaining=150)
+    books = books_for(market, up_ask=0.40, down_ask=0.60)
+    manager = _tap_ready(stack, market, books)
+    real_reserve = manager._reserve_tap_order
+    calls = {"n": 0}
+
+    def flaky_reserve(*args, **kwargs):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("database busy")
+        return real_reserve(*args, **kwargs)
+
+    manager._reserve_tap_order = flaky_reserve  # type: ignore[method-assign]
+    result = await manager.tap_buy(market, books, "paper", stack["config"], "UP", 2.0)
+    assert result.status == "FILLED" and result.order_id is not None
+    with session_scope() as session:
+        order = session.execute(select(Order)).scalar_one()
+        position = session.execute(select(Position)).scalar_one()
+    assert order.id == result.order_id and order.filled_size > 0
+    assert position.side == "UP" and position.tag == "tap"
+
+
+async def test_if_the_order_row_cannot_be_saved_at_all_the_tap_still_answers_with_the_fill():
+    stack = build_stack(make_config(paper_starting_balance=20.0))
+    market = make_market(remaining=150)
+    books = books_for(market, up_ask=0.40, down_ask=0.60)
+    manager = _tap_ready(stack, market, books)
+
+    def broken_reserve(*args, **kwargs):
+        raise RuntimeError("database down")
+
+    manager._reserve_tap_order = broken_reserve  # type: ignore[method-assign]
+    result = await manager.tap_buy(market, books, "paper", stack["config"], "UP", 2.0)  # must not raise
+    assert result.reason == "order_row_missing" and result.filled_size > 0 and result.order_id is None
+    assert result.error and "exchange" in result.error
