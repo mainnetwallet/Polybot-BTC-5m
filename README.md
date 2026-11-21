@@ -177,7 +177,7 @@ saved, so a restart does not silently turn buying back on early or lose the coun
 the numbers, one or two plain sentences, and tap buttons under it (**Buy on**, **Off for today**, **Status**,
 **Auto-resume** with 15 min / 30 min / 1 h / 2 h / never presets). Typed commands still work exactly as before. The
 "/" menu lists `/status`, `/buy`, `/off`, `/delay`, `/help`; `/start` (and `/help`) shows the status panel and the
-command list and never changes the buy switch. The layout lives in `backend/app/services/telegram_format.py`.
+command list, puts a permanent button bar (Buy · Off · Status · Delay) under the chat, and never changes the buy switch. The layout lives in `backend/app/services/telegram_format.py`.
 
 Telegram setup: create a bot with @BotFather, set `TELEGRAM_BOT_TOKEN`, send the bot one message, open
 `https://api.telegram.org/bot<TOKEN>/getUpdates`, and put `chat.id` into `TELEGRAM_CHAT_ID`. Only that chat can

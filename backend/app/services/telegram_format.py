@@ -74,6 +74,17 @@ DELAY_KEYBOARD: Keyboard = {
     ]
 }
 
+# Permanent button bar at the bottom of the chat (shown by /start and /help). Each button just types its label,
+# so it goes through the normal command parser ("▶️ Buy" -> Buy).
+MENU_KEYBOARD: Keyboard = {
+    "keyboard": [
+        [{"text": "▶️ Buy"}, {"text": "⏹ Off"}],
+        [{"text": "📊 Status"}, {"text": "⏱ Delay"}],
+    ],
+    "resize_keyboard": True,
+    "is_persistent": True,
+}
+
 BOT_MENU = [
     ("status", "Bot and buying status"),
     ("buy", "Turn buying on"),

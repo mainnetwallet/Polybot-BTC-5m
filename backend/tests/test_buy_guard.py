@@ -736,3 +736,25 @@ async def test_a_failing_command_reply_is_escaped():
     service = _telegram(handler, on_command)
     await service._handle_update({"update_id": 1, "message": {"chat": {"id": 42}, "text": "Buy"}})
     assert "bad &lt;thing&gt; &amp; more" in bodies[0]
+
+
+def test_button_bar_labels_parse_as_commands():
+    labels = [button["text"] for row in tg.MENU_KEYBOARD["keyboard"] for button in row]
+    assert [parse_command(label) for label in labels] == ["buy", "stop", "status", "delay"]
+    assert parse_command("▶️") is None and parse_command("📊") is None
+
+
+async def test_start_sends_the_permanent_button_bar():
+    async def on_command(command, arg=""):
+        return "panel"
+
+    bodies = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        bodies.append(request.read().decode())
+        return httpx.Response(200, json={"ok": True})
+
+    service = _telegram(handler, on_command)
+    await service._handle_update({"update_id": 1, "message": {"chat": {"id": 42}, "text": "/start"}})
+    assert '"keyboard"' in bodies[0] and '"is_persistent":true' in bodies[0].replace(" ", "")
+    assert "inline_keyboard" not in bodies[0]

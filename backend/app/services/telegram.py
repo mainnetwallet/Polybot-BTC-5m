@@ -57,6 +57,8 @@ def parse_message(text: str | None) -> tuple[str, str] | None:
     if not text:
         return None
     words = text.strip().split(None, 1)
+    while words and not any(char.isalnum() for char in words[0]):  # "▶️ Buy" (a button label) -> "Buy"
+        words = words[1].split(None, 1) if len(words) > 1 else []
     if not words:
         return None
     word = words[0].lstrip("/").split("@", 1)[0].lower()  # "/buy@my_bot" in group chats
@@ -291,5 +293,10 @@ class TelegramService:
             logger.exception("telegram command %s failed", command)
             reply = fmt.error_reply(command, exc)
         if reply:
-            keyboard = fmt.DELAY_KEYBOARD if command == "delay" and not arg.strip() else fmt.MAIN_KEYBOARD
+            if command == "help":
+                keyboard = fmt.MENU_KEYBOARD  # /start: the permanent button bar under the chat
+            elif command == "delay" and not arg.strip():
+                keyboard = fmt.DELAY_KEYBOARD
+            else:
+                keyboard = fmt.MAIN_KEYBOARD
             await self.send(reply, keyboard)
