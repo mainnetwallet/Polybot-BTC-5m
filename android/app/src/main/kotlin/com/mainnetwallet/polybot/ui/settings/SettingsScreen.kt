@@ -43,6 +43,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -243,7 +244,7 @@ fun SettingsSectionPage(sectionId: String, owner: ViewModelStoreOwner, modifier:
     val scope = rememberCoroutineScope()
     val section = SettingsSpec.sections.firstOrNull { it.id == sectionId } ?: return
     val stage = StageFacts.stageOf(section)
-    var tabState by rememberSaveable(sectionId) { mutableStateOf(0) }
+    var tabState by rememberSaveable(sectionId) { mutableIntStateOf(0) }
 
     PageFrame(vm, showSaveBar = true, modifier = modifier) { state ->
         when {
@@ -585,7 +586,7 @@ private fun StageOffNotice() {
 @Composable
 private fun LoadError(message: String?, onRetry: () -> Unit) {
     SettingsCard {
-        EmptyState("Could not load the settings", message, icon = Icons.Filled.CloudOff)
+        EmptyState("Could not load the settings", hint = message, icon = Icons.Filled.CloudOff)
         FilledTonalButton(
             onClick = onRetry,
             modifier = Modifier

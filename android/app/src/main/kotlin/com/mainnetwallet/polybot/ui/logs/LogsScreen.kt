@@ -209,14 +209,14 @@ fun LogsScreen(modifier: Modifier = Modifier) {
                             rows.isEmpty() -> ProCard {
                                 EmptyState(
                                     "No log entries yet",
-                                    "Entries show up here as the bot runs. Pull down to refresh.",
+                                    hint = "Entries show up here as the bot runs. Pull down to refresh.",
                                     icon = Icons.AutoMirrored.Filled.List,
                                 )
                             }
                             else -> ProCard {
                                 EmptyState(
                                     "Nothing matches",
-                                    "Try another level, category or search.",
+                                    hint = "Try another level, category or search.",
                                     icon = Icons.Filled.Search,
                                 )
                                 if (filters.isActive || text.isNotBlank()) {

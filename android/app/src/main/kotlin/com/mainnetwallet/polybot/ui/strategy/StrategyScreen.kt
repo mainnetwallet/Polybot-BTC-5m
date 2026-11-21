@@ -22,6 +22,7 @@ import androidx.compose.material3.Text
 import com.mainnetwallet.polybot.ui.components.PolyPullToRefresh
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -95,7 +96,7 @@ fun StrategyScreen(modifier: Modifier = Modifier) {
     }
     val scope = rememberCoroutineScope()
     var refreshing by remember { mutableStateOf(false) }
-    var filterIndex by rememberSaveable { mutableStateOf(0) }
+    var filterIndex by rememberSaveable { mutableIntStateOf(0) }
     val snap = view
 
     PolyPullToRefresh(
@@ -163,13 +164,13 @@ fun StrategyScreen(modifier: Modifier = Modifier) {
                             if (state.triggers.isEmpty()) {
                                 EmptyState(
                                     "No trigger events yet",
-                                    "A row is written when an ask reaches a trigger, including blocked and skipped decisions.",
+                                    hint = "A row is written when an ask reaches a trigger, including blocked and skipped decisions.",
                                     icon = Icons.Filled.TrackChanges,
                                 )
                             } else {
                                 EmptyState(
                                     "No ${filter.label.lowercase()} triggers",
-                                    "Pick another filter to see the other decisions.",
+                                    hint = "Pick another filter to see the other decisions.",
                                     icon = Icons.Filled.TrackChanges,
                                 )
                             }

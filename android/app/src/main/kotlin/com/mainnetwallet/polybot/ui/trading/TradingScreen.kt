@@ -41,6 +41,7 @@ import com.mainnetwallet.polybot.ui.components.PolyPullToRefresh
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -110,8 +111,8 @@ fun TradingScreen(modifier: Modifier = Modifier) {
     var target by remember { mutableStateOf<SellTarget?>(null) }
     var detail by remember { mutableStateOf<OrderRow?>(null) }
     var confirmClear by remember { mutableStateOf(false) }
-    var tab by rememberSaveable { mutableStateOf(0) }
-    var filter by rememberSaveable { mutableStateOf(0) }
+    var tab by rememberSaveable { mutableIntStateOf(0) }
+    var filter by rememberSaveable { mutableIntStateOf(0) }
     val historyFilter = HistoryFilter.entries.getOrElse(filter) { HistoryFilter.All }
 
     val snap = slice
@@ -201,14 +202,14 @@ fun TradingScreen(modifier: Modifier = Modifier) {
                             state.loading -> item { SkeletonCard(lines = 3) }
                             state.error != null && state.orders.isEmpty() -> item {
                                 ProCard {
-                                    EmptyState("Could not load the history", state.error, icon = Icons.Filled.ReceiptLong)
+                                    EmptyState("Could not load the history", hint = state.error, icon = Icons.Filled.ReceiptLong)
                                 }
                             }
                             state.orders.isEmpty() -> item {
                                 ProCard {
                                     EmptyState(
                                         "No orders yet",
-                                        "Orders appear here as soon as the engine places one.",
+                                        hint = "Orders appear here as soon as the engine places one.",
                                         icon = Icons.Filled.ReceiptLong,
                                     )
                                 }
@@ -217,7 +218,7 @@ fun TradingScreen(modifier: Modifier = Modifier) {
                                 ProCard {
                                     EmptyState(
                                         "No matching orders",
-                                        "Try another filter.",
+                                        hint = "Try another filter.",
                                         icon = Icons.Filled.ReceiptLong,
                                     )
                                 }
@@ -257,7 +258,7 @@ fun TradingScreen(modifier: Modifier = Modifier) {
                                 ProCard {
                                     EmptyState(
                                         "No open positions",
-                                        "Filled buys show up here until the market settles.",
+                                        hint = "Filled buys show up here until the market settles.",
                                         icon = Icons.Filled.Inventory2,
                                     )
                                 }
@@ -273,7 +274,7 @@ fun TradingScreen(modifier: Modifier = Modifier) {
                                 ProCard {
                                     EmptyState(
                                         "No open orders",
-                                        "Orders that are still working appear here.",
+                                        hint = "Orders that are still working appear here.",
                                         icon = Icons.Filled.ReceiptLong,
                                     )
                                 }

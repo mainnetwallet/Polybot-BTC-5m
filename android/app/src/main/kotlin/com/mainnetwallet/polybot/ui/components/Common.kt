@@ -139,7 +139,7 @@ fun pnlColor(value: Double?): Color {
 }
 
 @Composable
-fun EmptyState(title: String, hint: String? = null, icon: ImageVector = Icons.Filled.Inbox, modifier: Modifier = Modifier) {
+fun EmptyState(title: String, modifier: Modifier = Modifier, hint: String? = null, icon: ImageVector = Icons.Filled.Inbox) {
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -180,7 +180,7 @@ fun SkeletonBox(modifier: Modifier = Modifier, height: androidx.compose.ui.unit.
 }
 
 @Composable
-fun SkeletonCard(lines: Int = 3, modifier: Modifier = Modifier) {
+fun SkeletonCard(modifier: Modifier = Modifier, lines: Int = 3) {
     PolyCard(modifier) {
         SkeletonBox(height = 18.dp)
         repeat(lines) { SkeletonBox(height = 14.dp) }

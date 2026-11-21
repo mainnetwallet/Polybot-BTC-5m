@@ -93,7 +93,7 @@ fun AnalyticsScreen(modifier: Modifier = Modifier) {
                 else -> ProCard {
                     EmptyState(
                         if (state.error != null) "Could not load analytics" else "No analytics yet",
-                        state.error,
+                        hint = state.error,
                         icon = Icons.Filled.BarChart,
                     )
                 }
@@ -142,7 +142,7 @@ private fun AnalyticsBody(a: Analytics, mode: String) {
         ProCard {
             EmptyState(
                 "No trades yet",
-                "Statistics appear after the first fill on this ledger.",
+                hint = "Statistics appear after the first fill on this ledger.",
                 icon = Icons.Filled.BarChart,
             )
         }
