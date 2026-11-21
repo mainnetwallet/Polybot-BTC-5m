@@ -2105,7 +2105,8 @@ class TradingBot:
                     # stage holdings only to the untagged row of the same side
                     for stage in ((TAP_STAGE,) if p.tag == TAP_TAG else EXIT_STAGES):
                         held = self.orders.stage0_holding_in_session(
-                            session, self._mode, p.market_id, stage
+                            session, self._mode, p.market_id, stage,
+                            p.side if stage == TAP_STAGE else None,
                         )
                         if (
                             held is not None

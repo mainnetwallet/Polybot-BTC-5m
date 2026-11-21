@@ -963,7 +963,7 @@ class OrderManager:
     # ------------------------------------------------------------------
     @staticmethod
     def stage0_holding_in_session(
-        session, mode: str, market_id: str, stage: int = 0
+        session, mode: str, market_id: str, stage: int = 0, side: str | None = None
     ) -> Stage0Holding | None:
         orders = session.execute(
             select(Order).where(Order.mode == mode, Order.market_id == market_id)
@@ -972,6 +972,8 @@ class OrderManager:
             o for o in orders
             if o.order_key and _SELL_MARK not in o.order_key
             and OrderManager._key_stage(o.order_key) == stage and o.filled_size > 0
+            # `side` given: look at that side only (the one-tap stage can hold UP and DOWN at once)
+            and (side is None or o.side == side)
         ]
         if not buys:
             return None
@@ -1027,9 +1029,11 @@ class OrderManager:
         fees = sum(o.fee or 0.0 for o in buys)
         return cost / shares, fees / shares
 
-    def load_stage0_holding(self, mode: str, market_id: str, stage: int = 0) -> Stage0Holding | None:
+    def load_stage0_holding(
+        self, mode: str, market_id: str, stage: int = 0, side: str | None = None
+    ) -> Stage0Holding | None:
         with session_scope() as session:
-            return self.stage0_holding_in_session(session, mode, market_id, stage)
+            return self.stage0_holding_in_session(session, mode, market_id, stage, side)
 
     def stage0_bought(self, mode: str, market_id: str) -> bool:
         return (mode, market_id) in self._stage0_bought
@@ -1263,10 +1267,19 @@ class OrderManager:
             stages = tuple(stage for stage in SELLABLE_STAGES if stage == TAP_STAGE)
         else:
             stages = tuple(stage for stage in SELLABLE_STAGES if stage != TAP_STAGE)
+        # the strategy stages hold one side each; the one-tap stage can hold UP and DOWN at the same time
+        lookups = [
+            (stage, side)
+            for stage in stages
+            for side in (("UP", "DOWN") if stage == TAP_STAGE else (None,))
+        ]
         held = await asyncio.gather(
-            *(asyncio.to_thread(self.load_stage0_holding, mode, market.market_id, stage) for stage in stages)
+            *(
+                asyncio.to_thread(self.load_stage0_holding, mode, market.market_id, stage, side)
+                for stage, side in lookups
+            )
         )
-        targets = [(stage, holding.side) for stage, holding in zip(stages, held) if holding is not None]
+        targets = [(stage, holding.side) for (stage, _), holding in zip(lookups, held) if holding is not None]
         if not targets:
             return []
         return list(
@@ -1292,6 +1305,8 @@ class OrderManager:
         With `manual_side` set it is the operator's "sell now": sold at the market, no condition."""
         manual = manual_side is not None
         label = "TAP" if stage == TAP_STAGE else f"S{stage}"
+        # one-tap shares of UP and DOWN sit in the same stage: a manual sell reads the side it is selling
+        tap_side = manual_side if stage == TAP_STAGE else None
         reg_key = (mode, market.market_id)
         holdings = self._holdings(stage)
         async with self._exit_locks[stage]:
@@ -1300,7 +1315,7 @@ class OrderManager:
             if manual or reg_key not in holdings:
                 # a manual sell always reads what is really held, never a cached value
                 holdings[reg_key] = await asyncio.to_thread(
-                    self.load_stage0_holding, mode, market.market_id, stage
+                    self.load_stage0_holding, mode, market.market_id, stage, tap_side
                 )
             holding = holdings[reg_key]
             if manual and (holding is None or holding.side != manual_side):
@@ -1435,7 +1450,7 @@ class OrderManager:
                 f"stage{stage}_stop_loss" if kind == "stop_loss" else f"stage{stage}_manual" if manual else None,
             )
             holdings[reg_key] = await asyncio.to_thread(
-                self.load_stage0_holding, mode, market.market_id, stage
+                self.load_stage0_holding, mode, market.market_id, stage, tap_side
             )
             if sell_key is not None and isinstance(report.raw, dict) and report.raw.get("http_status") == 429:
                 # Rate limited by the CLOB (Retry-After): do not hammer it, wait ~250 ms for this exit.

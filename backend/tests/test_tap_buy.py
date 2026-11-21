@@ -291,3 +291,52 @@ async def test_bot_tap_buy_ignores_the_buy_guard_switch_because_it_is_a_manual_b
     bot._buys_off_by = "manual"
     snapshot = await bot.tap_buy(market.market_id, "UP", 2.0)
     assert snapshot["tap_buy"]["status"] == "FILLED"
+
+
+# ---------------------------------------------------------------- UP and DOWN one-tap at the same time
+async def test_tap_up_and_tap_down_are_each_sellable_by_their_own_side():
+    stack = build_stack(make_config(**STAGE0, trade_amount_usdc=4.0, paper_starting_balance=40.0))
+    market = make_market(remaining=150)
+    books = books_for(market, up_ask=0.80, down_ask=0.30)
+    manager = _tap_ready(stack, market, books)
+    assert (await manager.tap_buy(market, books, "paper", stack["config"], "UP", 3.0)).status == "FILLED"
+    _cooldown_over(manager)
+    assert (await manager.tap_buy(market, books, "paper", stack["config"], "DOWN", 3.0)).status == "FILLED"
+
+    # each side has its own holding (the DOWN one used to be hidden behind the first UP buy)
+    up = manager.load_stage0_holding("paper", market.market_id, 9, "UP")
+    down = manager.load_stage0_holding("paper", market.market_id, 9, "DOWN")
+    assert up is not None and up.side == "UP" and up.size == pytest.approx(3.0 / 0.80, rel=0.02)
+    assert down is not None and down.side == "DOWN" and down.size == pytest.approx(3.0 / 0.30, rel=0.02)
+    assert down.cost == pytest.approx(0.30, abs=0.01)
+
+    # selling DOWN by hand leaves the UP tap shares alone
+    books[market.down_token_id].bids = {0.60: 1000.0}
+    sold = await manager.manual_sell(market, books, "paper", stack["config"], "DOWN", 9)
+    assert sold.status == "FILLED"
+    assert manager.load_stage0_holding("paper", market.market_id, 9, "DOWN") is None
+    assert manager.load_stage0_holding("paper", market.market_id, 9, "UP") is not None
+    with session_scope() as session:
+        rows = session.execute(select(Position).order_by(Position.id)).scalars().all()
+    assert [(p.side, p.tag, p.status) for p in rows] == [("UP", "tap", "open"), ("DOWN", "tap", "closed")]
+
+
+async def test_sell_all_tap_sells_both_up_and_down_tap_shares():
+    stack = build_stack(make_config(**STAGE0, trade_amount_usdc=4.0, paper_starting_balance=40.0))
+    market = make_market(remaining=150)
+    books = books_for(market, up_ask=0.80, down_ask=0.30)
+    manager = _tap_ready(stack, market, books)
+    await manager.tap_buy(market, books, "paper", stack["config"], "UP", 3.0)
+    _cooldown_over(manager)
+    await manager.tap_buy(market, books, "paper", stack["config"], "DOWN", 3.0)
+    books[market.up_token_id].bids = {0.78: 1000.0}
+    books[market.down_token_id].bids = {0.60: 1000.0}
+
+    results = await manager.manual_sell_all(market, books, "paper", stack["config"], "tap")
+    assert sorted(r.side for r in results) == ["DOWN", "UP"]
+    assert all(r.status == "FILLED" for r in results)
+    assert manager.load_stage0_holding("paper", market.market_id, 9, "UP") is None
+    assert manager.load_stage0_holding("paper", market.market_id, 9, "DOWN") is None
+    with session_scope() as session:
+        rows = session.execute(select(Position)).scalars().all()
+    assert {(p.side, p.status) for p in rows} == {("UP", "closed"), ("DOWN", "closed")}
