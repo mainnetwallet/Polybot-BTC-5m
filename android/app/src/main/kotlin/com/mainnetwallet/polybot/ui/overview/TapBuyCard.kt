@@ -189,25 +189,30 @@ fun TapBuyCard(
                             // tap the side to select it (the other one is deselected); tap it again to deselect
                             Column(
                                 Modifier
-                                    .width(52.dp)
-                                    .clip(RoundedCornerShape(8.dp))
+                                    .width(70.dp)
+                                    .heightIn(min = 48.dp)
+                                    .clip(RoundedCornerShape(10.dp))
                                     .background(if (selected) container else scheme.surfaceContainer)
                                     .border(
-                                        BorderStroke(if (selected) 1.5.dp else 1.dp, if (selected) tone else scheme.outlineVariant),
-                                        RoundedCornerShape(8.dp),
+                                        BorderStroke(if (selected) 2.dp else 1.dp, if (selected) tone else scheme.outlineVariant),
+                                        RoundedCornerShape(10.dp),
                                     )
                                     .clickable { selectedSide = tapSideSelection(selectedSide, side) }
-                                    .padding(horizontal = 4.dp, vertical = 3.dp),
+                                    .padding(horizontal = 4.dp, vertical = 4.dp),
+                                verticalArrangement = Arrangement.Center,
+                                horizontalAlignment = Alignment.CenterHorizontally,
                             ) {
                                 Text(
                                     if (isUp) "UP" else "DOWN",
-                                    style = Mono.small.copy(fontWeight = FontWeight.Bold),
+                                    style = Mono.body.copy(fontWeight = FontWeight.Bold, fontSize = 16.sp),
                                     color = if (selected) tone else tone.copy(alpha = 0.6f),
+                                    maxLines = 1,
                                 )
                                 Text(
                                     if (ask == null) "--" else Fmt.centsShort(ask),
-                                    style = Mono.small,
+                                    style = Mono.small.copy(fontSize = 12.sp),
                                     color = scheme.onSurfaceVariant,
+                                    maxLines = 1,
                                 )
                             }
                             amounts.forEach { amount ->
@@ -217,21 +222,21 @@ fun TapBuyCard(
                                     enabled = enabled && blocked == null && tapSideEnabled(selectedSide, side) &&
                                         ask != null && !locked && busyKey == null,
                                     shape = RoundedCornerShape(10.dp),
-                                    contentPadding = PaddingValues(horizontal = 2.dp, vertical = 3.dp),
+                                    contentPadding = PaddingValues(horizontal = 2.dp, vertical = 2.dp),
                                     colors = ButtonDefaults.buttonColors(containerColor = container, contentColor = tone),
                                     modifier = Modifier
                                         .weight(1f)
-                                        .heightIn(min = 44.dp),
+                                        .heightIn(min = 38.dp),
                                 ) {
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                         Text(
                                             if (busyKey == key) "\u2026" else tapMoney(amount),
-                                            style = Mono.body.copy(fontWeight = FontWeight.Bold, fontSize = 15.sp),
+                                            style = Mono.body.copy(fontWeight = FontWeight.Bold, fontSize = 13.sp),
                                             maxLines = 1,
                                         )
                                         Text(
                                             tapWin(amount, ask),
-                                            style = Mono.small.copy(fontSize = 10.sp),
+                                            style = Mono.small.copy(fontSize = 9.sp),
                                             maxLines = 1,
                                             textAlign = TextAlign.Center,
                                         )
