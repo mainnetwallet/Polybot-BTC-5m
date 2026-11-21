@@ -504,3 +504,43 @@ async def test_a_new_tap_buy_or_sell_voids_the_ready_holding():
     assert sold.filled_size == pytest.approx(first_size * 2, rel=0.05)
     again = await manager.manual_sell(market, books, "paper", stack["config"], "UP", 9)
     assert (again.status, again.reason) == ("BLOCKED", "no_holding")
+
+
+async def test_a_failed_order_row_write_never_loses_the_fill():
+    """The row is written in parallel with the buy: if that write fails once, it is retried and the fill is saved."""
+    stack = build_stack(make_config(paper_starting_balance=20.0))
+    market = make_market(remaining=150)
+    books = books_for(market, up_ask=0.40, down_ask=0.60)
+    manager = _tap_ready(stack, market, books)
+    real_reserve = manager._reserve_tap_order
+    calls = {"n": 0}
+
+    def flaky_reserve(*args, **kwargs):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("database busy")
+        return real_reserve(*args, **kwargs)
+
+    manager._reserve_tap_order = flaky_reserve  # type: ignore[method-assign]
+    result = await manager.tap_buy(market, books, "paper", stack["config"], "UP", 2.0)
+    assert result.status == "FILLED" and result.order_id is not None
+    with session_scope() as session:
+        order = session.execute(select(Order)).scalar_one()
+        position = session.execute(select(Position)).scalar_one()
+    assert order.id == result.order_id and order.filled_size > 0
+    assert position.side == "UP" and position.tag == "tap"
+
+
+async def test_if_the_order_row_cannot_be_saved_at_all_the_tap_still_answers_with_the_fill():
+    stack = build_stack(make_config(paper_starting_balance=20.0))
+    market = make_market(remaining=150)
+    books = books_for(market, up_ask=0.40, down_ask=0.60)
+    manager = _tap_ready(stack, market, books)
+
+    def broken_reserve(*args, **kwargs):
+        raise RuntimeError("database down")
+
+    manager._reserve_tap_order = broken_reserve  # type: ignore[method-assign]
+    result = await manager.tap_buy(market, books, "paper", stack["config"], "UP", 2.0)  # must not raise
+    assert result.reason == "order_row_missing" and result.filled_size > 0 and result.order_id is None
+    assert result.error and "exchange" in result.error

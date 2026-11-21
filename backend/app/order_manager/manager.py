@@ -1097,6 +1097,16 @@ class OrderManager:
         side: str
         reason: str = "one-tap buy"
 
+    def _reserve_tap_order_once(
+        self, mode: str, market: MarketInfo, side: str, token_id: str, key: str, notional: float, ask: float
+    ) -> int:
+        """Retry of the order row after a failed parallel write: reuse the row if that write did land."""
+        with session_scope() as session:
+            existing = session.execute(select(Order.id).where(Order.order_key == key)).scalar_one_or_none()
+        if existing is not None:
+            return existing
+        return self._reserve_tap_order(mode, market, side, token_id, key, notional, ask)
+
     @staticmethod
     def _reserve_tap_order(
         mode: str, market: MarketInfo, side: str, token_id: str, key: str, notional: float, ask: float
@@ -1224,7 +1234,42 @@ class OrderManager:
                         else f"{type(exc).__name__}: {exc}"
                     ),
                 )
-            order_id = await reserve_task
+            try:
+                order_id = await reserve_task
+            except Exception as exc:
+                # The row is written in parallel with the exchange call, so a failed write can now be found out
+                # after the order left. Never lose the fill: retry once (finding a row that was in fact written).
+                logger.error("one-tap order row write failed after the send (%s); retrying once", type(exc).__name__)
+                try:
+                    order_id = await asyncio.to_thread(
+                        self._reserve_tap_order_once, mode, market, side, token_id, key, notional, ask
+                    )
+                except Exception as exc2:
+                    logger.error("one-tap order row retry failed (%s)", type(exc2).__name__)
+                    self._logs.log(
+                        "ERROR",
+                        "error",
+                        f"TAP order {report.status} could not be saved: reconcile with the exchange",
+                        payload={
+                            "order_key": key,
+                            "side": side,
+                            "exchange_order_id": report.exchange_order_id,
+                            "filled_size": report.filled_size,
+                            "avg_price": report.avg_price,
+                        },
+                        mode=mode,
+                    )
+                    return OrderResult(
+                        None,
+                        side,
+                        report.status,
+                        "order_row_missing",
+                        report.filled_size,
+                        report.avg_price,
+                        report.latency_ms,
+                        report.exchange_order_id,
+                        "the order row could not be saved: check the exchange before retrying",
+                    )
             result = await asyncio.to_thread(
                 self._finalize_order, order_id, report, self._TapSignal(side), mode
             )
