@@ -147,6 +147,17 @@ export interface LimitRow {
   set_at?: string;
 }
 
+/** A limit buy kept by the bot (code), not an exchange order: it buys `amount` USDC once the best ask is at or below `price`. */
+export interface BuyLimitRow {
+  market_id: string;
+  side: Side;
+  /** share price, 0.01 to 0.99: the buy never pays more than this */
+  price: number;
+  /** USDC to spend */
+  amount: number;
+  set_at?: string;
+}
+
 export interface OrderRow {
   id: number;
   market_id: string;
@@ -251,6 +262,8 @@ export interface Snapshot {
   sellable?: SellableHolding[];
   /** the limit sells of the live market (kept by the bot, never exchange orders) */
   limits?: LimitRow[];
+  /** the limit buys of the live market (kept by the bot, one one-tap buy each when the ask falls to the limit) */
+  buy_limits?: BuyLimitRow[];
   /** limits of the one-tap buy */
   tap?: { min_usdc: number; max_usdc: number; cooldown_ms: number; min_ask?: number };
   /** present only on the reply to a one-tap buy */

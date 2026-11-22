@@ -166,6 +166,7 @@ async def test_stop_during_live_start_cannot_be_overridden_by_late_validation():
     bot._market = None
     bot._risk_halt_reason = None
     bot._limits = {}
+    bot._buy_limits = {}
     bot.live_engine = FakeLiveEngine()
     bot.orders = FakeOrders()
     bot.logs = FakeLogs()

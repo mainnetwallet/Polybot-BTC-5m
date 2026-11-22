@@ -1183,6 +1183,7 @@ class OrderManager:
         notional: float,
         request_id: str | None = None,
         min_ask: float | None = None,
+        max_price_cap: float | None = None,
     ) -> OrderResult:
         """One tap = one market BUY of `notional` USDC on `side` at the best ask.
 
@@ -1193,6 +1194,9 @@ class OrderManager:
         Double tap guard: a second tap within TAP_COOLDOWN_S of an accepted one (any side, any size) is
         refused, a tap is refused while another one is still on its way, and a request id that was already
         seen is refused (a retried request over a bad connection cannot buy twice).
+
+        `max_price_cap` is used by a limit buy: the buy is refused ("above_limit") while the best ask is above it,
+        and the order's worst price is never above it, so a limit buy never pays more than its limit.
 
         A side whose best ask is below the floor cannot be bought with a tap at all. The floor is `min_ask` (the
         owner's One-tap setting, sent with the tap; 0 = none) or TAP_MIN_ASK (40 cents) when the client sends none.
@@ -1222,6 +1226,8 @@ class OrderManager:
             floor = TAP_MIN_ASK if min_ask is None else min_ask
             if floor > 0 and ask < floor - 1e-9:  # refused before it counts: no one-second cooldown is started
                 return OrderResult(None, side, "BLOCKED", "ask_too_low")
+            if max_price_cap is not None and ask > max_price_cap + 1e-9:  # same: nothing is sent above a limit
+                return OrderResult(None, side, "BLOCKED", "above_limit")
             # The tap counts from here on, even if the exchange refuses the order: no second try within 1 s.
             self._tap_last_s = now_s
             if request_id:
@@ -1231,6 +1237,8 @@ class OrderManager:
 
             tick = float(getattr(market, "tick_size", 0.01) or 0.01)
             max_price = min(TAP_MAX_PRICE, round(ask + TAP_SLIPPAGE_TICKS * tick, 4))
+            if max_price_cap is not None:
+                max_price = min(max_price, round(max_price_cap, 4))
             key = f"{mode}:{market.market_id}:{side}:tap:{uuid.uuid4().hex[:10]}:s{TAP_STAGE}"
             # shares of this side are about to change: whatever was known about them is void
             ready_key = (mode, market.market_id, side)

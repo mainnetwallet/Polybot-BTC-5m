@@ -4,107 +4,11 @@ import { useBot } from "../../hooks/BotContext";
 import { cx, isNum } from "../../lib/format";
 import { TAP_STAGE } from "../../lib/stages";
 import { Modal } from "../Modal";
+import { PriceSlider, parseCents } from "./PriceSlider";
 
 /** 0.8 -> "80", 0.855 -> "85.5" (a limit is shown and typed in cents) */
 function centsText(price: number): string {
   return String(Math.round(price * 1000) / 10);
-}
-
-const SLIDER_MIN = 1;
-const SLIDER_MAX = 99;
-const SLIDER_THUMB = 22; // px: must match .price-slider input's thumb in index.css
-const QUICK_PICKS = [50, 75, 90, 95, 99];
-
-/** where a price sits on the track (px offset is the thumb's half width, so the marker lines up with the thumb) */
-function trackPos(cents: number): string {
-  const pct = ((Math.min(SLIDER_MAX, Math.max(SLIDER_MIN, cents)) - SLIDER_MIN) / (SLIDER_MAX - SLIDER_MIN)) * 100;
-  return `calc(${pct}% + ${(SLIDER_THUMB / 2) * (1 - pct / 50)}px)`;
-}
-
-/**
- * Limit price in one drag: a slider over the whole 1-99 range, a - / + pair for single cents, and a few quick picks.
- * Typing in the field above still works (and keeps decimals like 85.5); the slider follows it to the nearest cent.
- * The white mark on the track is the best bid, so you can see how far the limit is from the market.
- */
-function PriceSlider({
-  value,
-  bid,
-  fallback,
-  onPick,
-}: {
-  /** the price in the field right now (cents), null when empty or invalid */
-  value: number | null;
-  /** best bid in cents, null when there is no bid */
-  bid: number | null;
-  /** where the thumb sits when the field is empty (the best bid, else 50) */
-  fallback: number;
-  onPick: (cents: number) => void;
-}) {
-  const clamp = (cents: number) => Math.min(SLIDER_MAX, Math.max(SLIDER_MIN, Math.round(cents)));
-  const shown = clamp(value ?? fallback);
-  const bidShown = bid === null ? null : clamp(bid);
-
-  return (
-    <div className="price-slider">
-      <div className="price-slider-step">
-        <button type="button" className="btn btn-ghost" aria-label="One cent less" onClick={() => onPick(clamp(shown - 1))}>
-          −
-        </button>
-        <div className="price-slider-value" aria-live="polite">
-          {value === null ? <span className="is-empty">{shown}</span> : <span>{Math.round(value * 10) / 10}</span>}
-          <small>¢</small>
-        </div>
-        <button type="button" className="btn btn-ghost" aria-label="One cent more" onClick={() => onPick(clamp(shown + 1))}>
-          +
-        </button>
-      </div>
-
-      <div className="price-slider-track">
-        <span className="price-slider-bar" aria-hidden="true" />
-        <span className="price-slider-fill" aria-hidden="true" style={{ width: trackPos(shown) }} />
-        {bidShown !== null ? (
-          <span className="price-slider-bid" aria-hidden="true" style={{ left: trackPos(bidShown) }} />
-        ) : null}
-        <input
-          type="range"
-          min={SLIDER_MIN}
-          max={SLIDER_MAX}
-          step={1}
-          value={shown}
-          aria-label="Limit price in cents"
-          onChange={(event) => onPick(Number(event.target.value))}
-        />
-      </div>
-
-      <div className="price-slider-ticks" aria-hidden="true">
-        {[SLIDER_MIN, 25, 50, 75, SLIDER_MAX]
-          .filter((tick) => bidShown === null || Math.abs(tick - bidShown) > 6) /* the bid label needs the room */
-          .map((tick) => (
-          <span key={tick} style={{ left: trackPos(tick) }}>
-            {tick}
-          </span>
-        ))}
-        {bidShown !== null ? (
-          <span className="is-bid" style={{ left: trackPos(bidShown) }}>
-            bid
-          </span>
-        ) : null}
-      </div>
-
-      <div className="price-slider-quick">
-        {QUICK_PICKS.map((cents) => (
-          <button
-            key={cents}
-            type="button"
-            className={cx("chip", value === cents && "is-on")}
-            onClick={() => onPick(cents)}
-          >
-            {cents}¢
-          </button>
-        ))}
-      </div>
-    </div>
-  );
 }
 
 /**
@@ -141,8 +45,9 @@ export function LimitButton({
   const canSet = snapshot.bot.status === "RUNNING" && !snapshot.bot.kill_switch && !!market && market.remaining_seconds > 0;
   const label = stage === TAP_STAGE ? "One-tap" : `Stage ${stage}`;
 
-  const price = Number(draft);
-  const valid = draft.trim() !== "" && Number.isFinite(price) && price >= 1 && price <= 99;
+  const parsed = parseCents(draft);
+  const valid = parsed !== null;
+  const price = parsed ?? 0;
   const alreadyThere = valid && isNum(bid) && bid * 100 + 1e-9 >= price;
 
   const openDialog = () => {
@@ -215,27 +120,13 @@ export function LimitButton({
         <div className="tap-set">
           <div>
             <div className="tap-set-title">Sell at this price or better (¢)</div>
-            <div className="tap-set-fields">
-              <label className="tap-field">
-                <input
-                  autoFocus
-                  inputMode="decimal"
-                  value={draft}
-                  aria-label="Limit price in cents"
-                  placeholder="e.g. 85"
-                  onChange={(event) => setDraft(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") void save();
-                  }}
-                />
-                <span>¢</span>
-              </label>
-            </div>
             <PriceSlider
-              value={valid ? price : null}
-              bid={isNum(bid) ? bid * 100 : null}
+              draft={draft}
+              onDraft={setDraft}
+              mark={isNum(bid) ? bid * 100 : null}
+              markLabel="bid"
               fallback={isNum(bid) ? bid * 100 : 50}
-              onPick={(cents) => setDraft(String(cents))}
+              onEnter={() => void save()}
             />
             <p className="tap-set-sub">
               {draft.trim() !== "" && !valid

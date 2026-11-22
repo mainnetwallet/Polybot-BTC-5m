@@ -12,6 +12,7 @@ import { cx, fmtNum, fmtPx, fmtSignedUsd } from "../../lib/format";
 import { useConfirmSells } from "../../lib/prefs";
 import { STAGE_VAR, TAP_COLOR, TAP_STAGE, stopLossPrice, takeProfitPrice, type StageId } from "../../lib/stages";
 import { LimitButton } from "./LimitButton";
+import { LimitOrderButton } from "./LimitOrderButton";
 
 type StageHolding = {
   key: string;
@@ -187,6 +188,7 @@ export function PositionsCard({ orders, className }: { orders: OrderRow[]; class
                 {sellingTap ? "Selling…" : "Sell all tap"}
               </button>
             ) : null}
+            <LimitOrderButton />
             <span>This round</span>
           </>
         }

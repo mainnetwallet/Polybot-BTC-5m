@@ -61,6 +61,10 @@ interface BotContextValue {
   setLimit: (side: Side, stage: number, price: number) => Promise<ActionResult>;
   /** Remove a limit sell (nothing to cancel on the exchange). */
   cancelLimit: (side: Side, stage: number) => Promise<ActionResult>;
+  /** Limit buy kept by the bot: buys `amount` USDC once the ask is at or below `price` (0.01-0.99), never above it. */
+  setBuyLimit: (side: Side, price: number, amount: number) => Promise<ActionResult>;
+  /** Remove a limit buy (nothing to cancel on the exchange). */
+  cancelBuyLimit: (side: Side) => Promise<ActionResult>;
   resetPaper: (balance: number) => Promise<ActionResult>;
   resetDaily: () => Promise<ActionResult>;
   clearOrderHistory: () => Promise<ActionResult>;
@@ -574,6 +578,50 @@ export function BotProvider({ children }: { children: ReactNode }) {
     [applySnapshot, notify, refresh],
   );
 
+  // Limit buy: same idea as the limit sell, kept by the bot (code), so it never touches an exchange order either.
+  const setBuyLimit = useCallback(
+    async (side: Side, price: number, amount: number): Promise<ActionResult> => {
+      const marketId = snapshotRef.current?.market?.market_id;
+      if (!marketId) {
+        notify("error", "Limit failed", "There is no live market right now.");
+        return { ok: false, error: "no market" };
+      }
+      try {
+        applySnapshot(await api.setBuyLimit(marketId, side, price, amount));
+        notify(
+          "success",
+          "Buy limit set",
+          `${side} buys $${amount.toFixed(2).replace(/\.00$/, "")} when the ask is ${(price * 100).toFixed(1).replace(/\.0$/, "")}¢ or lower.`,
+        );
+        return { ok: true };
+      } catch (error) {
+        const message = describeError(error);
+        notify("error", "Buy limit failed", message);
+        void refresh();
+        return { ok: false, error: message };
+      }
+    },
+    [applySnapshot, notify, refresh],
+  );
+
+  const cancelBuyLimit = useCallback(
+    async (side: Side): Promise<ActionResult> => {
+      const marketId = snapshotRef.current?.market?.market_id;
+      if (!marketId) return { ok: false, error: "no market" };
+      try {
+        applySnapshot(await api.cancelBuyLimit(marketId, side));
+        notify("info", "Buy limit removed", `${side} has no buy limit now.`);
+        return { ok: true };
+      } catch (error) {
+        const message = describeError(error);
+        notify("error", "Buy limit remove failed", message);
+        void refresh();
+        return { ok: false, error: message };
+      }
+    },
+    [applySnapshot, notify, refresh],
+  );
+
   const resetPaper = useCallback(
     async (balance: number): Promise<ActionResult> => {
       try {
@@ -659,6 +707,8 @@ export function BotProvider({ children }: { children: ReactNode }) {
       sellAll,
       setLimit,
       cancelLimit,
+      setBuyLimit,
+      cancelBuyLimit,
       resetPaper,
       resetDaily,
       clearOrderHistory,
@@ -686,6 +736,8 @@ export function BotProvider({ children }: { children: ReactNode }) {
       sellAll,
       setLimit,
       cancelLimit,
+      setBuyLimit,
+      cancelBuyLimit,
       resetPaper,
       resetDaily,
       clearOrderHistory,
