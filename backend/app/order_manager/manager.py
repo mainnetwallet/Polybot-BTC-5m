@@ -1397,19 +1397,22 @@ class OrderManager:
         side: str,
         stage: int,
         limit_price: float,
+        max_size: float | None = None,
     ) -> OrderResult:
         """The operator's limit sell, fired by the bot once the best bid has reached `limit_price`.
 
         The limit itself lives in the bot (code), not on the exchange: there is no resting order to cancel
         before the shares can be sold some other way. This only sells what `stage` still holds on `side`, at
         the market, and never below the limit. Like a manual sell it is not held back by a risk halt.
+        `max_size` caps the shares this limit may sell (a one-tap limit belongs to the buy it was set for: shares
+        bought later are never sold by it).
         """
         if stage not in SELLABLE_STAGES:
             return OrderResult(None, side, "BLOCKED", "unknown_stage")
         if market.remaining_seconds() <= 0:
             return OrderResult(None, side, "BLOCKED", "market_ended")
         results = await self._handle_stage_exit(
-            market, books, mode, config, stage, manual_side=side, limit_price=limit_price
+            market, books, mode, config, stage, manual_side=side, limit_price=limit_price, max_size=max_size
         )
         return results[0] if results else OrderResult(None, side, "BLOCKED", "no_holding")
 
@@ -1464,6 +1467,7 @@ class OrderManager:
         stage: int,
         manual_side: str | None = None,
         limit_price: float | None = None,
+        max_size: float | None = None,
     ) -> list[OrderResult]:
         """Sell the shares `stage` bought in this market: at its take-profit price once the best bid
         reaches it, or at the market once the best bid falls to its stop-loss level.
@@ -1505,6 +1509,11 @@ class OrderManager:
             sell_size = _floor_shares(holding.size)
             if sell_size < SELL_DUST:
                 holdings[reg_key] = None
+                return [OrderResult(None, holding.side, "BLOCKED", "no_holding")] if manual else []
+            if max_size is not None:
+                # a limit sells only the shares it was set for, never shares bought after it
+                sell_size = min(sell_size, _floor_shares(max_size))
+            if sell_size < SELL_DUST:
                 return [OrderResult(None, holding.side, "BLOCKED", "no_holding")] if manual else []
             book = books.get(holding.token_id)
             bid = book.best_bid if book is not None else None

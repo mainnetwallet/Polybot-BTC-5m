@@ -159,7 +159,7 @@ async def test_bot_manual_sell_works_at_once_with_a_limit_set_and_a_stage_limit_
     await bot.set_limit(market.market_id, "DOWN", 1, 0.95)
     sold = await bot.manual_sell(market.market_id, "UP", TAP)  # no exchange order to cancel first
     assert sold["manual_sell"]["status"] == "FILLED"
-    assert (market.market_id, "UP", TAP) in bot._limits  # a one-tap limit stays: it is set ahead of buys
+    assert (market.market_id, "UP", TAP) not in bot._limits  # a one-tap limit goes with the shares it was set for
 
     bot.orders._tap_last_s -= 5
     bot._limits[(market.market_id, "UP", 1)] = {
@@ -251,3 +251,71 @@ async def test_manual_sell_that_sells_nothing_keeps_the_limit_of_that_card():
     with pytest.raises(BotError):
         await bot.manual_sell(market.market_id, "UP", 1)
     assert (market.market_id, "UP", 1) in bot._limits
+
+
+# ---------------------------------------------------------------- a one-tap limit belongs to its own buy
+async def test_bot_tap_limit_does_not_sell_shares_bought_after_it_was_set():
+    market, bot, books = _setup()
+    await bot.tap_buy(market.market_id, "UP", 2.0)  # buy A
+    await bot.set_limit(market.market_id, "UP", TAP, 0.80)
+    bound = bot._limits[(market.market_id, "UP", TAP)]["size"]
+    assert bound is not None and bound > 0
+
+    bot.orders._tap_last_s = 0.0  # skip the one-second wait between taps
+    await bot.tap_buy(market.market_id, "UP", 2.0)  # buy B, after the limit was set
+    _set_bid(bot, books, market, "UP", 0.85)
+    await _run_limits(bot)
+
+    sells = _sell_orders(bot)
+    assert [(o.status, o.reason) for o in sells] == [("FILLED", "stage9_limit")]
+    assert sells[0].filled_size == pytest.approx(bound)  # only buy A was sold
+    assert bot._limits == {}  # the limit is done
+    held = bot.orders.load_stage0_holding("paper", market.market_id, TAP, "UP")
+    assert held is not None and held.size > 0  # buy B is still held
+
+    await _run_limits(bot)  # later book events never sell buy B
+    assert len(_sell_orders(bot)) == 1
+
+
+async def test_bot_tap_limit_set_ahead_binds_to_the_first_buy_only():
+    market, bot, books = _setup()
+    await bot.set_limit(market.market_id, "UP", TAP, 0.80)
+    assert bot._limits[(market.market_id, "UP", TAP)]["size"] is None  # armed, tied to nothing yet
+
+    await bot.tap_buy(market.market_id, "UP", 2.0)
+    bound = bot._limits[(market.market_id, "UP", TAP)]["size"]
+    assert bound is not None and bound > 0  # tied to that buy
+
+    bot.orders._tap_last_s = 0.0
+    await bot.tap_buy(market.market_id, "UP", 2.0)  # a second buy
+    assert bot._limits[(market.market_id, "UP", TAP)]["size"] == bound  # still only the first buy
+    _set_bid(bot, books, market, "UP", 0.85)
+    await _run_limits(bot)
+    sells = _sell_orders(bot)
+    assert len(sells) == 1 and sells[0].filled_size == pytest.approx(bound)
+
+
+async def test_bot_changing_the_price_of_a_tap_limit_keeps_its_own_shares():
+    market, bot, books = _setup()
+    await bot.tap_buy(market.market_id, "UP", 2.0)
+    await bot.set_limit(market.market_id, "UP", TAP, 0.80)
+    bound = bot._limits[(market.market_id, "UP", TAP)]["size"]
+    bot.orders._tap_last_s = 0.0
+    await bot.tap_buy(market.market_id, "UP", 2.0)
+    await bot.set_limit(market.market_id, "UP", TAP, 0.75)  # only the price changes
+    assert bot._limits[(market.market_id, "UP", TAP)]["size"] == bound
+
+
+async def test_bot_manual_sell_of_tap_shares_removes_the_limit_tied_to_them():
+    market, bot, books = _setup()
+    await bot.tap_buy(market.market_id, "UP", 2.0)
+    await bot.set_limit(market.market_id, "UP", TAP, 0.80)
+    _set_bid(bot, books, market, "UP", 0.50)
+    await bot.manual_sell(market.market_id, "UP", TAP)
+    assert bot._limits == {}  # its shares are gone, so a later buy is never sold by it
+
+    bot.orders._tap_last_s = 0.0
+    await bot.tap_buy(market.market_id, "UP", 2.0)
+    _set_bid(bot, books, market, "UP", 0.90)
+    await _run_limits(bot)
+    assert len(_sell_orders(bot)) == 1  # only the manual sell
