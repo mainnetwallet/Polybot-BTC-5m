@@ -188,6 +188,15 @@ async def test_bot_limit_buy_carried_over_buys_once_in_the_next_market_when_the_
     assert bot._buy_limits == {}  # filled: gone, not carried again
 
 
+async def test_bot_limit_buy_carry_over_can_be_switched_off():
+    market, bot, books = _setup(up_ask=0.55, down_ask=0.45)
+    bot.settings.limit_buy_carry_over = False
+    await bot.set_buy_limit(market.market_id, "UP", 0.40, 5.0)
+    other = make_market(remaining=250, market_id="0xnext", slug="btc-updown-5m-next")
+    await bot._on_market(other, "opened")
+    assert bot._buy_limits == {}
+
+
 async def test_bot_limit_buy_a_fresh_limit_in_the_new_market_wins_over_the_carried_one():
     market, bot, books = _setup(up_ask=0.55, down_ask=0.45)
     await bot.set_buy_limit(market.market_id, "UP", 0.40, 5.0)
