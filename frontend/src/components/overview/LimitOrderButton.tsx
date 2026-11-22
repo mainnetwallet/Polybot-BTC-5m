@@ -228,7 +228,7 @@ export function LimitOrderButton({ className }: { className?: string }) {
             {buy ? (
               <div className="limit-seg" role="group" aria-label="UP or DOWN">
                 {(["UP", "DOWN"] as const).map((s) => (
-                  <button key={s} type="button" className={cx(side === s && "is-on")} onClick={() => switchSide(s)}>
+                  <button key={s} type="button" className={cx(s === "UP" ? "is-up" : "is-down", side === s && "is-on")} onClick={() => switchSide(s)}>
                     {s}
                   </button>
                 ))}

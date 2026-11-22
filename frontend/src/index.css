@@ -1159,6 +1159,8 @@ select:focus-visible,
 .limit-seg button.is-on { background: var(--card-inset); color: var(--text); }
 .limit-seg button.is-buy.is-on { background: var(--up); color: #06281c; }
 .limit-seg button.is-sell.is-on { background: var(--down); color: #2a0a10; }
+.limit-seg button.is-up.is-on { background: var(--up); color: #06281c; }
+.limit-seg button.is-down.is-on { background: var(--down); color: #2a0a10; }
 .limit-active { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 0; font-size: 13px; color: var(--text-2); }
 .limit-active + .limit-active { border-top: 1px solid var(--line); }
 .limit-active button { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 12.5px; }
