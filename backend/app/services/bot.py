@@ -55,6 +55,7 @@ MANUAL_OFF = "manual"  # the operator's "Off": no auto-resume timer, buying come
 # Limit sell (kept by the bot, not an exchange order): a due sell that is refused / not filled is tried this many
 # times, then the limit is dropped and the operator is told, so a bad exchange state is not hammered.
 LIMIT_MAX_ATTEMPTS = 5
+LIMIT_PARTIAL_RETRY_MS = 20  # after a partial fill the rest of the shares is sold again this soon
 LIMIT_MIN_PRICE = 0.01
 LIMIT_MAX_PRICE = 0.99
 GUARD_TITLES = {
@@ -648,7 +649,7 @@ class TradingBot:
                     f"(limit {price * 100:g}c)"
                 )
             elif present:
-                entry["next_try_ms"] = now_ms + 250  # sold in part: the rest follows
+                entry["next_try_ms"] = now_ms + LIMIT_PARTIAL_RETRY_MS  # sold in part: the rest follows at once
             return True
 
         # nothing filled: refused, or cancelled because the bid fell back under the limit before the order reached

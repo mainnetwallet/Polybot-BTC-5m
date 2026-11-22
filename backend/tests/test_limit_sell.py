@@ -21,20 +21,20 @@ TAP = 9
 async def _run_limits(bot) -> None:
     """Wake the limit worker the way a book event does and wait for it to finish."""
     bot._dispatch_limits()
-    task = bot._limit_task
-    if task is not None:
-        await task
-    while bot._limit_jobs:  # the fire tasks the worker started
-        await asyncio.gather(*list(bot._limit_jobs))
+    await _settle_limits(bot)
 
 
 async def _settle_limits(bot) -> None:
-    """Wait for the limit worker and for every fire task it started."""
+    """Wait for the limit worker and for every fire task it started (without busy-waiting on finished tasks)."""
     task = bot._limit_task
     if task is not None:
         await task
-    while bot._limit_jobs:
-        await asyncio.gather(*list(bot._limit_jobs))
+    while True:
+        pending = [job for job in bot._limit_jobs if not job.done()]
+        if not pending:
+            break
+        await asyncio.wait(pending)
+    await asyncio.sleep(0)  # let the finished tasks leave the set
 
 
 def _set_bid(bot, books, market, side: str, bid: float) -> None:
