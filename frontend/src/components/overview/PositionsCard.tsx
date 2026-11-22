@@ -42,7 +42,7 @@ function stageEntryPrice(orders: OrderRow[], marketId: string, side: string, sta
 }
 
 export function PositionsCard({ orders, className }: { orders: OrderRow[]; className?: string }) {
-  const { snapshot, sellNow, sellAll } = useBot();
+  const { snapshot, sellNow, sellAll, cancelBuyLimit } = useBot();
   const remaining = useRemainingSeconds();
   const [selling, setSelling] = useState<Set<string>>(new Set());
   const [confirmSells] = useConfirmSells();
@@ -96,6 +96,23 @@ export function PositionsCard({ orders, className }: { orders: OrderRow[]; class
   }
   // strategy stages first, one-tap rows last
   rows.sort((x, y) => Number(x.tap) - Number(y.tap) || (x.stage ?? 99) - (y.stage ?? 99) || x.side.localeCompare(y.side));
+
+  // limit buys of this market that have not filled yet: they show here as pending until the ask reaches the limit
+  // (then the bot buys once, the limit is gone and the shares appear as a one-tap row above)
+  const pendingBuys = marketId ? (snapshot.buy_limits ?? []).filter((l) => l.market_id === marketId) : [];
+
+  const cancelPendingBuy = (side: "UP" | "DOWN") => {
+    const key = `buy:${side}`;
+    if (selling.has(key)) return;
+    setSelling((prev) => new Set(prev).add(key));
+    void Promise.resolve(cancelBuyLimit(side)).finally(() =>
+      setSelling((prev) => {
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      }),
+    );
+  };
 
   const sell = (row: StageHolding) => {
     if (!row.holding || selling.has(row.key)) return; // only blocks a double click while the request is on its way
@@ -193,7 +210,7 @@ export function PositionsCard({ orders, className }: { orders: OrderRow[]; class
         }
       >
         <div className="scrollbar min-h-0 flex-1 overflow-y-auto pr-1">
-        {rows.length === 0 ? (
+        {rows.length === 0 && pendingBuys.length === 0 ? (
           <EmptyState
             className="ov-empty"
             icon={<IconLayers size={22} />}
@@ -257,6 +274,52 @@ export function PositionsCard({ orders, className }: { orders: OrderRow[]; class
                     ) : (
                       <ExitMeter inline entry={row.entry} bid={row.bid} stop={sl} takeProfit={tp} />
                     )}
+                  </div>
+                </li>
+              );
+            })}
+            {pendingBuys.map((l) => {
+              const ask = (l.side === "UP" ? snapshot.books.up : snapshot.books.down)?.best_ask ?? null;
+              const cents = Math.round(l.price * 1000) / 10;
+              const usd = `$${l.amount.toFixed(2).replace(/\.00$/, "")}`;
+              const key = `buy:${l.side}`;
+              return (
+                <li key={key} className="py-2 first:pt-0">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-2.5 text-[13.5px]">
+                      <span
+                        className={cx(
+                          "chip !px-2 !py-0.5 !text-[11.5px] font-bold",
+                          l.side === "UP" ? "border-up/30 bg-up/12 text-up" : "border-down/30 bg-down/12 text-down",
+                        )}
+                      >
+                        {l.side}
+                      </span>
+                      <span className="truncate text-slate-200">
+                        Limit buy {usd} at {cents}¢ or lower
+                      </span>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2.5">
+                      <span className="chip !px-2 !py-0.5 !text-[11.5px] font-bold" style={{ color: "var(--amber)" }}>
+                        Pending
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => cancelPendingBuy(l.side)}
+                        disabled={selling.has(key)}
+                        title="Cancel this limit buy: nothing has been bought yet"
+                        className="btn !px-2.5 !py-1 !text-[12px]"
+                      >
+                        {selling.has(key) ? "Cancelling…" : "Cancel"}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="mt-1 flex items-center justify-between gap-3 text-[12px] text-slate-500">
+                    <span className="flex shrink-0 items-center gap-2">
+                      <span className="inline-block h-2.5 w-2.5 rounded-[3px]" style={{ background: TAP_COLOR }} aria-hidden="true" />
+                      One-tap · ask {fmtPx(ask)}
+                    </span>
+                    <span className="truncate">Waiting to fill · buys once, never above {cents}¢</span>
                   </div>
                 </li>
               );
