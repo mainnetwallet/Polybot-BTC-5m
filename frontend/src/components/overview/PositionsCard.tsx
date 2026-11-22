@@ -163,7 +163,7 @@ export function PositionsCard({ orders, className }: { orders: OrderRow[]; class
       <Card
         title="Positions"
         className={className}
-        right={
+        left={
           <>
             <button
               type="button"
@@ -184,6 +184,10 @@ export function PositionsCard({ orders, className }: { orders: OrderRow[]; class
             >
               {sellingTap ? "Selling…" : "Sell all tap"}
             </button>
+          </>
+        }
+        right={
+          <>
             <LimitOrderButton />
             <span>This round</span>
           </>
