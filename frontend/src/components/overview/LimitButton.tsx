@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useState } from "react";
 import type { Side } from "../../api/types";
 import { useBot } from "../../hooks/BotContext";
 import { cx, isNum } from "../../lib/format";
@@ -10,140 +10,99 @@ function centsText(price: number): string {
   return String(Math.round(price * 1000) / 10);
 }
 
-const RULER_MIN = 1;
-const RULER_MAX = 99;
-const RULER_STEP = 44; // px per cent: must match .price-ruler-item in index.css
+const SLIDER_MIN = 1;
+const SLIDER_MAX = 99;
+const SLIDER_THUMB = 22; // px: must match .price-slider input's thumb in index.css
+const QUICK_PICKS = [50, 75, 90, 95, 99];
+
+/** where a price sits on the track (px offset is the thumb's half width, so the marker lines up with the thumb) */
+function trackPos(cents: number): string {
+  const pct = ((Math.min(SLIDER_MAX, Math.max(SLIDER_MIN, cents)) - SLIDER_MIN) / (SLIDER_MAX - SLIDER_MIN)) * 100;
+  return `calc(${pct}% + ${(SLIDER_THUMB / 2) * (1 - pct / 50)}px)`;
+}
 
 /**
- * One line of cents (1-99) that scrolls left to right: whatever sits under the centre marker is the price.
- * Drag it, swipe it, use the mouse wheel, or tap a number. Typing in the field moves the line to that price.
- * A price typed with decimals (85.5) is kept as typed; the line only follows it to the nearest cent.
+ * Limit price in one drag: a slider over the whole 1-99 range, a - / + pair for single cents, and a few quick picks.
+ * Typing in the field above still works (and keeps decimals like 85.5); the slider follows it to the nearest cent.
+ * The white mark on the track is the best bid, so you can see how far the limit is from the market.
  */
-function PriceRuler({
+function PriceSlider({
   value,
+  bid,
   fallback,
   onPick,
 }: {
   /** the price in the field right now (cents), null when empty or invalid */
   value: number | null;
-  /** where the line starts when the field is empty (the best bid, else 50) */
+  /** best bid in cents, null when there is no bid */
+  bid: number | null;
+  /** where the thumb sits when the field is empty (the best bid, else 50) */
   fallback: number;
   onPick: (cents: number) => void;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const byUser = useRef(false); // the scroll comes from the person, not from the field following a typed price
-  const idle = useRef<number | undefined>(undefined);
-  const drag = useRef<{ x: number; left: number; moved: boolean } | null>(null);
-  const shown = Math.min(RULER_MAX, Math.max(RULER_MIN, Math.round(value ?? fallback)));
-  const target = (shown - RULER_MIN) * RULER_STEP;
-
-  // first paint: start on the current price without touching the field
-  useLayoutEffect(() => {
-    if (ref.current) ref.current.scrollLeft = target;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // the field changed (typing, tap on a number): the line follows, unless the person is scrolling it right now
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || byUser.current) return;
-    if (Math.abs(el.scrollLeft - target) > 1) el.scrollTo({ left: target, behavior: "smooth" });
-  }, [target]);
-
-  useEffect(() => () => window.clearTimeout(idle.current), []);
-
-  const touch = () => {
-    byUser.current = true;
-    window.clearTimeout(idle.current);
-    idle.current = window.setTimeout(() => {
-      byUser.current = false;
-    }, 180);
-  };
-
-  const onScroll = () => {
-    const el = ref.current;
-    if (!el || !byUser.current) return;
-    const cents = Math.min(RULER_MAX, Math.max(RULER_MIN, Math.round(el.scrollLeft / RULER_STEP) + RULER_MIN));
-    if (value === null || Math.round(value) !== cents) onPick(cents);
-    touch(); // still moving (also covers the snap after a drag)
-  };
-
-  const items = [];
-  for (let c = RULER_MIN; c <= RULER_MAX; c += 1) {
-    items.push(
-      <button
-        key={c}
-        type="button"
-        tabIndex={-1}
-        className={cx("price-ruler-item", c === shown && "is-on", c % 5 === 0 && "is-major")}
-        onClick={() => {
-          if (drag.current?.moved) return; // the end of a drag is not a tap
-          onPick(c);
-        }}
-      >
-        <i aria-hidden="true" />
-        <span>{c}</span>
-      </button>,
-    );
-  }
+  const clamp = (cents: number) => Math.min(SLIDER_MAX, Math.max(SLIDER_MIN, Math.round(cents)));
+  const shown = clamp(value ?? fallback);
+  const bidShown = bid === null ? null : clamp(bid);
 
   return (
-    <div className="price-ruler-wrap">
-      <div
-        ref={ref}
-        className="price-ruler scrollbar"
-        role="slider"
-        tabIndex={0}
-        aria-label="Limit price in cents"
-        aria-valuemin={RULER_MIN}
-        aria-valuemax={RULER_MAX}
-        aria-valuenow={shown}
-        onScroll={onScroll}
-        onTouchStart={touch}
-        onWheel={(event) => {
-          // a mouse wheel scrolls up and down: turn it into left and right
-          const el = ref.current;
-          if (!el) return;
-          touch();
-          el.scrollLeft += Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
-            event.preventDefault();
-            onPick(Math.min(RULER_MAX, Math.max(RULER_MIN, shown + (event.key === "ArrowRight" ? 1 : -1))));
-          }
-        }}
-        onPointerDown={(event) => {
-          if (event.pointerType !== "mouse" || !ref.current) return;
-          drag.current = { x: event.clientX, left: ref.current.scrollLeft, moved: false };
-        }}
-        onPointerMove={(event) => {
-          const d = drag.current;
-          const el = ref.current;
-          if (!d || !el || event.buttons !== 1) return;
-          const dx = event.clientX - d.x;
-          if (!d.moved && Math.abs(dx) < 4) return;
-          d.moved = true;
-          touch();
-          el.style.scrollSnapType = "none"; // free while dragging, snaps again on release
-          el.scrollLeft = d.left - dx;
-        }}
-        onPointerUp={() => {
-          const el = ref.current;
-          if (el) el.style.scrollSnapType = "";
-          window.setTimeout(() => {
-            drag.current = null;
-          }, 0);
-        }}
-        onPointerLeave={() => {
-          const el = ref.current;
-          if (el) el.style.scrollSnapType = "";
-          drag.current = null;
-        }}
-      >
-        {items}
+    <div className="price-slider">
+      <div className="price-slider-step">
+        <button type="button" className="btn btn-ghost" aria-label="One cent less" onClick={() => onPick(clamp(shown - 1))}>
+          −
+        </button>
+        <div className="price-slider-value" aria-live="polite">
+          {value === null ? <span className="is-empty">{shown}</span> : <span>{Math.round(value * 10) / 10}</span>}
+          <small>¢</small>
+        </div>
+        <button type="button" className="btn btn-ghost" aria-label="One cent more" onClick={() => onPick(clamp(shown + 1))}>
+          +
+        </button>
       </div>
-      <span className="price-ruler-marker" aria-hidden="true" />
+
+      <div className="price-slider-track">
+        <span className="price-slider-bar" aria-hidden="true" />
+        <span className="price-slider-fill" aria-hidden="true" style={{ width: trackPos(shown) }} />
+        {bidShown !== null ? (
+          <span className="price-slider-bid" aria-hidden="true" style={{ left: trackPos(bidShown) }} />
+        ) : null}
+        <input
+          type="range"
+          min={SLIDER_MIN}
+          max={SLIDER_MAX}
+          step={1}
+          value={shown}
+          aria-label="Limit price in cents"
+          onChange={(event) => onPick(Number(event.target.value))}
+        />
+      </div>
+
+      <div className="price-slider-ticks" aria-hidden="true">
+        {[SLIDER_MIN, 25, 50, 75, SLIDER_MAX]
+          .filter((tick) => bidShown === null || Math.abs(tick - bidShown) > 6) /* the bid label needs the room */
+          .map((tick) => (
+          <span key={tick} style={{ left: trackPos(tick) }}>
+            {tick}
+          </span>
+        ))}
+        {bidShown !== null ? (
+          <span className="is-bid" style={{ left: trackPos(bidShown) }}>
+            bid
+          </span>
+        ) : null}
+      </div>
+
+      <div className="price-slider-quick">
+        {QUICK_PICKS.map((cents) => (
+          <button
+            key={cents}
+            type="button"
+            className={cx("chip", value === cents && "is-on")}
+            onClick={() => onPick(cents)}
+          >
+            {cents}¢
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -272,8 +231,9 @@ export function LimitButton({
                 <span>¢</span>
               </label>
             </div>
-            <PriceRuler
+            <PriceSlider
               value={valid ? price : null}
+              bid={isNum(bid) ? bid * 100 : null}
               fallback={isNum(bid) ? bid * 100 : 50}
               onPick={(cents) => setDraft(String(cents))}
             />

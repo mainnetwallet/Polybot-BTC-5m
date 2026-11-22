@@ -1105,57 +1105,32 @@ select:focus-visible,
 }
 .tap-field input { width: 100%; min-width: 0; background: none; border: 0; outline: 0; color: var(--text); font-size: 15px; font-weight: 700; }
 
-/* limit price: one line of cents that scrolls left to right, the number under the centre marker is the price */
-.price-ruler-wrap { position: relative; margin-top: 12px; }
-.price-ruler {
-  display: flex;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scroll-snap-type: x mandatory;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior-x: contain;
-  padding: 0 calc(50% - 22px); /* half the item width: the first and the last cent can reach the centre */
-  border: 1px solid var(--line-strong);
-  border-radius: 10px;
-  cursor: grab;
-  user-select: none;
-  scrollbar-width: none;
-  outline: 0;
-}
-.price-ruler::-webkit-scrollbar { display: none; }
-.price-ruler:active { cursor: grabbing; }
-.price-ruler:focus-visible { border-color: var(--up); }
-.price-ruler-item {
-  flex: 0 0 44px;
-  width: 44px;
-  scroll-snap-align: center;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  padding: 8px 0 7px;
-  background: none;
-  border: 0;
-  color: var(--text-dim);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: inherit;
-}
-.price-ruler-item i { display: block; width: 1px; height: 8px; background: var(--line-strong); }
-.price-ruler-item.is-major i { height: 14px; background: var(--muted); }
-.price-ruler-item.is-major { color: var(--muted); }
-.price-ruler-item.is-on { color: var(--text); font-weight: 800; }
-.price-ruler-marker {
-  position: absolute;
-  top: 1px;
-  bottom: 1px;
-  left: 50%;
-  width: 2px;
-  margin-left: -1px;
-  border-radius: 2px;
-  background: var(--up);
-  pointer-events: none;
-}
+/* limit price: a slider over 1-99 cents, - / + for single cents, quick picks, a mark for the best bid */
+.price-slider { margin-top: 12px; }
+.price-slider-step { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.price-slider-step .btn { width: 38px; height: 38px; padding: 0; font-size: 20px; line-height: 1; justify-content: center; touch-action: manipulation; }
+.price-slider-value { display: flex; align-items: baseline; gap: 4px; font-size: 30px; font-weight: 800; color: var(--text); font-variant-numeric: tabular-nums; }
+.price-slider-value .is-empty { color: var(--text-faint); }
+.price-slider-value small { font-size: 16px; font-weight: 700; color: var(--muted); }
+.price-slider-track { position: relative; height: 40px; margin-top: 8px; }
+.price-slider-bar, .price-slider-fill { position: absolute; top: 17px; height: 6px; border-radius: 3px; left: 0; pointer-events: none; }
+.price-slider-bar { right: 0; background: var(--card-inset); border: 1px solid var(--line-strong); box-sizing: border-box; }
+.price-slider-fill { background: var(--up); }
+.price-slider-bid { position: absolute; top: 9px; width: 2px; height: 22px; margin-left: -1px; border-radius: 2px; background: var(--text); pointer-events: none; }
+.price-slider-track input { position: absolute; inset: 0; width: 100%; height: 40px; margin: 0; background: transparent; appearance: none; -webkit-appearance: none; outline: 0; cursor: pointer; touch-action: pan-y; }
+.price-slider-track input::-webkit-slider-runnable-track { height: 40px; background: transparent; }
+.price-slider-track input::-moz-range-track { height: 40px; background: transparent; }
+.price-slider-track input::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; margin-top: 9px; border-radius: 50%; background: var(--up); border: 3px solid var(--card); box-shadow: 0 0 0 1px var(--up); cursor: grab; }
+.price-slider-track input::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: var(--up); border: 3px solid var(--card); box-shadow: 0 0 0 1px var(--up); cursor: grab; }
+.price-slider-track input:active::-webkit-slider-thumb { cursor: grabbing; }
+.price-slider-track input:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 1px var(--up), 0 0 0 5px var(--up-soft); }
+.price-slider-track input:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 1px var(--up), 0 0 0 5px var(--up-soft); }
+.price-slider-ticks { position: relative; height: 16px; }
+.price-slider-ticks span { position: absolute; transform: translateX(-50%); font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.price-slider-ticks .is-bid { top: 0; color: var(--text); font-weight: 700; background: var(--card); padding: 0 3px; }
+.price-slider-quick { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.price-slider-quick .chip { cursor: pointer; font-variant-numeric: tabular-nums; }
+.price-slider-quick .chip.is-on { background: var(--up); border-color: var(--up); color: #06281c; }
 
 /* the right column of the tape card: tap panel on top, the two books under it */
 .tape-side { display: flex; min-width: 0; flex-direction: column; gap: 10px; }
