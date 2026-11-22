@@ -534,8 +534,7 @@ class TradingBot:
         price = entry["price"]
         entry["next_try_ms"] = int(time.time() * 1000) + 250  # no second try while this one is on its way
         result = await self.orders.limit_sell(
-            market, self.data.books, self._mode, self.runtime.get(), side, stage, price,
-            max_size=entry.get("size"),
+            market, self.data.books, self._mode, self.runtime.get(), side, stage, price
         )
         now_ms = int(time.time() * 1000)
         # the limit may have been removed (or replaced) while the sell was on its way
@@ -546,9 +545,9 @@ class TradingBot:
                 return False
             reason = result.reason
             if reason == "no_holding":
-                if entry["fired"] or stage != TAP_STAGE or entry.get("size") is not None:
-                    # this limit already sold everything (or the shares it was set for are gone): it is done.
-                    # Only a one-tap limit that is not tied to a buy yet may wait for the buy it is set ahead of.
+                if entry["fired"] or stage != TAP_STAGE:
+                    # this limit already sold everything (or the stage holds nothing any more): it is done.
+                    # Only a one-tap limit may wait for shares that are bought later.
                     self._limits.pop(key, None)
                     return True
                 entry["next_try_ms"] = now_ms + 1000
@@ -571,12 +570,6 @@ class TradingBot:
         if result.filled_size > 0:
             if present:
                 entry["fired"] = True
-                if entry.get("size") is not None:
-                    # the shares this limit was set for, less what it just sold
-                    entry["size"] = max(0.0, round(entry["size"] - result.filled_size, 6))
-                    if _floor_shares(entry["size"]) < SELL_DUST:
-                        self._limits.pop(key, None)
-                        present = False
             if result.status == "FILLED":
                 if present:
                     self._limits.pop(key, None)
@@ -646,24 +639,12 @@ class TradingBot:
         if not (LIMIT_MIN_PRICE <= price <= LIMIT_MAX_PRICE):
             raise BotError(f"the limit must be between {LIMIT_MIN_PRICE * 100:g}c and {LIMIT_MAX_PRICE * 100:g}c")
         price = round(price, 3)
-        # A one-tap limit belongs to the buy it is set for: it sells those shares only. Shares bought later are
-        # never sold by it. Set ahead of any buy (nothing held yet), it binds to the next one-tap buy (tap_buy).
-        bound_size: float | None = None
-        if stage == TAP_STAGE:
-            previous = self._limits.get((market_id, side, stage))
-            if previous is not None and previous.get("size") is not None:
-                bound_size = previous["size"]  # only the price changes: still the same shares
-            else:
-                held = await asyncio.to_thread(self.orders.load_stage0_holding, self._mode, market_id, stage, side)
-                if held is not None and held.side == side and _floor_shares(held.size) >= SELL_DUST:
-                    bound_size = _floor_shares(held.size)
         self._limits[(market_id, side, stage)] = {
             "price": price,
             "set_at": iso_z(utcnow()),
             "next_try_ms": 0,
             "attempts": 0,
             "fired": False,
-            "size": bound_size,
         }
         self.logs.log(
             "INFO",
@@ -1657,14 +1638,9 @@ class TradingBot:
         if result.status in {"REJECTED", "CANCELED"} and result.filled_size <= 0:
             # nothing was sold: the shares are still held, so the limit of this card stays
             raise BotError(f"sell {result.status.lower()}: {result.error or 'no fill'}")
-        if stage != TAP_STAGE:
-            # a stage's limit goes with the shares it was for
-            self._limits.pop((market_id, side, stage), None)
-        else:
-            # a one-tap limit tied to a buy goes with it; one set ahead of a buy (no shares yet) stays
-            tied = self._limits.get((market_id, side, stage))
-            if tied is not None and tied.get("size") is not None:
-                self._limits.pop((market_id, side, stage), None)
+        # a limit goes with the shares it was for: once they are sold, a later buy never inherits it.
+        # (A one-tap limit covers all the one-tap shares of its side while they are held, later buys included.)
+        self._limits.pop((market_id, side, stage), None)
         snapshot = await self._snapshot_and_publish()
         snapshot["manual_sell"] = result.as_dict()
         return snapshot
@@ -1722,11 +1698,6 @@ class TradingBot:
         }
         if result.status == "BLOCKED":
             raise BotError(reasons.get(result.reason, f"buy blocked: {result.reason}"))
-        if result.filled_size > 0:
-            # a one-tap limit set ahead of any buy belongs to this first buy only; later buys are never its shares
-            armed = self._limits.get((market_id, side, TAP_STAGE))
-            if armed is not None and armed.get("size") is None:
-                armed["size"] = _floor_shares(result.filled_size)
         self._last_order = result.as_dict()
         self._last_order["ts"] = iso_z(utcnow())
         if result.latency_ms is not None:
@@ -1780,10 +1751,9 @@ class TradingBot:
                 raise BotError(reasons.get(first.reason, f"sell blocked: {first.reason}"))
             raise BotError(f"sell {first.status.lower()}: {first.error or 'no fill'}")
         if scope == "tap":
+            # the one-tap shares of these sides are sold: their limits are done, a later buy needs a new limit
             for r in sold:
-                tied = self._limits.get((market_id, r.side, TAP_STAGE))
-                if tied is not None and tied.get("size") is not None:
-                    self._limits.pop((market_id, r.side, TAP_STAGE), None)
+                self._limits.pop((market_id, r.side, TAP_STAGE), None)
         if scope != "tap":
             # a limit belongs to its own card: only the stages that really sold lose theirs. A stage whose
             # sell was blocked or refused still holds its shares, so its limit stays.
