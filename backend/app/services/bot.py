@@ -373,8 +373,7 @@ class TradingBot:
                 self._marks()
                 self._snapshot_unrealized(previous.market_id)
                 self._limits.clear()
-                if not self._buy_limit_carry_over():
-                    self._buy_limits.clear()
+                # unfilled limit buys stay: they move to the next market when it opens (see _roll_buy_limits)
                 self._market = None
                 self.data.set_market(None)
                 self.btc.set_market(None)
@@ -704,22 +703,19 @@ class TradingBot:
         ask = book.best_ask if book is not None else None
         return ask if ask is not None and ask > 0 else None
 
-    def _buy_limit_carry_over(self) -> bool:
-        return bool(getattr(self.settings, "limit_buy_carry_over", True))
-
     def _roll_buy_limits(self, market: MarketInfo) -> None:
         """A new market opened: a limit buy that did not fill is moved to it, reset (fresh tries, armed at once).
 
         The same entry object is re-keyed, so a buy still on its way from the old market can find it again and
-        remove it if it filled (see `_fire_buy_limit`): a filled limit is never carried over. With
-        LIMIT_BUY_CARRY_OVER=false the old behaviour stays: a limit belongs to one market and is dropped.
+        remove it if it filled (see `_fire_buy_limit`): a filled limit is never carried over. Always on, no setting.
+        Each market starts the carried limit clean: nothing of the old market (tries, wait time) is kept.
         """
         stale = [key for key in self._buy_limits if key[0] != market.market_id]
         for key in stale:
             entry = self._buy_limits.pop(key)
             new_key = (market.market_id, key[1])
-            if not self._buy_limit_carry_over() or new_key in self._buy_limits:
-                continue  # off, or the operator already set a fresh limit for this side: that one wins
+            if new_key in self._buy_limits:
+                continue  # the operator already set a fresh limit for this side: that one wins
             entry["next_try_ms"] = 0
             entry["attempts"] = 0
             entry["set_at"] = iso_z(utcnow())
