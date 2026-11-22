@@ -54,7 +54,8 @@ BUYS_STATE_KEY = "buys_state"  # bot_settings row holding the persisted buy on/o
 MANUAL_OFF = "manual"  # the operator's "Off": no auto-resume timer, buying comes back at the next day's start
 # Limit sell (kept by the bot, not an exchange order): a due sell that is refused / not filled is tried this many
 # times, then the limit is dropped and the operator is told, so a bad exchange state is not hammered.
-LIMIT_MAX_ATTEMPTS = 5
+LIMIT_MAX_ATTEMPTS = 15
+LIMIT_RETRY_MS = 30  # gap before the next try when an order was sent but nothing filled
 LIMIT_PARTIAL_RETRY_MS = 20  # after a partial fill the rest of the shares is sold again this soon
 LIMIT_MIN_PRICE = 0.01
 LIMIT_MAX_PRICE = 0.99
@@ -671,7 +672,7 @@ class TradingBot:
                     f"{LIMIT_MAX_ATTEMPTS} tries ({result.error or result.status}). The shares are still held."
                 )
                 return True
-            entry["next_try_ms"] = now_ms + 500
+            entry["next_try_ms"] = now_ms + LIMIT_RETRY_MS
         return False
 
     def _limits_payload(self, market: MarketInfo | None) -> list[dict]:
@@ -834,7 +835,7 @@ class TradingBot:
                 entry["attempts"] += 1
                 if entry["attempts"] >= LIMIT_MAX_ATTEMPTS:
                     return drop(f"not filled after {LIMIT_MAX_ATTEMPTS} tries ({result.error or result.status})")
-                entry["next_try_ms"] = int(time.time() * 1000) + 500
+                entry["next_try_ms"] = int(time.time() * 1000) + LIMIT_RETRY_MS
                 return False
             return drop(f"outcome not known ({result.status}); check your positions before buying again")
         return False

@@ -9,7 +9,7 @@ from sqlalchemy import select
 from app.database.models import Order, Position
 from app.database.session import session_scope
 from app.order_manager.manager import OrderResult
-from app.services.bot import BotError
+from app.services.bot import LIMIT_MAX_ATTEMPTS, BotError
 
 from .helpers import books_for, build_stack, make_config, make_market, stage_books
 from .test_limit_sell import TAP, _run_limits, _sell_orders, _set_bid, _settle_limits, _setup
@@ -188,14 +188,14 @@ async def test_bot_limit_buy_retries_a_clean_refusal_then_gives_up():
     bot.orders.tap_buy = refused
     await bot.set_buy_limit(market.market_id, "UP", 0.40, 5.0)
     key = (market.market_id, "UP")
-    for _ in range(10):
+    for _ in range(LIMIT_MAX_ATTEMPTS + 5):
         entry = bot._buy_limits.get(key)
         if entry is None:
             break
         entry["next_try_ms"] = 0
         await _run_limits(bot)
     assert bot._buy_limits == {}
-    assert len(calls) == 5  # LIMIT_MAX_ATTEMPTS
+    assert len(calls) == LIMIT_MAX_ATTEMPTS
 
 
 async def test_limit_buy_shares_are_one_tap_shares_so_a_limit_sell_set_before_picks_them_up():
