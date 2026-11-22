@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { cx } from "../../lib/format";
 
 const SLIDER_MIN = 1;
@@ -33,6 +34,7 @@ export function PriceSlider({
   tone = "up",
   fill = "left",
   onEnter,
+  extra,
 }: {
   /** the text in the price field (cents) */
   draft: string;
@@ -48,6 +50,8 @@ export function PriceSlider({
   /** which side of the thumb is filled: "left" for "this price or lower", "right" for "this price or higher" */
   fill?: "left" | "right";
   onEnter?: () => void;
+  /** shown to the right of the ¢ sign (the big number stays centered), e.g. the profit at this price */
+  extra?: ReactNode;
 }) {
   const clamp = (cents: number) => Math.min(SLIDER_MAX, Math.max(SLIDER_MIN, Math.round(cents)));
   const value = parseCents(draft);
@@ -73,6 +77,7 @@ export function PriceSlider({
             }}
           />
           <small>¢</small>
+          {extra ? <span className="price-slider-extra">{extra}</span> : null}
         </label>
         <button type="button" className="btn btn-ghost" aria-label="One cent more" onClick={() => pick(shown + 1)}>
           +

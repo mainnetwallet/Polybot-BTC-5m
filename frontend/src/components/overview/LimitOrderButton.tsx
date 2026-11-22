@@ -107,6 +107,8 @@ export function LimitOrderButton({ className }: { className?: string }) {
   const alreadyThere = priceOk && isNum(ref) && (buy ? ref * 100 <= cents + 1e-9 : ref * 100 + 1e-9 >= cents);
   const valid = priceOk && (buy ? amountOk : selected !== null);
   const shares = buy && priceOk && amountOk ? amount / (cents / 100) : null;
+  // profit of the buy if the side wins, at the limit price (a lower ask fills more shares, so it can only be more)
+  const buyProfit = shares !== null ? shares - amount : null;
 
   // what the selected position gets at the typed limit
   const proceeds = !buy && priceOk && selected?.size != null ? (selected.size * cents) / 100 : null;
@@ -311,6 +313,14 @@ export function LimitOrderButton({ className }: { className?: string }) {
                 tone={buy ? "up" : "down"}
                 fill={buy ? "left" : "right"}
                 onEnter={() => void save()}
+                extra={
+                  buy && buyProfit !== null ? (
+                    <>
+                      <b>{fmtSignedUsd(buyProfit)}</b>
+                      <small>profit</small>
+                    </>
+                  ) : null
+                }
               />
               {hint ? <p className="tap-set-sub">{hint}</p> : null}
             </div>
@@ -345,13 +355,9 @@ export function LimitOrderButton({ className }: { className?: string }) {
                   </button>
                 ))}
               </div>
-              <p className="tap-set-sub">
-                {usd.trim() !== "" && !amountOk
-                  ? `Enter an amount from $${minUsd} to $${maxUsd}.`
-                  : shares !== null
-                    ? `About ${shares.toFixed(1)} shares at ${centsText(cents ?? 0)}¢ (more if the ask is lower). Pays $${shares.toFixed(2)} if ${side} wins.`
-                    : "Pick a price to see how many shares that buys."}
-              </p>
+              {usd.trim() !== "" && !amountOk ? (
+                <p className="tap-set-sub">{`Enter an amount from $${minUsd} to $${maxUsd}.`}</p>
+              ) : null}
             </div>
           ) : proceeds !== null && selected ? (
             <div className="limit-sum">
