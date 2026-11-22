@@ -18,30 +18,40 @@ def sell_outcomes(
     """{order id: (result, pnl)} for every filled SELL (take-profit or stop-loss exit).
 
     A SELL row used to show no result at all, so a stop-loss that lost money looked like an empty
-    row. Its own P&L is what that exit realised against the cost of the shares the same stage
-    bought (buy fee included): proceeds - sell fee - shares * (cost + buy fee per share).
+    row. Its own P&L is what that exit realised against the cost of the shares it sold: proceeds -
+    sell fee - sold shares * (cost + buy fee per share).
+
+    The buys and sells of one market / side / stage are replayed oldest first with the average-cost
+    method (as the position row does), so shares bought and sold earlier no longer weigh on the cost
+    of shares bought later. A one-tap buy that was sold and bought again at a higher price used to be
+    blended with the first buy, which showed a win for a sale that made almost nothing.
     """
-    buys: dict[tuple[str, str, int], list] = defaultdict(list)
-    sells: list = []
+    groups: dict[tuple[str, str, int], list[tuple[int, int, object]]] = defaultdict(list)
     for o in orders:
         if (o.filled_size or 0) <= 0:
             continue
-        if key_action(o.order_key) == "SELL":
-            sells.append(o)
-        else:
-            buys[(o.market_id, o.side, key_stage(o.order_key))].append(o)
+        is_sell = 1 if key_action(o.order_key) == "SELL" else 0
+        groups[(o.market_id, o.side, key_stage(o.order_key))].append((o.id or 0, is_sell, o))
 
     out: dict[int, tuple[str, float]] = {}
-    for o in sells:
-        group = buys.get((o.market_id, o.side, key_stage(o.order_key)))
-        if not group:
-            continue
-        bought = sum(b.filled_size for b in group)
-        if bought <= 0:
-            continue
-        cost_ps = sum(b.filled_size * (b.avg_fill_price or 0.0) for b in group) / bought
-        fee_ps = sum(b.fee or 0.0 for b in group) / bought
-        shares = min(o.filled_size, bought)
-        pnl = o.filled_size * (o.avg_fill_price or 0.0) - (o.fee or 0.0) - shares * (cost_ps + fee_ps)
-        out[o.id] = ("WIN" if pnl > 0 else "LOSS", round(pnl, 6))
+    for events in groups.values():
+        events.sort(key=lambda e: (e[0], e[1]))  # oldest first; a buy before a sell of the same id
+        held = cost = fees = 0.0  # shares still held, their total cost and total buy fee
+        for _, is_sell, o in events:
+            if not is_sell:
+                held += o.filled_size
+                cost += o.filled_size * (o.avg_fill_price or 0.0)
+                fees += o.fee or 0.0
+                continue
+            if held <= 1e-9:
+                continue  # nothing bought before this sale: no basis, no result
+            sold = min(o.filled_size, held)
+            fraction = sold / held
+            basis = (cost + fees) * fraction  # cost and buy fee of exactly the shares sold
+            proceeds = o.filled_size * (o.avg_fill_price or 0.0) * (sold / o.filled_size)
+            pnl = proceeds - (o.fee or 0.0) - basis
+            cost -= cost * fraction
+            fees -= fees * fraction
+            held -= sold
+            out[o.id] = ("WIN" if pnl > 0 else "LOSS", round(pnl, 6))
     return out
