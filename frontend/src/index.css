@@ -1105,6 +1105,58 @@ select:focus-visible,
 }
 .tap-field input { width: 100%; min-width: 0; background: none; border: 0; outline: 0; color: var(--text); font-size: 15px; font-weight: 700; }
 
+/* limit price: one line of cents that scrolls left to right, the number under the centre marker is the price */
+.price-ruler-wrap { position: relative; margin-top: 12px; }
+.price-ruler {
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  padding: 0 calc(50% - 22px); /* half the item width: the first and the last cent can reach the centre */
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  cursor: grab;
+  user-select: none;
+  scrollbar-width: none;
+  outline: 0;
+}
+.price-ruler::-webkit-scrollbar { display: none; }
+.price-ruler:active { cursor: grabbing; }
+.price-ruler:focus-visible { border-color: var(--up); }
+.price-ruler-item {
+  flex: 0 0 44px;
+  width: 44px;
+  scroll-snap-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 0 7px;
+  background: none;
+  border: 0;
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: inherit;
+}
+.price-ruler-item i { display: block; width: 1px; height: 8px; background: var(--line-strong); }
+.price-ruler-item.is-major i { height: 14px; background: var(--muted); }
+.price-ruler-item.is-major { color: var(--muted); }
+.price-ruler-item.is-on { color: var(--text); font-weight: 800; }
+.price-ruler-marker {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  left: 50%;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 2px;
+  background: var(--up);
+  pointer-events: none;
+}
+
 /* the right column of the tape card: tap panel on top, the two books under it */
 .tape-side { display: flex; min-width: 0; flex-direction: column; gap: 10px; }
 .tape-book-toggle { display: none; }
