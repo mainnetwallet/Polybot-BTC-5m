@@ -209,7 +209,7 @@ export function PositionsCard({ orders, className }: { orders: OrderRow[]; class
           </>
         }
       >
-        <div className="scrollbar min-h-0 flex-1 overflow-y-auto pr-1">
+        <div className="scrollbar min-h-0 flex-1 overflow-y-auto pr-1 pt-3">
         {rows.length === 0 && pendingBuys.length === 0 ? (
           <EmptyState
             className="ov-empty"
@@ -225,7 +225,7 @@ export function PositionsCard({ orders, className }: { orders: OrderRow[]; class
               const sl = stage === null ? null : stopLossPrice(stage, row.entry, strategy, remaining);
               const color = row.tap ? TAP_COLOR : stage === null ? "var(--muted)" : STAGE_VAR[stage];
               return (
-                <li key={row.key} className="py-2 first:pt-0">
+                <li key={row.key} className="py-3 first:pt-0">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex min-w-0 items-center gap-2.5 text-[13.5px]">
                       <span
@@ -284,7 +284,7 @@ export function PositionsCard({ orders, className }: { orders: OrderRow[]; class
               const usd = `$${l.amount.toFixed(2).replace(/\.00$/, "")}`;
               const key = `buy:${l.side}`;
               return (
-                <li key={key} className="py-2 first:pt-0">
+                <li key={key} className="py-3 first:pt-0">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex min-w-0 items-center gap-2.5 text-[13.5px]">
                       <span
