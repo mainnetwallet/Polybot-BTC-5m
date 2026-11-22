@@ -1146,6 +1146,31 @@ select:focus-visible,
 .limit-active button { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 12.5px; }
 .limit-active button:hover { color: var(--text); }
 
+/* sell mode of the limit dialog: pick an active position, then give it its own limit */
+.limit-pos-count { margin-left: 8px; font-size: 12px; font-weight: 500; color: var(--muted); }
+.limit-pos-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.limit-pos { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 12px; align-items: center; width: 100%; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--card-inset); color: var(--text); text-align: left; cursor: pointer; touch-action: manipulation; }
+.limit-pos:hover { border-color: color-mix(in srgb, var(--down) 40%, transparent); }
+.limit-pos.is-on { border-color: var(--down); background: color-mix(in srgb, var(--down) 8%, transparent); }
+.limit-pos-dot { width: 16px; height: 16px; box-sizing: border-box; border-radius: 50%; border: 1.5px solid var(--muted); display: flex; align-items: center; justify-content: center; }
+.limit-pos.is-on .limit-pos-dot { border-color: var(--down); }
+.limit-pos.is-on .limit-pos-dot::after { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--down); }
+.limit-pos-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.limit-pos-top { display: flex; align-items: center; gap: 8px; }
+.limit-pos-src { font-size: 12px; color: var(--muted); }
+.limit-pos-detail { font-size: 13px; color: var(--text-2); }
+.limit-pos-limit { font-size: 12px; color: var(--muted); }
+.limit-pos-limit.is-set { color: var(--down); font-weight: 700; }
+.limit-pos-side { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.limit-pos-pnl { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.limit-pos-now { font-size: 12px; color: var(--muted); }
+.limit-sum { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 12px; background: var(--card-inset); font-size: 13px; }
+.limit-sum > div { display: flex; justify-content: space-between; gap: 12px; }
+.limit-sum span { color: var(--muted); }
+.limit-sum b { font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+.limit-sum b.text-up { color: var(--up); }
+.limit-sum b.text-down { color: var(--down); }
+
 /* the right column of the tape card: tap panel on top, the two books under it */
 .tape-side { display: flex; min-width: 0; flex-direction: column; gap: 10px; }
 .tape-book-toggle { display: none; }
