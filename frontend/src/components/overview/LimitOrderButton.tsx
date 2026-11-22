@@ -20,7 +20,7 @@ type SellTarget = {
 
 const BUY_PICKS = [20, 30, 40, 50, 60];
 const SELL_PICKS = [50, 75, 90, 95, 99];
-const AMOUNT_PICKS = [5, 10, 25, 50];
+const AMOUNT_PICKS = [1, 2, 3, 5];
 
 const targetKey = (side: Side, stage: number) => `${side}:${stage}`;
 const stageLabel = (stage: number) => (stage === TAP_STAGE ? "One-tap" : `Stage ${stage}`);
