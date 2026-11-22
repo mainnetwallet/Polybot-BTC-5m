@@ -209,13 +209,12 @@ export function PositionsCard({ orders, className }: { orders: OrderRow[]; class
           </>
         }
       >
-        <div className="scrollbar min-h-0 flex-1 overflow-y-auto pr-1 pt-3">
+        <div className={cx("scrollbar min-h-0 flex-1 overflow-y-auto pr-1 pt-3", rows.length === 0 && pendingBuys.length === 0 && "flex flex-col")}>
         {rows.length === 0 && pendingBuys.length === 0 ? (
           <EmptyState
-            className="ov-empty"
+            className="ov-empty flex-1"
             icon={<IconLayers size={22} />}
             title="No open position"
-            hint="Filled buys of the live market appear here, one row per stage (and one-tap), with their take profit and stop loss."
           />
         ) : (
           <ul className="pos-list divide-y divide-white/[0.06]">
