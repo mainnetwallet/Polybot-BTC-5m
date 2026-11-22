@@ -193,7 +193,9 @@ export function ResultChip({ result, pnl }: { result?: string | null; pnl?: numb
   const title =
     result === "BUY"
       ? "Entry filled. The win or loss is shown on the sell row."
-      : pnl != null
+      : result === "SETTLING"
+        ? "Window ended. Waiting for Polymarket to publish the winner; balance updates on settlement."
+        : pnl != null
         ? `Realized P&L ${sign}$${pnl.toFixed(2)}`
         : "Waiting for market settlement";
   return (

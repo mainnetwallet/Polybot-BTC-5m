@@ -1,5 +1,7 @@
 import type { OrderRow, PositionRow } from "../api/types";
+import { useBot } from "../hooks/BotContext";
 import { cx, fmtCents, fmtDateTime, fmtNum, fmtSignedUsd, fmtTime, fmtUsd, pnlClass, shortId } from "../lib/format";
+import { TAP_STAGE } from "../lib/stages";
 import { ResultChip, RouteChip, SideBadge, StageChip, StatusChip } from "./Badges";
 import { EmptyState } from "./EmptyState";
 import { IconLayers } from "./Icons";
@@ -13,6 +15,14 @@ export function OrdersTable({
   detailed?: boolean;
   emptyHint?: string;
 }) {
+  const { snapshot } = useBot();
+  // positions whose window is over and wait for the winner: their filled buys show "Settling" in the Result column
+  const settling = new Set(
+    (snapshot?.positions ?? [])
+      .filter((p) => p.awaiting_settlement && p.size > 0)
+      .map((p) => `${p.market_id}:${p.side}:${p.tag === "tap" ? "tap" : "stage"}`),
+  );
+
   if (!orders.length) {
     return (
       <EmptyState
@@ -44,6 +54,9 @@ export function OrdersTable({
         <tbody>
           {orders.map((order) => {
             const price = order.avg_fill_price ?? order.submitted_price ?? order.requested_price;
+            const filledBuy = order.action === "BUY" && order.filled_size > 0;
+            const isSettling =
+              filledBuy && settling.has(`${order.market_id}:${order.side}:${order.stage === TAP_STAGE ? "tap" : "stage"}`);
             return (
               <tr key={order.id}>
                 <td className="mono text-slate-500">{fmtTime(order.created_at)}</td>
@@ -61,7 +74,7 @@ export function OrdersTable({
                   <RouteChip route={order.route} />
                 </td>
                 <td>
-                  <ResultChip result={order.action === "BUY" && order.filled_size > 0 ? "BUY" : order.result} pnl={order.result_pnl} />
+                  <ResultChip result={isSettling ? "SETTLING" : filledBuy ? "BUY" : order.result} pnl={isSettling ? null : order.result_pnl} />
                 </td>
                 <td className="mono text-right text-slate-300">{fmtUsd(order.requested_notional)}</td>
                 <td className="mono text-right text-slate-300">{fmtCents(price)}</td>
