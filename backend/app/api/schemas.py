@@ -52,6 +52,21 @@ class LimitCancelRequest(BaseModel):
     stage: Literal[0, 1, 2, 3, 9]
 
 
+class BuyLimitRequest(BaseModel):
+    """Limit buy kept by the bot (code), never an exchange order: it buys `amount` USDC of `side` once the best ask
+    is at or below `price` (a share price, 0.01 to 0.99), and never pays more than `price`."""
+
+    market_id: str
+    side: Literal["UP", "DOWN"]
+    price: float = Field(ge=0.01, le=0.99)
+    amount: float = Field(ge=1, le=100000)
+
+
+class BuyLimitCancelRequest(BaseModel):
+    market_id: str
+    side: Literal["UP", "DOWN"]
+
+
 class TapBuyRequest(BaseModel):
     market_id: str
     side: Literal["UP", "DOWN"]

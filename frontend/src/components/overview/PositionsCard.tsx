@@ -12,6 +12,7 @@ import { cx, fmtNum, fmtPx, fmtSignedUsd } from "../../lib/format";
 import { useConfirmSells } from "../../lib/prefs";
 import { STAGE_VAR, TAP_COLOR, TAP_STAGE, stopLossPrice, takeProfitPrice, type StageId } from "../../lib/stages";
 import { LimitButton } from "./LimitButton";
+import { LimitOrderButton } from "./LimitOrderButton";
 
 type StageHolding = {
   key: string;
@@ -160,33 +161,34 @@ export function PositionsCard({ orders, className }: { orders: OrderRow[]; class
   return (
     <>
       <Card
-        title="Positions and triggers"
+        title="Positions"
         className={className}
+        left={
+          <>
+            <button
+              type="button"
+              onClick={requestSellAll}
+              disabled={sellingAll || sellableRows.length === 0}
+              title={`Sell every strategy stage that holds shares (${sellableRows.length}) now at the market. One-tap shares are not included.`}
+              className="btn btn-danger !px-3 !py-1 !text-[12px]"
+            >
+              {sellingAll ? "Selling…" : "Sell all"}
+            </button>
+            <button
+              type="button"
+              onClick={requestSellAllTap}
+              disabled={sellingTap || tapRows.length === 0}
+              title={`Sell every one-tap position (${tapRows.length}) now at the market. The strategy stages are not touched.`}
+              className="btn !px-3 !py-1 !text-[12px]"
+              style={{ color: TAP_COLOR, borderColor: "color-mix(in srgb, var(--tap) 45%, transparent)" }}
+            >
+              {sellingTap ? "Selling…" : "Sell all tap"}
+            </button>
+          </>
+        }
         right={
           <>
-            {sellableRows.length > 0 ? (
-              <button
-                type="button"
-                onClick={requestSellAll}
-                disabled={sellingAll}
-                title={`Sell every strategy stage that holds shares (${sellableRows.length}) now at the market. One-tap shares are not included.`}
-                className="btn btn-danger !px-3 !py-1 !text-[12px]"
-              >
-                {sellingAll ? "Selling…" : "Sell all"}
-              </button>
-            ) : null}
-            {tapRows.length > 0 ? (
-              <button
-                type="button"
-                onClick={requestSellAllTap}
-                disabled={sellingTap}
-                title={`Sell every one-tap position (${tapRows.length}) now at the market. The strategy stages are not touched.`}
-                className="btn !px-3 !py-1 !text-[12px]"
-                style={{ color: TAP_COLOR, borderColor: "color-mix(in srgb, var(--tap) 45%, transparent)" }}
-              >
-                {sellingTap ? "Selling…" : "Sell all tap"}
-              </button>
-            ) : null}
+            <LimitOrderButton />
             <span>This round</span>
           </>
         }

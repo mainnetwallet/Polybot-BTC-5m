@@ -119,6 +119,21 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ market_id: marketId, side, stage }),
     }),
+  /**
+   * Set / change a limit buy: once the best ask is at or below `price` (0.01 to 0.99) the bot buys `amount` USDC of
+   * `side` at the market (one one-tap buy, never above the limit). Kept in the bot, not on the exchange.
+   */
+  setBuyLimit: (marketId: string, side: Side, price: number, amount: number) =>
+    request<Snapshot>("/api/orders/limit-buy", {
+      method: "POST",
+      body: JSON.stringify({ market_id: marketId, side, price, amount }),
+    }),
+  /** Remove a limit buy (there is no exchange order to cancel). */
+  cancelBuyLimit: (marketId: string, side: Side) =>
+    request<Snapshot>("/api/orders/limit-buy/cancel", {
+      method: "POST",
+      body: JSON.stringify({ market_id: marketId, side }),
+    }),
   /** Turn NEW buys on/off (all stages). Exits, settlement and market data keep running. */
   setBuys: (enabled: boolean) =>
     request<Snapshot>("/api/buys", {

@@ -9,6 +9,8 @@ from sqlalchemy import select
 
 from app.api.origin import build_cross_site_guard
 from app.api.schemas import (
+    BuyLimitCancelRequest,
+    BuyLimitRequest,
     BuysRequest,
     KillSwitchRequest,
     LimitCancelRequest,
@@ -152,6 +154,22 @@ def build_router(
         """Remove a limit sell. It is not an exchange order, so nothing has to be cancelled there."""
         try:
             return await bot.cancel_limit(request.market_id, request.side, request.stage)
+        except BotError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @router.post("/orders/limit-buy")
+    async def set_buy_limit(request: BuyLimitRequest) -> dict:
+        """Set or change a limit buy: the bot buys at the market once the ask falls to `price` (see TradingBot.set_buy_limit)."""
+        try:
+            return await bot.set_buy_limit(request.market_id, request.side, request.price, request.amount)
+        except BotError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @router.post("/orders/limit-buy/cancel")
+    async def cancel_buy_limit(request: BuyLimitCancelRequest) -> dict:
+        """Remove a limit buy. It is not an exchange order, so nothing has to be cancelled there."""
+        try:
+            return await bot.cancel_buy_limit(request.market_id, request.side)
         except BotError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 

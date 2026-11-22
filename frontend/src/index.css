@@ -1106,22 +1106,25 @@ select:focus-visible,
 .tap-field input { width: 100%; min-width: 0; background: none; border: 0; outline: 0; color: var(--text); font-size: 15px; font-weight: 700; }
 
 /* limit price: a slider over 1-99 cents, - / + for single cents, quick picks, a mark for the best bid */
-.price-slider { margin-top: 12px; }
+.price-slider { --slider-color: var(--up); margin-top: 12px; }
+.price-slider.is-down { --slider-color: var(--down); }
 .price-slider-step { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .price-slider-step .btn { width: 38px; height: 38px; padding: 0; font-size: 20px; line-height: 1; justify-content: center; touch-action: manipulation; }
-.price-slider-value { display: flex; align-items: baseline; gap: 4px; font-size: 30px; font-weight: 800; color: var(--text); font-variant-numeric: tabular-nums; }
-.price-slider-value .is-empty { color: var(--text-faint); }
+.price-slider-value { display: flex; align-items: baseline; justify-content: center; gap: 4px; color: var(--muted); }
+.price-slider-value input { width: 4.2ch; min-width: 0; padding: 0; background: none; border: 0; outline: 0; text-align: center; color: var(--text); font-size: 30px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.price-slider-value input::placeholder { color: var(--text-faint); }
+.price-slider-value:focus-within input { color: var(--slider-color); }
 .price-slider-value small { font-size: 16px; font-weight: 700; color: var(--muted); }
 .price-slider-track { position: relative; height: 40px; margin-top: 8px; }
 .price-slider-bar, .price-slider-fill { position: absolute; top: 17px; height: 6px; border-radius: 3px; left: 0; pointer-events: none; }
 .price-slider-bar { right: 0; background: var(--card-inset); border: 1px solid var(--line-strong); box-sizing: border-box; }
-.price-slider-fill { background: var(--up); }
+.price-slider-fill { background: var(--slider-color); }
 .price-slider-bid { position: absolute; top: 9px; width: 2px; height: 22px; margin-left: -1px; border-radius: 2px; background: var(--text); pointer-events: none; }
 .price-slider-track input { position: absolute; inset: 0; width: 100%; height: 40px; margin: 0; background: transparent; appearance: none; -webkit-appearance: none; outline: 0; cursor: pointer; touch-action: pan-y; }
 .price-slider-track input::-webkit-slider-runnable-track { height: 40px; background: transparent; }
 .price-slider-track input::-moz-range-track { height: 40px; background: transparent; }
-.price-slider-track input::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; margin-top: 9px; border-radius: 50%; background: var(--up); border: 3px solid var(--card); box-shadow: 0 0 0 1px var(--up); cursor: grab; }
-.price-slider-track input::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: var(--up); border: 3px solid var(--card); box-shadow: 0 0 0 1px var(--up); cursor: grab; }
+.price-slider-track input::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; margin-top: 9px; border-radius: 50%; background: var(--slider-color); border: 3px solid var(--card); box-shadow: 0 0 0 1px var(--slider-color); cursor: grab; }
+.price-slider-track input::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: var(--slider-color); border: 3px solid var(--card); box-shadow: 0 0 0 1px var(--slider-color); cursor: grab; }
 .price-slider-track input:active::-webkit-slider-thumb { cursor: grabbing; }
 .price-slider-track input:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 1px var(--up), 0 0 0 5px var(--up-soft); }
 .price-slider-track input:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 1px var(--up), 0 0 0 5px var(--up-soft); }
@@ -1130,7 +1133,18 @@ select:focus-visible,
 .price-slider-ticks .is-bid { top: 0; color: var(--text); font-weight: 700; background: var(--card); padding: 0 3px; }
 .price-slider-quick { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .price-slider-quick .chip { cursor: pointer; font-variant-numeric: tabular-nums; }
-.price-slider-quick .chip.is-on { background: var(--up); border-color: var(--up); color: #06281c; }
+.price-slider-quick .chip.is-on { background: var(--slider-color); border-color: var(--slider-color); color: #06281c; }
+
+/* limit order dialog (header of the positions card): Buy / Sell and UP / DOWN switches, active limits */
+.limit-seg { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border-radius: 12px; background: var(--bg); }
+.limit-seg button { border: 0; border-radius: 9px; padding: 8px 0; background: none; color: var(--muted); font-size: 14px; font-weight: 700; cursor: pointer; touch-action: manipulation; }
+.limit-seg button.is-on { background: var(--card-inset); color: var(--text); }
+.limit-seg button.is-buy.is-on { background: var(--up); color: #06281c; }
+.limit-seg button.is-sell.is-on { background: var(--down); color: #2a0a10; }
+.limit-active { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 0; font-size: 13px; color: var(--text-2); }
+.limit-active + .limit-active { border-top: 1px solid var(--line); }
+.limit-active button { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 12.5px; }
+.limit-active button:hover { color: var(--text); }
 
 /* the right column of the tape card: tap panel on top, the two books under it */
 .tape-side { display: flex; min-width: 0; flex-direction: column; gap: 10px; }

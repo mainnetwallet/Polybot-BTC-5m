@@ -161,6 +161,10 @@ class TradingBot:
         self._limits: dict[tuple[str, str, int], dict] = {}
         self._limit_dirty = False
         self._limit_task: asyncio.Task | None = None
+        # Operator limit buys, kept here in code too: (market_id, side) -> {"price", "amount", "set_at",
+        # "next_try_ms", "attempts"}. One per side of the live market. Same lifetime as the limit sells: dropped
+        # when the market changes and when the bot stops. A fired limit buy is one one-tap buy and is then gone.
+        self._buy_limits: dict[tuple[str, str], dict] = {}
         # market_id -> {"attempts": int, "next_at": monotonic seconds}
         self._redeem_queue: dict[str, dict] = {}
         self._redeem_notice_logged: set[str] = set()
@@ -333,6 +337,8 @@ class TradingBot:
             # a limit belongs to one market: a new round starts without any
             for stale in [key for key in self._limits if key[0] != market.market_id]:
                 self._limits.pop(stale, None)
+            for stale_buy in [key for key in self._buy_limits if key[0] != market.market_id]:
+                self._buy_limits.pop(stale_buy, None)
             if previous is not None and previous.market_id != market.market_id:
                 self._snapshot_unrealized(previous.market_id)
                 await self.orders.finalize_market(previous.market_id, self._mode, "market changed")
@@ -368,6 +374,7 @@ class TradingBot:
                 self._marks()
                 self._snapshot_unrealized(previous.market_id)
                 self._limits.clear()
+                self._buy_limits.clear()
                 self._market = None
                 self.data.set_market(None)
                 self.btc.set_market(None)
@@ -418,7 +425,12 @@ class TradingBot:
             self._dispatch_exits()
 
         # The operator's limit sells are watched right here too, on the same book event.
-        if self._limits and self._status == "RUNNING" and not self._kill_switch and self._limit_due(market_id):
+        if (
+            (self._limits or self._buy_limits)
+            and self._status == "RUNNING"
+            and not self._kill_switch
+            and (self._limit_due(market_id) or self._buy_limit_due(market_id))
+        ):
             self._dispatch_limits()
 
         evaluation = self.strategy.evaluate(market, self.data.books, now_ms, config)
@@ -518,6 +530,16 @@ class TradingBot:
                     if bid is None or bid + 1e-9 < entry["price"]:
                         continue
                     if await self._fire_limit(market, key, entry):
+                        changed = True
+                for buy_key, buy_entry in list(self._buy_limits.items()):
+                    if self._buy_limits.get(buy_key) is not buy_entry or buy_key[0] != market.market_id:
+                        continue
+                    if buy_entry["next_try_ms"] > int(time.time() * 1000):
+                        continue
+                    ask = self._best_ask(buy_key[1])
+                    if ask is None or ask > buy_entry["price"] + 1e-9:
+                        continue
+                    if await self._fire_buy_limit(market, buy_key, buy_entry):
                         changed = True
                 if changed:
                     await self._broadcast_state()
@@ -667,6 +689,176 @@ class TradingBot:
                 "system",
                 f"limit SELL removed: {self._limit_label(stage)} {side} (was {removed['price'] * 100:g}c)",
                 payload={"market_id": market_id, "side": side, "stage": stage, "limit": removed["price"]},
+                mode=self._mode,
+            )
+        return await self._snapshot_and_publish()
+
+    # ------------------------------------------------------------------
+    # Limit buy: the mirror of the limit sell. The operator's price and amount, watched by the bot. It is never an
+    # exchange order: when the best ask falls to the limit the bot makes ONE one-tap buy (stage 9, no take profit,
+    # no stop loss) that never pays more than the limit, and the limit is gone. Because the shares are one-tap
+    # shares, a limit sell of the one-tap stage can be set before they exist and picks them up.
+    # ------------------------------------------------------------------
+    def _best_ask(self, side: str) -> float | None:
+        book = self.data.book_for(side)
+        ask = book.best_ask if book is not None else None
+        return ask if ask is not None and ask > 0 else None
+
+    def _buy_limit_due(self, market_id: str) -> bool:
+        """True when a limit buy of this market has its best ask at or below the limit and may be tried now."""
+        now_ms = int(time.time() * 1000)
+        for (limit_market, side), entry in self._buy_limits.items():
+            if limit_market != market_id or entry["next_try_ms"] > now_ms:
+                continue
+            ask = self._best_ask(side)
+            if ask is not None and ask <= entry["price"] + 1e-9:
+                return True
+        return False
+
+    async def _fire_buy_limit(self, market: MarketInfo, key: tuple[str, str], entry: dict) -> bool:
+        """Try one due limit buy. True = something changed that the dashboards should show now."""
+        _market_id, side = key
+        price = entry["price"]
+        amount = entry["amount"]
+        now_ms = int(time.time() * 1000)
+        entry["next_try_ms"] = now_ms + 250  # no second try while this one is on its way
+
+        def drop(reason: str) -> bool:
+            if self._buy_limits.get(key) is entry:
+                self._buy_limits.pop(key, None)
+            self.logs.log(
+                "ERROR",
+                "error",
+                f"limit BUY dropped: {side} at {price:.3f} ${amount:.2f} ({reason})",
+                payload={"market_id": market.market_id, "side": side, "limit": price, "amount": amount},
+                mode=self._mode,
+            )
+            self._notify_telegram(f"Limit buy NOT placed: {side} at {price * 100:g}c, ${amount:.2f}. {reason}.")
+            return True
+
+        balance = await self._balance_fast()
+        if amount > balance + 1e-9:
+            return drop(f"not enough balance (${balance:.2f} available)")
+        # min_ask=0: the one-tap floor is for a blind tap. The operator chose this price on purpose.
+        result = await self.orders.tap_buy(
+            market,
+            self.data.books,
+            self._mode,
+            self.runtime.get(),
+            side,
+            amount,
+            f"limitbuy-{secrets.token_hex(8)}",
+            0.0,
+            price,
+        )
+        present = self._buy_limits.get(key) is entry  # it may have been removed while the buy was on its way
+
+        if result.status == "BLOCKED":
+            if not present:
+                return False
+            reason = result.reason
+            if reason in {"market_ended", "bad_side", "bot_not_accepting_orders"}:
+                return drop(f"buy blocked: {reason}")
+            # waiting states: the ask moved back above the limit, no fresh book, another tap on its way
+            wait = {"tap_cooldown": 300, "tap_in_flight": 200, "above_limit": 100}.get(reason, 1000)
+            entry["next_try_ms"] = int(time.time() * 1000) + wait
+            return False
+
+        self._last_order = result.as_dict()
+        self._last_order["ts"] = iso_z(utcnow())
+        if result.latency_ms is not None:
+            self._latencies.append(result.latency_ms)
+
+        if result.filled_size > 0:
+            if present:
+                self._buy_limits.pop(key, None)
+            avg = result.avg_price or 0.0
+            self.logs.log(
+                "INFO",
+                "system",
+                f"limit BUY filled: {side} {result.filled_size:.2f} shares @ {avg:.3f} (limit {price:.3f}, ${amount:.2f})",
+                payload={"market_id": market.market_id, "side": side, "limit": price, "avg_price": avg, "amount": amount},
+                mode=self._mode,
+            )
+            self._notify_telegram(
+                f"Limit buy filled: {side} {result.filled_size:.2f} shares at {avg * 100:.1f}c "
+                f"(limit {price * 100:g}c, ${amount:.2f})"
+            )
+            return True
+
+        # Nothing filled. Only a clean refusal is tried again (a few times). Any other outcome (a live order whose
+        # result is not known yet) is NEVER repeated: a second buy could double the position.
+        if present:
+            if result.status in {"REJECTED", "CANCELED"}:
+                entry["attempts"] += 1
+                if entry["attempts"] >= LIMIT_MAX_ATTEMPTS:
+                    return drop(f"not filled after {LIMIT_MAX_ATTEMPTS} tries ({result.error or result.status})")
+                entry["next_try_ms"] = int(time.time() * 1000) + 500
+                return False
+            return drop(f"outcome not known ({result.status}); check your positions before buying again")
+        return False
+
+    def _buy_limits_payload(self, market: MarketInfo | None) -> list[dict]:
+        if market is None:
+            return []
+        return [
+            {"market_id": m, "side": s, "price": e["price"], "amount": e["amount"], "set_at": e["set_at"]}
+            for (m, s), e in self._buy_limits.items()
+            if m == market.market_id
+        ]
+
+    async def set_buy_limit(self, market_id: str, side: str, price: float, amount: float) -> dict:
+        """Set (or change) the limit buy of one side in the live market.
+
+        Once the best ask is at or below `price` the bot buys `amount` USDC of `side` at the market, never above the
+        limit (see `OrderManager.tap_buy`, `max_price_cap`), once. It lives in the bot, not on the exchange, and can
+        be changed or removed at any time. Like a one-tap buy it is manual: no stage rules, no strategy risk limits.
+        """
+        market = self._market
+        if self._status != "RUNNING" or self._kill_switch:
+            raise BotError("the bot must be running to set a limit")
+        if market is None or market.market_id != market_id or market.remaining_seconds() <= 0:
+            raise BotError("this market has ended: wait for the next one")
+        if side not in {"UP", "DOWN"}:
+            raise BotError("side must be UP or DOWN")
+        if not (LIMIT_MIN_PRICE <= price <= LIMIT_MAX_PRICE):
+            raise BotError(f"the limit must be between {LIMIT_MIN_PRICE * 100:g}c and {LIMIT_MAX_PRICE * 100:g}c")
+        max_amount = float(getattr(self.settings, "tap_buy_max_usdc", 100.0))
+        if not (TAP_MIN_USDC <= amount <= max_amount):
+            raise BotError(f"the amount must be between ${TAP_MIN_USDC:g} and ${max_amount:g}")
+        balance = await self._balance_fast()
+        if amount > balance + 1e-9:
+            raise BotError(f"not enough balance: ${balance:.2f} available")
+        price = round(price, 3)
+        amount = round(amount, 2)
+        self._buy_limits[(market_id, side)] = {
+            "price": price,
+            "amount": amount,
+            "set_at": iso_z(utcnow()),
+            "next_try_ms": 0,
+            "attempts": 0,
+        }
+        self.logs.log(
+            "INFO",
+            "system",
+            f"limit BUY set: {side} at {price * 100:g}c, ${amount:.2f}",
+            payload={"market_id": market_id, "side": side, "limit": price, "amount": amount, "mode": self._mode},
+            mode=self._mode,
+        )
+        if self._buy_limit_due(market_id):
+            # the ask may already be at or below it: look now, not at the next book event
+            self._dispatch_limits()
+        return await self._snapshot_and_publish()
+
+    async def cancel_buy_limit(self, market_id: str, side: str) -> dict:
+        """Remove the limit buy of one side (nothing to cancel on the exchange). Removing none is fine."""
+        removed = self._buy_limits.pop((market_id, side), None)
+        if removed is not None:
+            self.logs.log(
+                "INFO",
+                "system",
+                f"limit BUY removed: {side} (was {removed['price'] * 100:g}c, ${removed['amount']:.2f})",
+                payload={"market_id": market_id, "side": side, "limit": removed["price"]},
                 mode=self._mode,
             )
         return await self._snapshot_and_publish()
@@ -1500,6 +1692,7 @@ class TradingBot:
         self._stop_generation += 1
         # a stopped bot (stop button, kill switch, mode switch) fires nothing later on its own
         self._limits.clear()
+        self._buy_limits.clear()
         self.live_engine.block_new_orders()
         async with self._lock:
             was_running = self._status == "RUNNING"
@@ -2613,6 +2806,8 @@ class TradingBot:
             "sellable": sellable_rows,
             # the operator's limit sells of the live market (kept by the bot, not exchange orders)
             "limits": self._limits_payload(market),
+            # the operator's limit buys of the live market (kept by the bot too, one buy when the ask falls to it)
+            "buy_limits": self._buy_limits_payload(market),
             # limits of the one-tap buy (the dashboard / app offer amounts inside them)
             "tap": {
                 "min_usdc": TAP_MIN_USDC,
