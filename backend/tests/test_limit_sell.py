@@ -3,6 +3,8 @@ best bid reaches it and never below it. It can be set before the shares exist (o
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 from sqlalchemy import select
 
@@ -22,6 +24,17 @@ async def _run_limits(bot) -> None:
     task = bot._limit_task
     if task is not None:
         await task
+    while bot._limit_jobs:  # the fire tasks the worker started
+        await asyncio.gather(*list(bot._limit_jobs))
+
+
+async def _settle_limits(bot) -> None:
+    """Wait for the limit worker and for every fire task it started."""
+    task = bot._limit_task
+    if task is not None:
+        await task
+    while bot._limit_jobs:
+        await asyncio.gather(*list(bot._limit_jobs))
 
 
 def _set_bid(bot, books, market, side: str, bid: float) -> None:
@@ -134,8 +147,7 @@ async def test_bot_limit_set_while_the_bid_is_already_above_it_sells_right_away(
     await bot.tap_buy(market.market_id, "UP", 5.0)
     _set_bid(bot, books, market, "UP", 0.90)
     await bot.set_limit(market.market_id, "UP", TAP, 0.80)
-    if bot._limit_task is not None:
-        await bot._limit_task
+    await _settle_limits(bot)
     assert [(o.status, o.reason) for o in _sell_orders(bot)] == [("FILLED", "stage9_limit")]
 
 
@@ -284,8 +296,7 @@ async def test_bot_tap_limit_that_sold_does_not_sell_a_later_buy():
     assert len(_sell_orders(bot)) == 1  # the old limit is gone: nothing is sold
 
     await bot.set_limit(market.market_id, "UP", TAP, 0.80)  # a new limit works for it
-    if bot._limit_task is not None:
-        await bot._limit_task
+    await _settle_limits(bot)
     assert len(_sell_orders(bot)) == 2
 
 
@@ -303,8 +314,7 @@ async def test_bot_tap_limit_does_not_survive_a_manual_sell():
     assert len(_sell_orders(bot)) == 1  # only the manual sell: the old limit did not touch the new buy
 
     await bot.set_limit(market.market_id, "UP", TAP, 0.80)  # the new limit works
-    if bot._limit_task is not None:
-        await bot._limit_task
+    await _settle_limits(bot)
     assert len(_sell_orders(bot)) == 2
 
 
@@ -314,3 +324,22 @@ async def test_bot_sell_all_tap_removes_the_tap_limits_of_the_sold_sides():
     await bot.set_limit(market.market_id, "UP", TAP, 0.95)
     await bot.manual_sell_all(market.market_id, "tap")
     assert bot._limits == {}
+
+
+async def test_limit_sell_floor_is_exactly_the_limit_price():
+    """A 60c limit must never sell at 59c: no floor tolerance on a limit sell."""
+    market, bot, books = _setup()
+    captured = {}
+    executor = bot.orders._executor_provider("paper")
+    original = executor.place_sell
+
+    async def spy(request):
+        captured["min_price"] = request.min_price
+        return await original(request)
+
+    executor.place_sell = spy
+    _set_bid(bot, books, market, "UP", 0.62)
+    await bot.set_limit(market.market_id, "UP", TAP, 0.60)
+    await _run_limits(bot)
+    if "min_price" in captured:
+        assert captured["min_price"] >= 0.60 - 1e-9

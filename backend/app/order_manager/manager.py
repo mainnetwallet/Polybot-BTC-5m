@@ -1522,14 +1522,11 @@ class OrderManager:
                 stop_price = None
                 if limit_price is not None:
                     # the operator's limit: sold at the market, but only once the bid has reached it and never
-                    # below it (less the usual floor tolerance, same as the take-profit sell)
+                    # below it (no floor tolerance here: "60c or better" must not sell at 59c)
                     if bid + 1e-9 < limit_price:
                         return [OrderResult(None, holding.side, "BLOCKED", "below_limit")]
                     kind = "limit"
-                    floor = max(
-                        round(limit_price - config.sell_floor_tolerance_ticks * SELL_TICK, 6),
-                        STOP_LOSS_FLOOR,
-                    )
+                    floor = max(round(limit_price, 6), STOP_LOSS_FLOOR)
                 else:
                     kind, floor = "manual", STOP_LOSS_FLOOR  # market sell: no price floor
                 sell_key = None

@@ -12,7 +12,7 @@ from app.order_manager.manager import OrderResult
 from app.services.bot import BotError
 
 from .helpers import books_for, build_stack, make_config, make_market, stage_books
-from .test_limit_sell import TAP, _run_limits, _sell_orders, _set_bid, _setup
+from .test_limit_sell import TAP, _run_limits, _sell_orders, _set_bid, _settle_limits, _setup
 
 
 def _set_ask(bot, books, market, side: str, ask: float) -> None:
@@ -99,9 +99,7 @@ async def test_bot_limit_buy_waits_above_the_limit_then_buys_once_and_disappears
 async def test_bot_limit_buy_fires_at_once_when_the_ask_is_already_at_or_below_the_limit():
     market, bot, books = _setup(up_ask=0.35, down_ask=0.65)
     await bot.set_buy_limit(market.market_id, "UP", 0.40, 5.0)
-    task = bot._limit_task
-    if task is not None:
-        await task
+    await _settle_limits(bot)
     assert [(o.status, o.reason) for o in _buy_orders(bot)] == [("FILLED", "one-tap buy")]
     assert bot._buy_limits == {}
 
@@ -172,9 +170,7 @@ async def test_bot_limit_buy_is_not_repeated_when_the_outcome_is_not_known():
 
     bot.orders.tap_buy = unknown
     await bot.set_buy_limit(market.market_id, "UP", 0.40, 5.0)
-    task = bot._limit_task
-    if task is not None:
-        await task
+    await _settle_limits(bot)
     assert calls == [1]
     assert bot._buy_limits == {}  # dropped, not retried
     await _run_limits(bot)
@@ -213,3 +209,42 @@ async def test_limit_buy_shares_are_one_tap_shares_so_a_limit_sell_set_before_pi
     bot._limits[(market.market_id, "UP", TAP)]["next_try_ms"] = 0
     await _run_limits(bot)  # now the shares exist and the bid is above the sell limit
     assert [(o.status, o.reason) for o in _sell_orders(bot)] == [("FILLED", "stage9_limit")]
+
+
+# ---------------------------------------------------------------- audit fixes
+async def test_bot_held_back_limit_buy_is_retried_by_a_timer_on_a_quiet_book():
+    import asyncio
+    import time
+
+    market, bot, books = _setup(up_ask=0.40, down_ask=0.60)
+    bot.orders._tap_last_s = time.monotonic()  # a tap just happened: the buy is held back by the cooldown
+    await bot.set_buy_limit(market.market_id, "UP", 0.40, 5.0)
+    await _settle_limits(bot)
+    assert _buy_orders(bot) == []
+    await asyncio.sleep(1.6)  # no book event arrives: only the timer can wake the limit
+    assert [o.status for o in _buy_orders(bot)] == ["FILLED"]
+    assert bot._buy_limits == {}
+
+
+async def test_bot_slow_limit_sell_does_not_hold_back_a_due_limit_buy():
+    import asyncio
+    import time
+
+    market, bot, books = _setup(up_ask=0.55, down_ask=0.45)
+
+    async def slow_limit_sell(*args, **kwargs):
+        await asyncio.sleep(0.8)
+        return OrderResult(None, "UP", "CANCELED", "stage9_limit", 0.0, None, 800.0, None, "no fill")
+
+    bot.orders.limit_sell = slow_limit_sell
+    await bot.set_limit(market.market_id, "UP", TAP, 0.50)
+    await bot.set_buy_limit(market.market_id, "DOWN", 0.45, 5.0)
+    _set_bid(bot, books, market, "UP", 0.52)
+    _set_ask(bot, books, market, "DOWN", 0.45)
+    started = time.monotonic()
+    bot._dispatch_limits()
+    while not _buy_orders(bot) and time.monotonic() - started < 3:
+        await asyncio.sleep(0.01)
+    assert _buy_orders(bot), "the buy limit never fired"
+    assert time.monotonic() - started < 0.5  # it did not wait for the 0.8 s sell
+    await asyncio.gather(*list(bot._limit_jobs))

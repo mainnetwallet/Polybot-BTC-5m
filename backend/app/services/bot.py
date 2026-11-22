@@ -161,6 +161,8 @@ class TradingBot:
         self._limits: dict[tuple[str, str, int], dict] = {}
         self._limit_dirty = False
         self._limit_task: asyncio.Task | None = None
+        self._limit_jobs: set[asyncio.Task] = set()
+        self._limit_wakeup_handle = None
         # Operator limit buys, kept here in code too: (market_id, side) -> {"price", "amount", "set_at",
         # "next_try_ms", "attempts"}. One per side of the live market. Same lifetime as the limit sells: dropped
         # when the market changes and when the bot stops. A fired limit buy is one one-tap buy and is then gone.
@@ -513,41 +515,79 @@ class TradingBot:
             self._limit_task = asyncio.create_task(self._limit_worker(), name="limit-worker")
 
     async def _limit_worker(self) -> None:
+        """Look at every limit and START each due one as its own task. The worker never waits for an exchange call:
+        a sell on its way never holds back a limit that falls due meanwhile (nor the other way round)."""
         try:
             while self._limit_dirty:
                 self._limit_dirty = False
                 market = self._market
                 if market is None or self._status != "RUNNING" or self._kill_switch:
                     return
-                changed = False
+                now_ms = int(time.time() * 1000)
                 for key, entry in list(self._limits.items()):
                     if self._limits.get(key) is not entry or key[0] != market.market_id:
                         continue
-                    if entry["next_try_ms"] > int(time.time() * 1000):
+                    if entry["next_try_ms"] > now_ms:
                         continue
                     book = self.data.book_for(key[1])
                     bid = book.best_bid if book is not None else None
                     if bid is None or bid + 1e-9 < entry["price"]:
                         continue
-                    if await self._fire_limit(market, key, entry):
-                        changed = True
+                    entry["next_try_ms"] = now_ms + 250  # claimed: no second task for it while this one runs
+                    self._spawn_limit_job(self._fire_limit(market, key, entry))
                 for buy_key, buy_entry in list(self._buy_limits.items()):
                     if self._buy_limits.get(buy_key) is not buy_entry or buy_key[0] != market.market_id:
                         continue
-                    if buy_entry["next_try_ms"] > int(time.time() * 1000):
+                    if buy_entry["next_try_ms"] > now_ms:
                         continue
                     ask = self._best_ask(buy_key[1])
                     if ask is None or ask > buy_entry["price"] + 1e-9:
                         continue
-                    if await self._fire_buy_limit(market, buy_key, buy_entry):
-                        changed = True
-                if changed:
-                    await self._broadcast_state()
+                    buy_entry["next_try_ms"] = now_ms + 250
+                    self._spawn_limit_job(self._fire_buy_limit(market, buy_key, buy_entry))
+            self._schedule_limit_wakeup()
         except asyncio.CancelledError:
             raise
         except Exception as exc:
             logger.exception("limit worker failed")
             self.logs.log("ERROR", "error", f"limit worker failed: {exc}", mode=self._mode)
+
+    def _spawn_limit_job(self, coro) -> None:
+        task = asyncio.create_task(self._run_limit_job(coro), name="limit-fire")
+        self._limit_jobs.add(task)
+        task.add_done_callback(self._limit_jobs.discard)
+
+    async def _run_limit_job(self, coro) -> None:
+        try:
+            changed = await coro
+            if changed:
+                await self._broadcast_state()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.exception("limit fire failed")
+            self.logs.log("ERROR", "error", f"limit fire failed: {exc}", mode=self._mode)
+        finally:
+            # whatever it left waiting (a retry, a cooldown) gets its own wake-up
+            self._schedule_limit_wakeup()
+
+    def _schedule_limit_wakeup(self) -> None:
+        """A limit that was held back (cooldown, in flight, no fresh book...) is looked at again when its wait ends,
+        not only at the next book event: on a quiet book there may be none, and the fill would be missed."""
+        now_ms = int(time.time() * 1000)
+        waits = [
+            entry["next_try_ms"] - now_ms
+            for entry in (*self._limits.values(), *self._buy_limits.values())
+            if entry["next_try_ms"] > now_ms
+        ]
+        handle = getattr(self, "_limit_wakeup_handle", None)
+        if handle is not None:
+            handle.cancel()
+            self._limit_wakeup_handle = None
+        if not waits or self._status != "RUNNING":
+            return
+        delay = max(0.01, min(waits) / 1000.0)
+        self._limit_wakeup_handle = asyncio.get_running_loop().call_later(delay, self._dispatch_limits)
 
     async def _fire_limit(self, market: MarketInfo, key: tuple[str, str, int], entry: dict) -> bool:
         """Try one due limit sell. True = something changed that the dashboards should show now."""
@@ -760,7 +800,7 @@ class TradingBot:
             if reason in {"market_ended", "bad_side", "bot_not_accepting_orders"}:
                 return drop(f"buy blocked: {reason}")
             # waiting states: the ask moved back above the limit, no fresh book, another tap on its way
-            wait = {"tap_cooldown": 300, "tap_in_flight": 200, "above_limit": 100}.get(reason, 1000)
+            wait = {"tap_cooldown": 300, "tap_in_flight": 200, "above_limit": 100}.get(reason, 200)
             entry["next_try_ms"] = int(time.time() * 1000) + wait
             return False
 
