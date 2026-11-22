@@ -3,9 +3,10 @@ import type { Side } from "../../api/types";
 import { useBot } from "../../hooks/BotContext";
 import { cx, fmtUsdGrouped, isNum } from "../../lib/format";
 import { useTapAmounts, useTapEnabled, useTapMinAsk } from "../../lib/prefs";
-import { TAP_COLOR } from "../../lib/stages";
+import { TAP_COLOR, TAP_STAGE } from "../../lib/stages";
 import { IconGear, IconLock } from "../Icons";
 import { Modal } from "../Modal";
+import { LimitButton } from "./LimitButton";
 
 /** how long all tap buttons stay locked after a tap (the server ignores a second tap in this window too) */
 const LOCK_MS = 1000;
@@ -153,6 +154,7 @@ export function TapBuyPanel({ className }: { className?: string }) {
                 <span>{side === "UP" ? "Up" : "Down"}</span>
                 <b className={old ? "tap-old" : cheap ? "tap-cheap" : undefined}>{noAsk ? "--" : cents(ask)}</b>
               </div>
+              <LimitButton side={side} stage={TAP_STAGE} variant="tap" />
               {amounts.map((amount) => {
                 const key = `${side}:${amount}`;
                 const off = !enabled || Boolean(blocked) || noAsk || old || cheap || locked || busy !== null || noCash(amount);
@@ -182,7 +184,7 @@ export function TapBuyPanel({ className }: { className?: string }) {
             <span className="tap-foot-text">{blocked}</span>
           </>
         ) : (
-          <span className="tap-foot-text">One click = one buy · no take profit or stop loss</span>
+          <span className="tap-foot-text">One click = one buy · no take profit or stop loss · Limit sells for you</span>
         )}
         <span className="tap-cash" title="Cash available">{fmtUsdGrouped(snapshot.account.balance)}</span>
       </footer>

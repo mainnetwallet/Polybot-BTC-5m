@@ -1388,6 +1388,31 @@ class OrderManager:
         results = await self._handle_stage_exit(market, books, mode, config, stage, manual_side=side)
         return results[0] if results else OrderResult(None, side, "BLOCKED", "no_holding")
 
+    async def limit_sell(
+        self,
+        market: MarketInfo,
+        books: dict[str, OrderBook],
+        mode: str,
+        config,
+        side: str,
+        stage: int,
+        limit_price: float,
+    ) -> OrderResult:
+        """The operator's limit sell, fired by the bot once the best bid has reached `limit_price`.
+
+        The limit itself lives in the bot (code), not on the exchange: there is no resting order to cancel
+        before the shares can be sold some other way. This only sells what `stage` still holds on `side`, at
+        the market, and never below the limit. Like a manual sell it is not held back by a risk halt.
+        """
+        if stage not in SELLABLE_STAGES:
+            return OrderResult(None, side, "BLOCKED", "unknown_stage")
+        if market.remaining_seconds() <= 0:
+            return OrderResult(None, side, "BLOCKED", "market_ended")
+        results = await self._handle_stage_exit(
+            market, books, mode, config, stage, manual_side=side, limit_price=limit_price
+        )
+        return results[0] if results else OrderResult(None, side, "BLOCKED", "no_holding")
+
     async def manual_sell_all(
         self, market: MarketInfo, books: dict[str, OrderBook], mode: str, config, scope: str = "stages"
     ) -> list[OrderResult]:
@@ -1438,10 +1463,13 @@ class OrderManager:
         config,
         stage: int,
         manual_side: str | None = None,
+        limit_price: float | None = None,
     ) -> list[OrderResult]:
         """Sell the shares `stage` bought in this market: at its take-profit price once the best bid
         reaches it, or at the market once the best bid falls to its stop-loss level.
-        With `manual_side` set it is the operator's "sell now": sold at the market, no condition."""
+        With `manual_side` set it is the operator's "sell now": sold at the market, no condition.
+        With `limit_price` as well it is the operator's limit sell (watched by the bot, never an exchange
+        order): due only while the best bid is at or above the limit, and never sold below it."""
         manual = manual_side is not None
         label = "TAP" if stage == TAP_STAGE else f"S{stage}"
         # one-tap shares of UP and DOWN sit in the same stage: a manual sell reads the side it is selling
@@ -1484,7 +1512,18 @@ class OrderManager:
                 if bid is None:
                     return [OrderResult(None, holding.side, "BLOCKED", "no_bid")]
                 stop_price = None
-                kind, floor = "manual", STOP_LOSS_FLOOR  # market sell: no price floor
+                if limit_price is not None:
+                    # the operator's limit: sold at the market, but only once the bid has reached it and never
+                    # below it (less the usual floor tolerance, same as the take-profit sell)
+                    if bid + 1e-9 < limit_price:
+                        return [OrderResult(None, holding.side, "BLOCKED", "below_limit")]
+                    kind = "limit"
+                    floor = max(
+                        round(limit_price - config.sell_floor_tolerance_ticks * SELL_TICK, 6),
+                        STOP_LOSS_FLOOR,
+                    )
+                else:
+                    kind, floor = "manual", STOP_LOSS_FLOOR  # market sell: no price floor
                 sell_key = None
                 attempts = 0
                 now_ms = clock.now_ms()
@@ -1545,7 +1584,7 @@ class OrderManager:
             self._logs.log(
                 "WARNING" if kind == "stop_loss" else "INFO",
                 "order_submit",
-                f"{label} {'STOP-LOSS ' if kind == 'stop_loss' else 'MANUAL ' if kind == 'manual' else ''}marketable SELL "
+                f"{label} {'STOP-LOSS ' if kind == 'stop_loss' else 'MANUAL ' if kind == 'manual' else 'LIMIT ' if kind == 'limit' else ''}marketable SELL "
                 f"{holding.side} {sell_size:.2f} shares at bid {bid:.3f}{stop_note}",
                 payload={
                     "market_id": market.market_id,
@@ -1595,7 +1634,13 @@ class OrderManager:
                 holding.side,
                 mode,
                 stage,
-                f"stage{stage}_stop_loss" if kind == "stop_loss" else f"stage{stage}_manual" if manual else None,
+                f"stage{stage}_stop_loss"
+                if kind == "stop_loss"
+                else f"stage{stage}_limit"
+                if kind == "limit"
+                else f"stage{stage}_manual"
+                if manual
+                else None,
             )
             holdings[reg_key] = await asyncio.to_thread(
                 self.load_stage0_holding, mode, market.market_id, stage, tap_side

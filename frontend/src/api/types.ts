@@ -136,6 +136,17 @@ export interface SellableHolding {
   entry_price?: number | null;
 }
 
+/** A limit sell kept by the bot (code), not an exchange order: it sells at the market once the bid reaches `price`. */
+export interface LimitRow {
+  market_id: string;
+  side: Side;
+  /** 0-3 = a strategy stage, 9 = the one-tap buys */
+  stage: number;
+  /** share price, 0.01 to 0.99 */
+  price: number;
+  set_at?: string;
+}
+
 export interface OrderRow {
   id: number;
   market_id: string;
@@ -238,6 +249,8 @@ export interface Snapshot {
   open_orders: OrderRow[];
   /** shares the operator can sell right now (live market, bot running) */
   sellable?: SellableHolding[];
+  /** the limit sells of the live market (kept by the bot, never exchange orders) */
+  limits?: LimitRow[];
   /** limits of the one-tap buy */
   tap?: { min_usdc: number; max_usdc: number; cooldown_ms: number; min_ask?: number };
   /** present only on the reply to a one-tap buy */

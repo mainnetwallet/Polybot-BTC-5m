@@ -11,6 +11,8 @@ from app.api.origin import build_cross_site_guard
 from app.api.schemas import (
     BuysRequest,
     KillSwitchRequest,
+    LimitCancelRequest,
+    LimitRequest,
     ManualSellAllRequest,
     ManualSellRequest,
     ModeRequest,
@@ -134,6 +136,22 @@ def build_router(
         """Sell what one order's stage still holds, right now, at the market (no confirmation step)."""
         try:
             return await bot.manual_sell(request.market_id, request.side, request.stage)
+        except BotError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @router.post("/orders/limit")
+    async def set_limit(request: LimitRequest) -> dict:
+        """Set or change a limit sell: the bot sells at the market once the bid reaches `price` (see TradingBot.set_limit)."""
+        try:
+            return await bot.set_limit(request.market_id, request.side, request.stage, request.price)
+        except BotError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @router.post("/orders/limit/cancel")
+    async def cancel_limit(request: LimitCancelRequest) -> dict:
+        """Remove a limit sell. It is not an exchange order, so nothing has to be cancelled there."""
+        try:
+            return await bot.cancel_limit(request.market_id, request.side, request.stage)
         except BotError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 

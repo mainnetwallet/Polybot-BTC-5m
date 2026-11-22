@@ -57,6 +57,10 @@ interface BotContextValue {
   tapBuy: (side: Side, amount: number, minAsk?: number) => Promise<ActionResult>;
   /** "stages" = Sell all (strategy stages only), "tap" = Sell all tap (one-tap shares only) */
   sellAll: (marketId: string, scope?: "stages" | "tap") => Promise<ActionResult>;
+  /** Limit sell kept by the bot: sells at the market once the bid reaches `price` (0.01-0.99). `stage` 9 = one-tap. */
+  setLimit: (side: Side, stage: number, price: number) => Promise<ActionResult>;
+  /** Remove a limit sell (nothing to cancel on the exchange). */
+  cancelLimit: (side: Side, stage: number) => Promise<ActionResult>;
   resetPaper: (balance: number) => Promise<ActionResult>;
   resetDaily: () => Promise<ActionResult>;
   clearOrderHistory: () => Promise<ActionResult>;
@@ -526,6 +530,50 @@ export function BotProvider({ children }: { children: ReactNode }) {
     [applySnapshot, notify, refresh],
   );
 
+  // Limit sell: the price is kept by the bot (code), so setting, changing and removing it never touches an exchange order.
+  const setLimit = useCallback(
+    async (side: Side, stage: number, price: number): Promise<ActionResult> => {
+      const marketId = snapshotRef.current?.market?.market_id;
+      if (!marketId) {
+        notify("error", "Limit failed", "There is no live market right now.");
+        return { ok: false, error: "no market" };
+      }
+      try {
+        applySnapshot(await api.setLimit(marketId, side, stage, price));
+        notify(
+          "success",
+          "Limit set",
+          `${stage === TAP_STAGE ? "One-tap" : `Stage ${stage}`} ${side} sells at ${(price * 100).toFixed(1).replace(/\.0$/, "")}¢ or better.`,
+        );
+        return { ok: true };
+      } catch (error) {
+        const message = describeError(error);
+        notify("error", "Limit failed", message);
+        void refresh();
+        return { ok: false, error: message };
+      }
+    },
+    [applySnapshot, notify, refresh],
+  );
+
+  const cancelLimit = useCallback(
+    async (side: Side, stage: number): Promise<ActionResult> => {
+      const marketId = snapshotRef.current?.market?.market_id;
+      if (!marketId) return { ok: false, error: "no market" };
+      try {
+        applySnapshot(await api.cancelLimit(marketId, side, stage));
+        notify("info", "Limit removed", `${stage === TAP_STAGE ? "One-tap" : `Stage ${stage}`} ${side} has no limit now.`);
+        return { ok: true };
+      } catch (error) {
+        const message = describeError(error);
+        notify("error", "Limit remove failed", message);
+        void refresh();
+        return { ok: false, error: message };
+      }
+    },
+    [applySnapshot, notify, refresh],
+  );
+
   const resetPaper = useCallback(
     async (balance: number): Promise<ActionResult> => {
       try {
@@ -609,6 +657,8 @@ export function BotProvider({ children }: { children: ReactNode }) {
       sellNow,
       tapBuy,
       sellAll,
+      setLimit,
+      cancelLimit,
       resetPaper,
       resetDaily,
       clearOrderHistory,
@@ -634,6 +684,8 @@ export function BotProvider({ children }: { children: ReactNode }) {
       sellNow,
       tapBuy,
       sellAll,
+      setLimit,
+      cancelLimit,
       resetPaper,
       resetDaily,
       clearOrderHistory,

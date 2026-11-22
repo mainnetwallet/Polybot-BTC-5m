@@ -103,6 +103,22 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ market_id: marketId, scope }),
     }),
+  /**
+   * Set / change a limit sell: once the best bid reaches `price` (0.01 to 0.99) the bot sells what that stage holds,
+   * at the market and never below the limit. The limit lives in the bot, not on the exchange, so it can be set before
+   * the shares exist (one-tap) and removed at any time.
+   */
+  setLimit: (marketId: string, side: Side, stage: number, price: number) =>
+    request<Snapshot>("/api/orders/limit", {
+      method: "POST",
+      body: JSON.stringify({ market_id: marketId, side, stage, price }),
+    }),
+  /** Remove a limit sell (there is no exchange order to cancel). */
+  cancelLimit: (marketId: string, side: Side, stage: number) =>
+    request<Snapshot>("/api/orders/limit/cancel", {
+      method: "POST",
+      body: JSON.stringify({ market_id: marketId, side, stage }),
+    }),
   /** Turn NEW buys on/off (all stages). Exits, settlement and market data keep running. */
   setBuys: (enabled: boolean) =>
     request<Snapshot>("/api/buys", {

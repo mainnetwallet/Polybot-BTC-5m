@@ -36,6 +36,22 @@ class ManualSellRequest(BaseModel):
     stage: Literal[0, 1, 2, 3, 9]
 
 
+class LimitRequest(BaseModel):
+    """Limit sell kept by the bot (code), never an exchange order. `price` is a share price, 0.01 to 0.99."""
+
+    market_id: str
+    side: Literal["UP", "DOWN"]
+    # 0-3 = a strategy stage, 9 = the one-tap buys
+    stage: Literal[0, 1, 2, 3, 9]
+    price: float = Field(ge=0.01, le=0.99)
+
+
+class LimitCancelRequest(BaseModel):
+    market_id: str
+    side: Literal["UP", "DOWN"]
+    stage: Literal[0, 1, 2, 3, 9]
+
+
 class TapBuyRequest(BaseModel):
     market_id: str
     side: Literal["UP", "DOWN"]

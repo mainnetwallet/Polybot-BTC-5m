@@ -11,6 +11,7 @@ import { useRemainingSeconds } from "../../hooks/useCountdown";
 import { cx, fmtNum, fmtPx, fmtSignedUsd } from "../../lib/format";
 import { useConfirmSells } from "../../lib/prefs";
 import { STAGE_VAR, TAP_COLOR, TAP_STAGE, stopLossPrice, takeProfitPrice, type StageId } from "../../lib/stages";
+import { LimitButton } from "./LimitButton";
 
 type StageHolding = {
   key: string;
@@ -225,6 +226,9 @@ export function PositionsCard({ orders, className }: { orders: OrderRow[]; class
                       <span className={cx("text-[13.5px] font-semibold", row.pnl === null ? "text-slate-500" : row.pnl >= 0 ? "text-up" : "text-down")}>
                         {row.pnl === null ? "—" : fmtSignedUsd(row.pnl)}
                       </span>
+                      {row.holding ? (
+                        <LimitButton side={row.side} stage={row.holding.stage} variant="row" />
+                      ) : null}
                       {row.holding ? (
                         <button
                           type="button"
