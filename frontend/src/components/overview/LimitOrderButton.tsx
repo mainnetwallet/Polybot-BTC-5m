@@ -18,7 +18,7 @@ type SellTarget = {
   entry: number | null;
 };
 
-const BUY_PICKS = [40, 50, 60, 70, 80, 90, 95, 97, 99];
+const BUY_PICKS = [40, 50, 60, 70, 80, 90, 95];
 const SELL_PICKS = [50, 75, 90, 95, 99];
 const AMOUNT_PICKS = [1, 2, 3, 5];
 
