@@ -1638,9 +1638,9 @@ class TradingBot:
         if result.status in {"REJECTED", "CANCELED"} and result.filled_size <= 0:
             # nothing was sold: the shares are still held, so the limit of this card stays
             raise BotError(f"sell {result.status.lower()}: {result.error or 'no fill'}")
-        if stage != TAP_STAGE:
-            # a stage's limit goes with the shares it was for (a one-tap limit stays: it is set ahead of buys)
-            self._limits.pop((market_id, side, stage), None)
+        # a limit goes with the shares it was for: once they are sold, a later buy never inherits it.
+        # (A one-tap limit covers all the one-tap shares of its side while they are held, later buys included.)
+        self._limits.pop((market_id, side, stage), None)
         snapshot = await self._snapshot_and_publish()
         snapshot["manual_sell"] = result.as_dict()
         return snapshot
@@ -1750,6 +1750,10 @@ class TradingBot:
             if first.status == "BLOCKED":
                 raise BotError(reasons.get(first.reason, f"sell blocked: {first.reason}"))
             raise BotError(f"sell {first.status.lower()}: {first.error or 'no fill'}")
+        if scope == "tap":
+            # the one-tap shares of these sides are sold: their limits are done, a later buy needs a new limit
+            for r in sold:
+                self._limits.pop((market_id, r.side, TAP_STAGE), None)
         if scope != "tap":
             # a limit belongs to its own card: only the stages that really sold lose theirs. A stage whose
             # sell was blocked or refused still holds its shares, so its limit stays.
