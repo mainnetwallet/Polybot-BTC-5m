@@ -321,6 +321,46 @@ async def test_tap_up_and_tap_down_are_each_sellable_by_their_own_side():
     assert [(p.side, p.tag, p.status) for p in rows] == [("UP", "tap", "open"), ("DOWN", "tap", "closed")]
 
 
+async def test_entry_of_a_tap_holding_ignores_shares_already_sold_in_the_same_market():
+    """Cheap tap buy, sold; a dearer tap buy after it: the shares held cost the dearer price, not a blend."""
+    stack = build_stack(make_config(**STAGE0, trade_amount_usdc=4.0, paper_starting_balance=40.0))
+    market = make_market(remaining=150)
+    books = books_for(market, up_ask=0.80, down_ask=0.40)
+    manager = _tap_ready(stack, market, books)
+    assert (await manager.tap_buy(market, books, "paper", stack["config"], "UP", 4.0)).status == "FILLED"
+    books[market.up_token_id].bids = {0.85: 1000.0}
+    assert (await manager.manual_sell(market, books, "paper", stack["config"], "UP", 9)).status == "FILLED"
+    assert manager.load_stage0_holding("paper", market.market_id, 9, "UP") is None
+
+    _cooldown_over(manager)
+    books[market.up_token_id].asks = {0.99: 1000.0}
+    assert (await manager.tap_buy(market, books, "paper", stack["config"], "UP", 4.0)).status == "FILLED"
+
+    held = manager.load_stage0_holding("paper", market.market_id, 9, "UP")
+    assert held is not None
+    assert held.cost == pytest.approx(0.99, abs=0.01)  # used to show the blend of 0.80 and 0.99
+    with session_scope() as session:
+        position = session.execute(select(Position)).scalar_one()
+        basis = manager.stage0_basis(session, "paper", market.market_id, "UP", 9)
+    assert position.avg_price == pytest.approx(0.99, abs=0.01)
+    assert basis is not None and basis[0] == pytest.approx(0.99, abs=0.01)
+
+
+async def test_a_partial_sell_keeps_the_average_cost_of_the_rest():
+    stack = build_stack(make_config(**STAGE0, trade_amount_usdc=4.0, paper_starting_balance=40.0))
+    market = make_market(remaining=150)
+    books = books_for(market, up_ask=0.80, down_ask=0.40)
+    manager = _tap_ready(stack, market, books)
+    await manager.tap_buy(market, books, "paper", stack["config"], "UP", 4.0)
+    _cooldown_over(manager)
+    books[market.up_token_id].asks = {0.90: 1000.0}
+    await manager.tap_buy(market, books, "paper", stack["config"], "UP", 4.0)
+    held = manager.load_stage0_holding("paper", market.market_id, 9, "UP")
+    with session_scope() as session:
+        position = session.execute(select(Position)).scalar_one()
+    assert held is not None and held.cost == pytest.approx(position.avg_price, abs=0.001)
+
+
 async def test_sell_all_tap_sells_both_up_and_down_tap_shares():
     stack = build_stack(make_config(**STAGE0, trade_amount_usdc=4.0, paper_starting_balance=40.0))
     market = make_market(remaining=150)

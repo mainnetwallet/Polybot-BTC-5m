@@ -1026,34 +1026,65 @@ class OrderManager:
             return None
         side_buys = [o for o in buys if o.side == side]
         bought = sum(o.filled_size for o in side_buys)
-        cost = (
-            sum(o.filled_size * (o.avg_fill_price or 0.0) for o in side_buys) / bought
+        # cost of the shares still held: buys already sold again (a one-tap buy can be sold and bought
+        # anew in the same market) must not blend into the entry price
+        avg = (
+            OrderManager._held_avg_cost(side_buys, sells)
             if bought > 0 and all(o.avg_fill_price for o in side_buys)
             else None
         )
+        cost = avg[0] if avg is not None else None
         return Stage0Holding(
             side=side, token_id=token_id, size=round(held, 10), sell_in_flight=in_flight,
             cost=cost, stage=stage,
         )
 
     @staticmethod
+    def _held_avg_cost(buys: list, sells: list) -> tuple[float, float] | None:
+        """(cost per share, buy fee per share) of the shares still held, oldest order first.
+
+        Replays the buys and sells of one stage / side with the average-cost method (the same one the
+        position row uses): a sale removes shares at the running average, so shares bought and sold earlier
+        no longer weigh on the entry price of shares bought later. When everything was sold, the average
+        just before the last sale is returned (that is the basis of that sale).
+        """
+        events = [(o.id or 0, 0, o) for o in buys] + [(o.id or 0, 1, o) for o in sells]
+        events.sort(key=lambda e: (e[0], e[1]))
+        shares = cost = fees = 0.0
+        last: tuple[float, float] | None = None
+        for _, is_sell, o in events:
+            if is_sell:
+                if shares <= 0:
+                    continue
+                sold = min(o.filled_size, shares)
+                fraction = sold / shares
+                cost -= cost * fraction
+                fees -= fees * fraction
+                shares -= sold
+            else:
+                shares += o.filled_size
+                cost += o.filled_size * (o.avg_fill_price or 0.0)
+                fees += o.fee or 0.0
+            if shares > 1e-9:
+                last = (cost / shares, fees / shares)
+        return last
+
+    @staticmethod
     def stage0_basis(
         session, mode: str, market_id: str, side: str, stage: int = 0
     ) -> tuple[float, float] | None:
-        """(cost per share, buy fee per share) of the shares `stage` bought in this market/side."""
-        buys = [
+        """(cost per share, buy fee per share) of the shares `stage` still holds in this market/side."""
+        orders = [
             o for o in session.execute(
                 select(Order).where(Order.mode == mode, Order.market_id == market_id, Order.side == side)
             ).scalars().all()
-            if o.order_key and _SELL_MARK not in o.order_key
-            and OrderManager._key_stage(o.order_key) == stage and o.filled_size > 0
+            if o.order_key and OrderManager._key_stage(o.order_key) == stage
         ]
-        shares = sum(o.filled_size for o in buys)
-        if shares <= 0:
+        buys = [o for o in orders if _SELL_MARK not in o.order_key and o.filled_size > 0]
+        sells = [o for o in orders if _SELL_MARK in o.order_key and o.filled_size > 0]
+        if not buys:
             return None
-        cost = sum(o.filled_size * (o.avg_fill_price or 0.0) for o in buys)
-        fees = sum(o.fee or 0.0 for o in buys)
-        return cost / shares, fees / shares
+        return OrderManager._held_avg_cost(buys, sells)
 
     def load_stage0_holding(
         self, mode: str, market_id: str, stage: int = 0, side: str | None = None
