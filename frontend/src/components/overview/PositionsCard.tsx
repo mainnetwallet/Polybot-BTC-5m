@@ -189,7 +189,6 @@ export function PositionsCard({ orders, className }: { orders: OrderRow[]; class
         right={
           <>
             <LimitOrderButton />
-            <span>This round</span>
           </>
         }
       >

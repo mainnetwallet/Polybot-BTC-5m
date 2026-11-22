@@ -127,7 +127,7 @@ export function LimitOrderButton({ className }: { className?: string }) {
         title="Set a limit buy or a limit sell for this round"
         className={cx("btn limit-btn limit-btn-row !px-2.5 !py-1 !text-[12px]", activeCount > 0 && "is-on", className)}
       >
-        <span>Limit</span>
+        <span>Limit buy/sell</span>
         {activeCount > 0 ? <b>{activeCount}</b> : null}
       </button>
 
