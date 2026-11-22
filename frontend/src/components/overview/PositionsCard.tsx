@@ -227,7 +227,7 @@ export function PositionsCard({ orders, className }: { orders: OrderRow[]; class
                         {row.pnl === null ? "—" : fmtSignedUsd(row.pnl)}
                       </span>
                       {row.holding ? (
-                        <LimitButton side={row.side} stage={row.holding.stage} variant="row" />
+                        <LimitButton side={row.side} stage={row.holding.stage} />
                       ) : null}
                       {row.holding ? (
                         <button

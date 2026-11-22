@@ -18,18 +18,16 @@ function centsText(price: number): string {
  * shares are even bought (one-tap), changed, or removed at any time. When the best bid reaches the limit the bot sells
  * at the market, never below the limit.
  *
- * `tap` = the column of the one-tap panel, `row` = the small button next to "Sell" in the positions list.
+ * It sits next to "Sell" in the positions list (the one-tap panel has no Limit button).
  */
 export function LimitButton({
   side,
   stage,
-  variant,
   className,
 }: {
   side: Side;
   /** 0-3 = a strategy stage, 9 (TAP_STAGE) = the one-tap shares */
   stage: number;
-  variant: "tap" | "row";
   className?: string;
 }) {
   const { snapshot, setLimit, cancelLimit } = useBot();
@@ -85,7 +83,7 @@ export function LimitButton({
         disabled={!canSet && !active}
         title={title}
         className={cx(
-          variant === "tap" ? "limit-btn limit-btn-tap" : "btn limit-btn limit-btn-row !px-2.5 !py-1 !text-[12px]",
+          "btn limit-btn limit-btn-row !px-2.5 !py-1 !text-[12px]",
           active && "is-on",
           className,
         )}
