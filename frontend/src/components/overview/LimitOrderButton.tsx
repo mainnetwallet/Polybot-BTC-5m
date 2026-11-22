@@ -151,10 +151,8 @@ export function LimitOrderButton({ className }: { className?: string }) {
   const hint = (() => {
     if (draft.trim() !== "" && !priceOk) return "Enter a price from 1 to 99.";
     if (buy) {
-      if (alreadyThere && isNum(ref)) return `The ask (${centsText(ref)}¢) is already at or below this limit: it buys right away.`;
-      return isNum(ref)
-        ? `The bot buys when the best ask falls to ${priceOk ? centsText(cents) : "this price"}¢ or lower. Ask now: ${centsText(ref)}¢.`
-        : "The bot buys when the best ask falls to this price or lower. There is no ask right now.";
+      // only the warning that matters stays; the plain "the bot buys when the ask falls to..." line is gone
+      return alreadyThere && isNum(ref) ? `The ask (${centsText(ref)}¢) is already at or below this limit: it buys right away.` : null;
     }
     if (selected?.size == null && selected) return "Nothing is held yet. This limit applies to the shares your buy limit buys.";
     if (alreadyThere && isNum(ref)) return `The bid (${centsText(ref)}¢) is already at or above this limit: the shares are sold right away.`;
@@ -314,7 +312,7 @@ export function LimitOrderButton({ className }: { className?: string }) {
                 fill={buy ? "left" : "right"}
                 onEnter={() => void save()}
               />
-              <p className="tap-set-sub">{hint}</p>
+              {hint ? <p className="tap-set-sub">{hint}</p> : null}
             </div>
           ) : null}
 
@@ -401,11 +399,6 @@ export function LimitOrderButton({ className }: { className?: string }) {
               ))}
             </div>
           ) : null}
-
-          <p className="tap-set-sub">
-            Limits are kept by the bot, not placed on the exchange, and end with this round.
-            {buy ? " A limit buy buys once and never pays more than its price." : " Each position keeps its own limit."}
-          </p>
         </div>
       </Modal>
     </>
