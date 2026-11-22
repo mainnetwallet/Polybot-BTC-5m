@@ -375,6 +375,16 @@ select:focus-visible,
   min-height: 0;
   overflow: hidden;
 }
+/* Positions reaches down over the top strip of the Recent orders row (its title row, down to just above the table
+   header), so it shows more rows. Recent orders keeps its own place and size; only that strip is under Positions.
+   --pos-extend = the 16px gap below the screen + the card head of Recent orders. */
+.ov-screen { --pos-extend: 76px; }
+.ov-screen > .ov-b-c {
+  position: relative;
+  z-index: 3;
+  align-self: start;
+  height: calc(100% + var(--pos-extend));
+}
 .ov-screen .panel {
   padding: 14px 18px 16px;
   border-radius: 18px;
