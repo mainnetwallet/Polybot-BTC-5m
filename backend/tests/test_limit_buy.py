@@ -161,6 +161,51 @@ async def test_bot_limit_buy_is_dropped_with_the_market_and_when_the_bot_stops()
     assert bot._buy_limits == {}
 
 
+async def test_bot_limit_buy_not_filled_is_carried_to_the_next_market_and_reset():
+    market, bot, books = _setup(up_ask=0.55, down_ask=0.45)
+    await bot.set_buy_limit(market.market_id, "UP", 0.40, 5.0)
+    entry = bot._buy_limits[(market.market_id, "UP")]
+    entry["attempts"] = 2
+    entry["next_try_ms"] = 10**15
+    other = make_market(remaining=250, market_id="0xnext", slug="btc-updown-5m-next")
+    await bot._on_market(other, "opened")
+    assert list(bot._buy_limits) == [("0xnext", "UP")]
+    carried = bot._buy_limits[("0xnext", "UP")]
+    assert (carried["price"], carried["amount"]) == (0.4, 5.0)
+    assert carried["attempts"] == 0 and carried["next_try_ms"] == 0  # reset
+    assert bot._buy_limits_payload(other)[0]["price"] == 0.4  # shown for the new market
+
+
+async def test_bot_limit_buy_carried_over_buys_once_in_the_next_market_when_the_ask_falls():
+    market, bot, books = _setup(up_ask=0.55, down_ask=0.45)
+    await bot.set_buy_limit(market.market_id, "UP", 0.40, 5.0)
+    other = make_market(remaining=250, market_id="0xnext", slug="btc-updown-5m-next")
+    next_books = books_for(other, up_ask=0.38, down_ask=0.62)
+    bot.data._books = dict(next_books)
+    await bot._on_market(other, "opened")
+    await _run_limits(bot)
+    assert len(_buy_orders(bot)) == 1
+    assert bot._buy_limits == {}  # filled: gone, not carried again
+
+
+async def test_bot_limit_buy_carry_over_can_be_switched_off():
+    market, bot, books = _setup(up_ask=0.55, down_ask=0.45)
+    bot.settings.limit_buy_carry_over = False
+    await bot.set_buy_limit(market.market_id, "UP", 0.40, 5.0)
+    other = make_market(remaining=250, market_id="0xnext", slug="btc-updown-5m-next")
+    await bot._on_market(other, "opened")
+    assert bot._buy_limits == {}
+
+
+async def test_bot_limit_buy_a_fresh_limit_in_the_new_market_wins_over_the_carried_one():
+    market, bot, books = _setup(up_ask=0.55, down_ask=0.45)
+    await bot.set_buy_limit(market.market_id, "UP", 0.40, 5.0)
+    other = make_market(remaining=250, market_id="0xnext", slug="btc-updown-5m-next")
+    await bot._on_market(other, "opened")
+    await bot.set_buy_limit("0xnext", "UP", 0.30, 3.0)
+    assert bot._buy_limits[("0xnext", "UP")]["price"] == 0.3
+
+
 async def test_bot_limit_buy_is_not_repeated_when_the_outcome_is_not_known():
     """A live order whose result is unknown must never be sent a second time: it could double the position."""
     market, bot, books = _setup(up_ask=0.35, down_ask=0.65)
