@@ -118,9 +118,6 @@ class Settings(BaseSettings):
     trade_amount_usdc: float = 2.0
     # Largest single one-tap buy (dashboard / app) in USDC; the smallest is 1.
     tap_buy_max_usdc: float = 100.0
-    # A limit buy that did not fill in its market is carried to the next market and reset there (fresh tries),
-    # until it fills or the operator removes it. false = a limit belongs to one market and is dropped with it.
-    limit_buy_carry_over: bool = True
     # Book age only resets on a websocket book event, so a stable price on a quiet book looks
     # "old" without being wrong, so too low a limit blocks stage 2/3 (armed by the clock) on a quiet
     # book. 2s: a signal is never built on a book older than that. Exits do not check book age.

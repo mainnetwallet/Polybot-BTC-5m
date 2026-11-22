@@ -337,7 +337,8 @@ class TradingBot:
             # a limit belongs to one market: a new round starts without any
             for stale in [key for key in self._limits if key[0] != market.market_id]:
                 self._limits.pop(stale, None)
-            self._roll_buy_limits(market)
+            for stale_buy in [key for key in self._buy_limits if key[0] != market.market_id]:
+                self._buy_limits.pop(stale_buy, None)
             if previous is not None and previous.market_id != market.market_id:
                 self._snapshot_unrealized(previous.market_id)
                 await self.orders.finalize_market(previous.market_id, self._mode, "market changed")
@@ -373,8 +374,7 @@ class TradingBot:
                 self._marks()
                 self._snapshot_unrealized(previous.market_id)
                 self._limits.clear()
-                if not self._buy_limit_carry_over():
-                    self._buy_limits.clear()
+                self._buy_limits.clear()
                 self._market = None
                 self.data.set_market(None)
                 self.btc.set_market(None)
@@ -704,45 +704,6 @@ class TradingBot:
         ask = book.best_ask if book is not None else None
         return ask if ask is not None and ask > 0 else None
 
-    def _buy_limit_carry_over(self) -> bool:
-        return bool(getattr(self.settings, "limit_buy_carry_over", True))
-
-    def _roll_buy_limits(self, market: MarketInfo) -> None:
-        """A new market opened: a limit buy that did not fill is moved to it, reset (fresh tries, armed at once).
-
-        The same entry object is re-keyed, so a buy still on its way from the old market can find it again and
-        remove it if it filled (see `_fire_buy_limit`): a filled limit is never carried over. With
-        LIMIT_BUY_CARRY_OVER=false the old behaviour stays: a limit belongs to one market and is dropped.
-        """
-        stale = [key for key in self._buy_limits if key[0] != market.market_id]
-        for key in stale:
-            entry = self._buy_limits.pop(key)
-            new_key = (market.market_id, key[1])
-            if not self._buy_limit_carry_over() or new_key in self._buy_limits:
-                continue  # off, or the operator already set a fresh limit for this side: that one wins
-            entry["next_try_ms"] = 0
-            entry["attempts"] = 0
-            entry["set_at"] = iso_z(utcnow())
-            self._buy_limits[new_key] = entry
-            self.logs.log(
-                "INFO",
-                "system",
-                f"limit BUY carried over: {key[1]} at {entry['price'] * 100:g}c, ${entry['amount']:.2f} "
-                "(not filled in the last market, reset for this one)",
-                payload={"market_id": market.market_id, "side": key[1], "limit": entry["price"], "amount": entry["amount"]},
-                mode=self._mode,
-            )
-            self._notify_telegram(
-                f"Limit buy carried to the next market: {key[1]} at {entry['price'] * 100:g}c, ${entry['amount']:.2f}."
-            )
-
-    def _buy_limit_key(self, entry: dict) -> tuple[str, str] | None:
-        """Where this entry sits now (it may have been re-keyed to a new market), or None if it was removed."""
-        for key, value in self._buy_limits.items():
-            if value is entry:
-                return key
-        return None
-
     def _buy_limit_due(self, market_id: str) -> bool:
         """True when a limit buy of this market has its best ask at or below the limit and may be tried now."""
         now_ms = int(time.time() * 1000)
@@ -762,13 +723,9 @@ class TradingBot:
         now_ms = int(time.time() * 1000)
         entry["next_try_ms"] = now_ms + 250  # no second try while this one is on its way
 
-        def remove() -> None:
-            current = self._buy_limit_key(entry)
-            if current is not None:
-                self._buy_limits.pop(current, None)
-
         def drop(reason: str) -> bool:
-            remove()
+            if self._buy_limits.get(key) is entry:
+                self._buy_limits.pop(key, None)
             self.logs.log(
                 "ERROR",
                 "error",
@@ -794,16 +751,12 @@ class TradingBot:
             0.0,
             price,
         )
-        current_key = self._buy_limit_key(entry)
-        present = current_key is not None  # it may have been removed while the buy was on its way
-        rolled = present and current_key != key  # carried to the next market while the buy was on its way
+        present = self._buy_limits.get(key) is entry  # it may have been removed while the buy was on its way
 
         if result.status == "BLOCKED":
             if not present:
                 return False
             reason = result.reason
-            if rolled and reason == "market_ended":
-                return False  # the old market ended under it: the carried limit simply waits in the new one
             if reason in {"market_ended", "bad_side", "bot_not_accepting_orders"}:
                 return drop(f"buy blocked: {reason}")
             # waiting states: the ask moved back above the limit, no fresh book, another tap on its way
@@ -817,7 +770,8 @@ class TradingBot:
             self._latencies.append(result.latency_ms)
 
         if result.filled_size > 0:
-            remove()  # a filled limit is gone, also when it had already been carried to the next market
+            if present:
+                self._buy_limits.pop(key, None)
             avg = result.avg_price or 0.0
             self.logs.log(
                 "INFO",
