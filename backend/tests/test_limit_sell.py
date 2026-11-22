@@ -210,3 +210,44 @@ async def test_bot_limits_belong_to_one_market_and_are_not_shown_for_another():
     assert len(bot._limits_payload(market)) == 1
     await bot._on_market(other, "opened")  # a new round starts without any limit
     assert bot._limits == {}
+
+
+# ---------------------------------------------------------------- a limit only ever belongs to its own card
+def _limit_entry(price: float = 0.9) -> dict:
+    return {"price": price, "set_at": "x", "next_try_ms": 0, "attempts": 0, "fired": False}
+
+
+async def test_sell_all_keeps_the_limit_of_a_stage_that_did_not_sell():
+    from app.order_manager.manager import OrderResult
+
+    market, bot, books = _setup()
+    bot._limits[(market.market_id, "UP", 1)] = _limit_entry()
+    bot._limits[(market.market_id, "UP", 2)] = _limit_entry()
+    bot._limits[(market.market_id, "DOWN", TAP)] = _limit_entry()
+
+    async def fake_sell_all(*_args, **_kwargs):
+        return [
+            OrderResult(1, "UP", "FILLED", "stage1_manual", 2.0, 0.9),  # stage 1 sold
+            OrderResult(None, "UP", "BLOCKED", "sell_in_flight"),  # stage 2 could not sell: still held
+        ]
+
+    bot.orders.manual_sell_all = fake_sell_all
+    await bot.manual_sell_all(market.market_id)
+    assert (market.market_id, "UP", 1) not in bot._limits  # sold: its limit goes
+    assert (market.market_id, "UP", 2) in bot._limits  # not sold: its limit stays
+    assert (market.market_id, "DOWN", TAP) in bot._limits  # another card entirely: untouched
+
+
+async def test_manual_sell_that_sells_nothing_keeps_the_limit_of_that_card():
+    from app.order_manager.manager import OrderResult
+
+    market, bot, books = _setup()
+    bot._limits[(market.market_id, "UP", 1)] = _limit_entry()
+
+    async def fake_sell(*_args, **_kwargs):
+        return OrderResult(7, "UP", "REJECTED", "stage1_manual", 0.0, None, None, None, "rejected")
+
+    bot.orders.manual_sell = fake_sell
+    with pytest.raises(BotError):
+        await bot.manual_sell(market.market_id, "UP", 1)
+    assert (market.market_id, "UP", 1) in bot._limits

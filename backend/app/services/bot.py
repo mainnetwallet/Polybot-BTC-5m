@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import secrets
 import time
 from collections import deque
@@ -1630,15 +1631,16 @@ class TradingBot:
         }
         if result.status == "BLOCKED":
             raise BotError(reasons.get(result.reason, f"sell blocked: {result.reason}"))
-        if stage != TAP_STAGE:
-            # a stage's limit goes with the shares it was for (a one-tap limit stays: it is set ahead of buys)
-            self._limits.pop((market_id, side, stage), None)
         self._last_order = result.as_dict()
         self._last_order["ts"] = iso_z(utcnow())
         if result.latency_ms is not None:
             self._latencies.append(result.latency_ms)
         if result.status in {"REJECTED", "CANCELED"} and result.filled_size <= 0:
+            # nothing was sold: the shares are still held, so the limit of this card stays
             raise BotError(f"sell {result.status.lower()}: {result.error or 'no fill'}")
+        if stage != TAP_STAGE:
+            # a stage's limit goes with the shares it was for (a one-tap limit stays: it is set ahead of buys)
+            self._limits.pop((market_id, side, stage), None)
         snapshot = await self._snapshot_and_publish()
         snapshot["manual_sell"] = result.as_dict()
         return snapshot
@@ -1749,7 +1751,17 @@ class TradingBot:
                 raise BotError(reasons.get(first.reason, f"sell blocked: {first.reason}"))
             raise BotError(f"sell {first.status.lower()}: {first.error or 'no fill'}")
         if scope != "tap":
-            for stage_key in [k for k in self._limits if k[0] == market_id and k[2] != TAP_STAGE]:
+            # a limit belongs to its own card: only the stages that really sold lose theirs. A stage whose
+            # sell was blocked or refused still holds its shares, so its limit stays.
+            sold_stages = {
+                int(m.group(1))
+                for m in (re.match(r"stage(\d+)_", r.reason or "") for r in sold)
+                if m is not None
+            }
+            for stage_key in [
+                k for k in self._limits
+                if k[0] == market_id and k[2] != TAP_STAGE and k[2] in sold_stages
+            ]:
                 self._limits.pop(stage_key, None)
         last = sold[-1]
         self._last_order = last.as_dict()
