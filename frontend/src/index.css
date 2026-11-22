@@ -1008,8 +1008,10 @@ select:focus-visible,
   transition: background 0.1s, color 0.1s;
 }
 .tap-icon:hover { background: rgba(255, 255, 255, 0.07); color: var(--text); }
-.tap-grid { display: flex; flex-direction: column; gap: 8px; }
-.tap-row { display: grid; grid-template-columns: 56px repeat(3, minmax(0, 1fr)); gap: 8px; }
+/* the rows spread over the box (more air between them) and the cash line sits at the very bottom of the box */
+.tap-grid { display: flex; flex: 1; flex-direction: column; justify-content: space-evenly; gap: 14px; }
+.tap-row { display: grid; grid-template-columns: 56px repeat(3, minmax(0, 1fr)); column-gap: 10px; row-gap: 10px; }
+.ov-screen .tape-side .tap-panel { flex: 1; min-height: 0; }
 .tap-side {
   display: flex;
   flex-direction: column;
@@ -1063,6 +1065,7 @@ select:focus-visible,
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  margin-top: auto;
   border-top: 1px solid var(--line);
   padding-top: 8px;
   font-size: 10.5px;
@@ -1072,7 +1075,7 @@ select:focus-visible,
 .tap-foot-text { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tap-foot.is-warn { color: var(--amber); font-weight: 600; }
 .tap-foot.is-warn .tap-foot-text { display: inline; flex: 1; }
-.tap-cash { flex: none; font-size: 11.5px; font-variant-numeric: tabular-nums; color: var(--text-2); }
+.tap-cash { flex: none; margin-left: auto; font-size: 11.5px; font-variant-numeric: tabular-nums; color: var(--text-2); }
 
 /* settings dialog */
 .tap-set { display: flex; flex-direction: column; gap: 20px; }

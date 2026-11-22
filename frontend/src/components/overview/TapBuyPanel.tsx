@@ -181,9 +181,7 @@ export function TapBuyPanel({ className }: { className?: string }) {
             {!enabled ? <IconLock size={12} /> : null}
             <span className="tap-foot-text">{blocked}</span>
           </>
-        ) : (
-          <span className="tap-foot-text">One click = one buy · no take profit or stop loss</span>
-        )}
+        ) : null}
         <span className="tap-cash" title="Cash available">{fmtUsdGrouped(snapshot.account.balance)}</span>
       </footer>
 
