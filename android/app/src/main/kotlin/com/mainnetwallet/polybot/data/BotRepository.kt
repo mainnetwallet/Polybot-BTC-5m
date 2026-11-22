@@ -403,6 +403,22 @@ class BotRepository(
         return result
     }
 
+    /** Set or change the limit sell of one side / stage. [price] is a 0..1 share price. */
+    suspend fun setLimit(marketId: String, side: String, stage: Int, price: Double): ActionResult {
+        val label = if (stage == TAP_STAGE) "One-tap" else "Stage $stage"
+        val cents = String.format(Locale.US, "%.1f", price * 100.0).removeSuffix(".0")
+        val result = act({ "Limit sell set: $label $side at $cents\u00A2." }) { api.setLimit(marketId, side, stage, price) }
+        if (!result.ok) refresh()
+        return result
+    }
+
+    suspend fun cancelLimit(marketId: String, side: String, stage: Int): ActionResult {
+        val label = if (stage == TAP_STAGE) "One-tap" else "Stage $stage"
+        val result = act({ "Limit sell removed: $label $side." }) { api.cancelLimit(marketId, side, stage) }
+        if (!result.ok) refresh()
+        return result
+    }
+
     /** [tapOnly] false = "Sell all" (strategy stages only); true = "Sell all tap" (one-tap shares only). */
     suspend fun sellAll(marketId: String, tapOnly: Boolean = false): ActionResult {
         val what = if (tapOnly) "one-tap position" else "stage"

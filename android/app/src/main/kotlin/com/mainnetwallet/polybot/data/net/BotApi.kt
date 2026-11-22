@@ -76,6 +76,23 @@ class BotApi(private val client: ApiClient) {
             buildJsonObject { put("market_id", marketId); put("side", side); put("stage", stage) },
         )
 
+    /**
+     * Limit sell: the bot (not the exchange) watches [price] (0.01 to 0.99) and sells at the market once the best
+     * bid reaches it, never below it. There is no exchange order, so nothing has to be cancelled before a manual Sell.
+     */
+    suspend fun setLimit(marketId: String, side: String, stage: Int, price: Double): Snapshot =
+        call(
+            "POST", "/api/orders/limit", Snapshot.serializer(),
+            buildJsonObject { put("market_id", marketId); put("side", side); put("stage", stage); put("price", price) },
+        )
+
+    /** Remove a limit sell (nothing to cancel on the exchange). */
+    suspend fun cancelLimit(marketId: String, side: String, stage: Int): Snapshot =
+        call(
+            "POST", "/api/orders/limit/cancel", Snapshot.serializer(),
+            buildJsonObject { put("market_id", marketId); put("side", side); put("stage", stage) },
+        )
+
     /** One-tap buy of [amount] USDC. [requestId] makes a request the network repeats buy only once. */
     suspend fun tapBuy(marketId: String, side: String, amount: Double, requestId: String, minAsk: Double? = null): Snapshot =
         call(

@@ -23,14 +23,17 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -38,6 +41,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -51,6 +55,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -61,6 +66,7 @@ import com.mainnetwallet.polybot.data.model.BotState
 import com.mainnetwallet.polybot.data.model.BtcState
 import com.mainnetwallet.polybot.data.model.BuyGuardState
 import com.mainnetwallet.polybot.data.model.LiveReadiness
+import com.mainnetwallet.polybot.data.model.LimitRow
 import com.mainnetwallet.polybot.data.model.MarketSnapshot
 import com.mainnetwallet.polybot.data.model.Modes
 import com.mainnetwallet.polybot.data.model.PositionRow
@@ -799,6 +805,114 @@ private fun SellButton(label: String, enabled: Boolean, onClick: () -> Unit, com
     }
 }
 
+/**
+ * "Limit" button next to a stage's Sell: opens a small dialog to set the price (in cents) at which that stage's shares
+ * are sold. The limit is kept by the bot in code, never placed on the exchange, so there is no resting order to cancel:
+ * Sell keeps working at once, and the limit can be changed or removed at any time. When the best bid reaches it the
+ * bot sells at the market, never below the limit.
+ */
+@Composable
+private fun LimitButton(
+    active: LimitRow?,
+    bid: Double?,
+    enabled: Boolean,
+    title: String,
+    onSet: (Double) -> Unit,
+    onCancel: () -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    var open by remember { mutableStateOf(false) }
+    var draft by remember { mutableStateOf("") }
+
+    Button(
+        onClick = {
+            draft = active?.let { Fmt.plain(Math.round(it.price * 1000.0) / 10.0) }.orEmpty()
+            open = true
+        },
+        enabled = enabled || active != null,
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (active != null) scheme.primaryContainer else scheme.surfaceVariant,
+            contentColor = if (active != null) scheme.onPrimaryContainer else scheme.onSurfaceVariant,
+        ),
+        modifier = Modifier.heightIn(min = 32.dp),
+    ) {
+        Text(
+            if (active != null) "Limit " + Fmt.centsShort(active.price) else "Limit",
+            style = MaterialTheme.typography.labelLarge,
+            maxLines = 1,
+        )
+    }
+
+    if (open) {
+        val cents = draft.trim().replace(',', '.').toDoubleOrNull()
+        val valid = cents != null && cents >= 1.0 && cents <= 99.0
+        val alreadyThere = valid && bid != null && bid * 100.0 + 1e-9 >= cents!!
+        AlertDialog(
+            onDismissRequest = { open = false },
+            title = { Text("Limit sell \u00B7 $title") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(Space.sm)) {
+                    Text(
+                        if (bid != null) "Best bid now ${Fmt.centsShort(bid)}" else "No bid in the order book right now",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = scheme.onSurfaceVariant,
+                    )
+                    OutlinedTextField(
+                        value = draft,
+                        onValueChange = { draft = it },
+                        label = { Text("Sell at this price or better (\u00A2)") },
+                        placeholder = { Text("e.g. 85") },
+                        suffix = { Text("\u00A2") },
+                        singleLine = true,
+                        isError = draft.isNotBlank() && !valid,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Text(
+                        when {
+                            draft.isNotBlank() && !valid -> "Enter a price from 1 to 99."
+                            alreadyThere -> "The bid is already at or above this limit: the shares are sold right away."
+                            else -> "When the best bid reaches this price the bot sells at the market, never below it."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (draft.isNotBlank() && !valid) scheme.error else scheme.onSurfaceVariant,
+                    )
+                    Text(
+                        "The limit is kept by the bot, not placed on the exchange. You can still tap Sell at any time, " +
+                            "and change or remove the limit without cancelling anything. It ends with this market.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = scheme.onSurfaceVariant,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = valid && enabled,
+                    onClick = {
+                        onSet(cents!! / 100.0)
+                        open = false
+                    },
+                ) { Text(if (active != null) "Change limit" else "Set limit") }
+            },
+            dismissButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+                    if (active != null) {
+                        TextButton(
+                            onClick = {
+                                onCancel()
+                                open = false
+                            },
+                            colors = ButtonDefaults.textButtonColors(contentColor = scheme.error),
+                        ) { Text("Remove limit") }
+                    }
+                    TextButton(onClick = { open = false }) { Text("Cancel") }
+                }
+            },
+        )
+    }
+}
+
 /** (bid - entry) x shares: what this stage would make or lose if it sold at the best bid right now. */
 internal fun stagePnl(entry: Double?, bid: Double?, size: Double): Double? =
     if (entry == null || bid == null) null else (bid - entry) * size
@@ -825,6 +939,10 @@ fun PositionBoxCard(
     upBook: BookSnapshot?,
     downBook: BookSnapshot?,
     selling: Set<String>,
+    limits: List<LimitRow> = emptyList(),
+    canSetLimit: Boolean = false,
+    onSetLimit: (SellableHolding, Double) -> Unit = { _, _ -> },
+    onCancelLimit: (SellableHolding) -> Unit = {},
     onSell: (SellableHolding) -> Unit,
     onSellAll: (String) -> Unit,
     onSellAllTap: (String) -> Unit,
@@ -923,6 +1041,16 @@ fun PositionBoxCard(
                                 color = scheme.onSurfaceVariant,
                             )
                             Text("${Fmt.num(h.size, 2)} sh", style = Mono.small, modifier = Modifier.weight(1f))
+                            LimitButton(
+                                active = limits.firstOrNull {
+                                    it.marketId == h.marketId && it.side.equals(h.side, ignoreCase = true) && it.stage == h.stage
+                                },
+                                bid = bid,
+                                enabled = canSetLimit,
+                                title = (if (h.stage == TAP_STAGE) "One-tap " else "Stage ${h.stage} ") + h.side,
+                                onSet = { price -> onSetLimit(h, price) },
+                                onCancel = { onCancelLimit(h) },
+                            )
                             SellButton(
                                 label = if (busy) "\u2026" else "Sell",
                                 enabled = !busy,

@@ -179,6 +179,18 @@ data class SellableHolding(
     @SerialName("entry_price") val entryPrice: Double? = null,
 )
 
+/** A limit sell kept by the bot (in code, never an exchange order): sells at the market once the bid reaches [price]. */
+@Serializable
+data class LimitRow(
+    @SerialName("market_id") val marketId: String = "",
+    val side: String = "",
+    /** 0-3 = a strategy stage, 9 = the one-tap shares */
+    val stage: Int = 0,
+    /** share price, 0.01 to 0.99 */
+    val price: Double = 0.0,
+    @SerialName("set_at") val setAt: String? = null,
+)
+
 @Serializable
 data class OrderRow(
     val id: Long = 0,
@@ -337,6 +349,8 @@ data class Snapshot(
     val positions: List<PositionRow> = emptyList(),
     @SerialName("open_orders") val openOrders: List<OrderRow> = emptyList(),
     val sellable: List<SellableHolding> = emptyList(),
+    /** the operator's limit sells of the live market (bot-managed, not exchange orders) */
+    val limits: List<LimitRow> = emptyList(),
     val tap: TapLimits? = null,
     @SerialName("tap_buy") val tapBuy: TapBuyResult? = null,
     @SerialName("manual_sell_all") val manualSellAll: ManualSellAll? = null,
