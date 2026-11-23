@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -112,7 +113,7 @@ fun TapBuyCard(
     onSetEnabled: (Boolean) -> Unit,
     onSaveSettings: (amounts: List<Double>, enabled: Boolean, minAsk: Double) -> Unit,
     modifier: Modifier = Modifier,
-    /** Shown in the header between the title and the ON / OFF button (the "Limit" pill lives here). */
+    /** Shown in the header right after the title, on the left (the "Limit" pill lives here). */
     headerExtra: @Composable () -> Unit = {},
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -148,8 +149,9 @@ fun TapBuyCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(Space.sm),
             ) {
-                Label("One-tap buy", Modifier.weight(1f))
+                Label("One-tap buy")
                 headerExtra()
+                Spacer(Modifier.weight(1f))
                 // The ON / OFF button of one-tap buy: one click turns it OFF, the next turns it ON.
                 // ON = tinted and outlined (green in paper, red in live), OFF = grey. The balance next to it stays plain text.
                 val modeTone = if (bot.isLive) scheme.error else c.up
@@ -269,12 +271,6 @@ fun TapBuyCard(
 
                     if (blocked != null) {
                         Text(blocked, style = MaterialTheme.typography.bodySmall, color = scheme.tertiary)
-                    } else if (selectedSide == null) {
-                        Text(
-                            "Tap UP or DOWN to choose a side, the buy buttons are locked until then",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = scheme.onSurfaceVariant,
-                        )
                     }
                 }
             }
