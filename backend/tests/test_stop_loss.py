@@ -445,3 +445,25 @@ def test_sell_attempt_cap_follows_the_retry_gap_so_the_window_stays_about_22_sec
         assert manager.max_sell_attempts == expected
     manager._exit_retry_gap_ms = 10
     assert manager.max_sell_attempts * manager._exit_retry_gap_ms == TAKE_PROFIT_RETRY_WINDOW_MS
+
+
+async def test_buy_held_to_the_end_shows_win_or_loss_on_its_own_row_after_settlement():
+    from app.market_discovery.types import ResolutionInfo
+
+    market = make_market(remaining=150)
+    bot = _running_bot(market, btc=(99_850.0, 100_000.0, ""))  # DOWN is bought, no stop, no take-profit exit
+    books = books_for(market, up_ask=0.40, down_ask=0.80)
+    books[market.down_token_id].bids = {0.79: 100.0}
+    bot.data._books = dict(books)
+    await _event(bot, market)
+
+    rows = await bot.recent_orders("paper")
+    buy = next(r for r in rows if r["action"] == "BUY")
+    assert buy["result"] is None  # market not resolved yet: still blank (the dashboard shows Settling)
+
+    await bot._apply_resolution(ResolutionInfo(market.market_id, True, "DOWN"))
+    buy = next(r for r in await bot.recent_orders("paper") if r["action"] == "BUY")
+    assert buy["result"] == "WIN" and buy["result_pnl"] > 0
+    with session_scope() as session:
+        position = session.execute(select(Position)).scalar_one()
+    assert buy["result_pnl"] == pytest.approx(position.realized_pnl, abs=1e-5)  # same PnL as the position row

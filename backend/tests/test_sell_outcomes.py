@@ -1,6 +1,6 @@
 from types import SimpleNamespace as NS
 
-from app.services.order_outcomes import sell_outcomes
+from app.services.order_outcomes import sell_outcomes, settlement_outcomes
 
 
 def _key_stage(k):
@@ -56,3 +56,43 @@ def test_partial_sells_use_the_running_average_cost():
     res = sell_outcomes([buy, sell1, sell2], _key_stage, _key_action)
     assert abs(res[2][1] - 0.10) < 1e-6
     assert abs(res[3][1] + 0.30) < 1e-6
+
+
+def test_buy_held_to_the_end_shows_win_when_its_side_won():
+    buy = _o(1, "paper:m:DOWN:s1", 2.0, 0.80, 0.01)  # side DOWN, cost 1.60 + 0.01 fee
+    res = settlement_outcomes([buy], _key_stage, _key_action, {"m": "DOWN"})
+    assert res[1][0] == "WIN" and abs(res[1][1] - (2.0 - 1.60 - 0.01)) < 1e-6
+
+
+def test_buy_held_to_the_end_shows_loss_when_its_side_lost():
+    buy = _o(1, "paper:m:DOWN:s1", 2.0, 0.80, 0.01)
+    res = settlement_outcomes([buy], _key_stage, _key_action, {"m": "UP"})
+    assert res[1][0] == "LOSS" and abs(res[1][1] + 1.61) < 1e-6
+
+
+def test_buy_has_no_settlement_result_before_the_market_resolves():
+    buy = _o(1, "paper:m:DOWN:s1", 2.0, 0.80)
+    assert settlement_outcomes([buy], _key_stage, _key_action, {}) == {}
+    assert settlement_outcomes([buy], _key_stage, _key_action, {"m": None}) == {}
+
+
+def test_fully_sold_buy_has_no_settlement_result():
+    # the exit is already on the SELL row; the buy must not repeat it
+    buy = _o(1, "paper:m:DOWN:s0", 1.0, 0.50)
+    sell = _o(2, "paper:m:DOWN:s0:sell:x", 1.0, 0.70)
+    assert settlement_outcomes([buy, sell], _key_stage, _key_action, {"m": "DOWN"}) == {}
+
+
+def test_partly_sold_buy_settles_only_the_shares_still_held():
+    buy = _o(1, "paper:m:DOWN:s9:tap:a", 4.0, 0.50)  # cost 2.00
+    sell = _o(2, "paper:m:DOWN:s9:sell:x", 1.0, 0.60)  # 1 share sold, 3 left (cost 1.50)
+    res = settlement_outcomes([buy, sell], _key_stage, _key_action, {"m": "DOWN"})
+    assert abs(res[1][1] - (3.0 - 1.50)) < 1e-6
+    assert sell_outcomes([buy, sell], _key_stage, _key_action)[2][0] == "WIN"
+
+
+def test_several_buys_show_one_settlement_result_on_the_last_buy():
+    buy1 = _o(1, "paper:m:DOWN:s1", 1.0, 0.40)
+    buy2 = _o(2, "paper:m:DOWN:s1:b", 1.0, 0.60)
+    res = settlement_outcomes([buy1, buy2], _key_stage, _key_action, {"m": "UP"})
+    assert list(res) == [2] and abs(res[2][1] + 1.0) < 1e-6

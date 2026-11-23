@@ -74,7 +74,7 @@ export function OrdersTable({
                   <RouteChip route={order.route} />
                 </td>
                 <td>
-                  <ResultChip result={isSettling ? "SETTLING" : filledBuy ? "BUY" : order.result} pnl={isSettling ? null : order.result_pnl} />
+                  <ResultChip result={isSettling ? "SETTLING" : order.result ?? (filledBuy ? "BUY" : null)} pnl={isSettling ? null : order.result_pnl} />
                 </td>
                 <td className="mono text-right text-slate-300">{fmtUsd(order.requested_notional)}</td>
                 <td className="mono text-right text-slate-300">{fmtCents(price)}</td>

@@ -40,7 +40,7 @@ from app.portfolio.analytics import AnalyticsService
 from app.portfolio.service import Portfolio, start_of_day_utc
 from app.risk_manager import buy_guard
 from app.risk_manager.manager import RiskContext, RiskManager
-from app.services.order_outcomes import sell_outcomes
+from app.services.order_outcomes import sell_outcomes, settlement_outcomes
 from app.services import telegram_format as tg
 from app.services.telegram import TelegramService, parse_minutes
 from app.strategy.engine import Stage1Strategy
@@ -2936,12 +2936,31 @@ class TradingBot:
                 select(Order).where(Order.mode == mode, Order.market_id.in_(market_ids))
             ).scalars().all() if market_ids else []
             exit_results = sell_outcomes(market_orders, self.orders._key_stage, self.orders._key_action)
+            # Buys held until the market ended have no SELL row: once the market has a winner the BUY
+            # row itself shows the settlement result (WIN / LOSS and PnL of the shares still held).
+            # The winner comes from this mode's own settled positions (set by `portfolio.settle`, also
+            # when the wallet fallback settled them), so it is exactly what the account was credited.
+            resolutions = dict(
+                session.execute(
+                    select(Position.market_id, Position.resolution).where(
+                        Position.mode == mode,
+                        Position.market_id.in_(market_ids),
+                        Position.resolution.is_not(None),
+                    )
+                ).all()
+            ) if market_ids else {}
+            settle_results = settlement_outcomes(
+                market_orders, self.orders._key_stage, self.orders._key_action, resolutions
+            )
 
             def outcome(o: Order) -> tuple[str | None, float | None]:
-                # Only a filled SELL row has a result: what that exit (take-profit or stop-loss) itself
-                # realised. A BUY row stays blank, its outcome is shown on the SELL row.
-                if (o.filled_size or 0) <= 0 or self.orders._key_action(o.order_key) != "SELL":
+                # A filled SELL row shows what that exit (take-profit or stop-loss) itself realised. A BUY
+                # row stays blank (its outcome is on the SELL row), except a buy held to the end of the
+                # market: that one shows the settlement result.
+                if (o.filled_size or 0) <= 0:
                     return None, None
+                if self.orders._key_action(o.order_key) != "SELL":
+                    return settle_results.get(o.id, (None, None))
                 return exit_results.get(o.id, (None, None))
 
             return [
