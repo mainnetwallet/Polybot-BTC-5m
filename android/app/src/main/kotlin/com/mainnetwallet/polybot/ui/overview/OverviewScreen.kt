@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -115,6 +116,8 @@ fun OverviewScreen(modifier: Modifier = Modifier) {
                 )
                 HeroCard(snap.market, snap.btc, history.btc, snap.account, snap.strategy.inWindow, snap.strategy, marketEndMs)
                 TapBuyCard(
+                    // a little air above the one-tap box so it sits lower, not glued to the hero card
+                    modifier = Modifier.padding(top = 14.dp),
                     market = snap.market,
                     bot = snap.bot,
                     up = snap.books.up,
