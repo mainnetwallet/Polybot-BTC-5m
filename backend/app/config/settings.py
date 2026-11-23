@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     host: str = "127.0.0.1"
     port: int = 8000
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+    # Extra Host names the dashboard may be opened under while no login/API token is set (comma separated,
+    # ".example.com" = all subdomains). localhost, IP addresses and cloudflared quick tunnels always work.
+    trusted_hosts: str = ""
     # Optional shared secret for the control API (X-API-Key / Bearer header, ``?token=`` on the
     # WebSocket). Empty = no auth, fine on 127.0.0.1; set it before binding HOST to 0.0.0.0.
     api_token: str = ""
@@ -299,6 +302,17 @@ class Settings(BaseSettings):
             and not self.api_token.strip()
             and not self.admin_password
         )
+
+    @property
+    def host_allowlist(self) -> list[str] | None:
+        """Host names the API answers browsers on, or None when a login / API token already protects it.
+
+        Without any credential a website could point its own DNS name at this machine (DNS rebinding) and,
+        being "same origin" by Host header, drive the bot. A Host allowlist closes that.
+        """
+        if self.api_token.strip() or self.admin_password:
+            return None
+        return [h.strip() for h in self.trusted_hosts.split(",") if h.strip()]
 
     @property
     def cors_origin_list(self) -> list[str]:

@@ -66,6 +66,11 @@ def create_app() -> FastAPI:
             logging.getLogger(__name__).warning(
                 "Dashboard login is OFF (ADMIN_PASSWORD is empty). Set ADMIN_PASSWORD in .env to require a login."
             )
+        if auth.enabled and not settings.auth_secret.strip():
+            logging.getLogger(__name__).warning(
+                "AUTH_SECRET is empty: dashboard sessions are signed with a key derived from the login "
+                "password alone. Set a long random AUTH_SECRET in .env."
+            )
         ensure_schema()
         await bot.initialize()
         try:
@@ -95,9 +100,11 @@ def create_app() -> FastAPI:
     async def healthz() -> dict:
         return {"status": "ok"}
 
-    app.include_router(build_auth_router(auth, settings.cors_origin_list))
+    app.include_router(build_auth_router(auth, settings.cors_origin_list, settings.host_allowlist))
     app.include_router(build_router(bot, runtime, settings, analytics, auth))
-    app.include_router(build_ws_router(hub, bot.snapshot, settings.api_token, auth, settings.cors_origin_list))
+    app.include_router(
+        build_ws_router(hub, bot.snapshot, settings.api_token, auth, settings.cors_origin_list, settings.host_allowlist)
+    )
     # Serve the prebuilt dashboard (backend/app/static, built from frontend/) from the same origin as the
     # API, so cookies and the WebSocket work without a separate proxy. Registered last: API routes win.
     static_dir = Path(__file__).resolve().parent / "static"

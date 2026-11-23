@@ -21,6 +21,11 @@ from app.market_discovery.types import MarketInfo, ResolutionInfo, parse_iso, to
 
 logger = logging.getLogger(__name__)
 
+# Price a winning outcome must show to count as settled. With UMA's "resolved" flag 0.99 is enough; on a
+# merely closed market only a terminal 1 / 0 price is trusted (0.995 can still be an unsettled last trade).
+RESOLVED_PRICE = 0.99
+TERMINAL_PRICE = 0.999
+
 
 class DiscoveryError(RuntimeError):
     pass
@@ -267,8 +272,11 @@ class MarketDiscovery:
             return ResolutionInfo(market.market_id, True, None)
         if len(outcomes) != 2 or len(prices) != 2:
             return ResolutionInfo(market.market_id, True, None)
+        # Closed only means trading stopped: the last traded price can still sit at 0.99x while the oracle has
+        # not settled. Without UMA's "resolved" flag only a terminal 1 / 0 price counts as a result.
+        threshold = RESOLVED_PRICE if resolved_flag else TERMINAL_PRICE
         for name, price in zip(outcomes, prices):
-            if price >= 0.99:
+            if price >= threshold:
                 side = self._side_from_label(name)
                 if side is not None:
                     return ResolutionInfo(market.market_id, True, side)
@@ -312,7 +320,7 @@ class MarketDiscovery:
             terminal = []
             for token in tokens:
                 try:
-                    if float(token.get("price")) >= 0.99:
+                    if float(token.get("price")) >= TERMINAL_PRICE:
                         terminal.append(token)
                 except (TypeError, ValueError):
                     continue

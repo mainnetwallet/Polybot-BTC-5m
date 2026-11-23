@@ -148,9 +148,11 @@ class AuthService:
             self._attempts.pop(client, None)
 
 
-def build_auth_router(auth: AuthService, cors_origins: list[str] | None = None) -> APIRouter:
+def build_auth_router(
+    auth: AuthService, cors_origins: list[str] | None = None, trusted_hosts: list[str] | None = None
+) -> APIRouter:
     # Login/logout change state too (login CSRF, forced logout): same cross-site rule as the control API.
-    router = APIRouter(prefix="/api/auth", dependencies=[Depends(build_cross_site_guard(cors_origins or []))])
+    router = APIRouter(prefix="/api/auth", dependencies=[Depends(build_cross_site_guard(cors_origins or [], trusted_hosts))])
 
     @router.get("/me")
     async def me(request: Request, response: Response) -> dict:

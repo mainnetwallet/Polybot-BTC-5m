@@ -589,7 +589,7 @@ def test_dashboard_origins_and_non_browser_clients_still_work():
         # the Vite dev dashboard (CORS_ORIGINS default)
         assert client.post("/api/bot/stop", headers={"Origin": "http://127.0.0.1:5173"}).status_code == 200
         # dashboard served by the backend itself (same origin, also through a tunnel hostname)
-        same_origin = client.post("/api/bot/stop", headers={"Origin": "http://testserver"})
+        same_origin = client.post("/api/bot/stop", headers={"Origin": "http://localhost:8000", "Host": "localhost:8000"})
         assert same_origin.status_code == 200
         # scripts and the Android app send no Origin header
         assert client.post("/api/bot/stop").status_code == 200
@@ -609,14 +609,17 @@ def test_login_logout_and_websocket_refuse_cross_site_origins():
             assert blocked.json()["detail"] == "Cross-site request blocked"
         # no Origin (Android app, scripts) and the dashboard's own origin still reach the endpoint
         assert client.post("/api/auth/logout").status_code != 403
-        assert client.post("/api/auth/logout", headers={"Origin": "http://testserver"}).status_code != 403
+        assert (
+            client.post("/api/auth/logout", headers={"Origin": "http://localhost:8000", "Host": "localhost:8000"}).status_code
+            != 403
+        )
 
         with pytest.raises(Exception):
             with client.websocket_connect("/api/ws", headers=evil):
                 pass
         with client.websocket_connect("/api/ws") as ws:  # no Origin header: allowed
             assert ws.receive_json()["type"] == "state"
-        with client.websocket_connect("/api/ws", headers={"Origin": "http://testserver"}) as ws:
+        with client.websocket_connect("/api/ws", headers={"Origin": "http://localhost:8000", "Host": "localhost:8000"}) as ws:
             assert ws.receive_json()["type"] == "state"
 
 

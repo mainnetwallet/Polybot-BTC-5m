@@ -77,14 +77,14 @@ notepad .env
 
 ## Strategy
 
-All values are defaults and can be changed in Settings or `.env`. Up to 3 buys per market; every stage buys and sells only its own shares.
+All values are defaults and can be changed in Settings or `.env`. Up to 4 buys per market (one per stage 0-3); every stage buys and sells only its own shares.
 
 | Stage | Entry | Take-profit | Stop-loss |
 | --- | --- | --- | --- |
 | **0** early buy | `180`-`100`s left, ask `0.70`-`0.96` (cheaper buys up to `0.85`; `0.89`+ only after 50% of the window), BTC gap >= `$80` beyond the price to beat (`$70` for the `0.89`+ buys). One buy per market | Best bid `+10%` / `+7%` / `+5%` over avg cost (buy below `0.80` / `0.80`-`0.85` / `0.85`+), at most bid `0.98` (`STAGE0_SELL_CAP_PRICE`, editable in Settings); `0` = hold | `60%` below avg cost (`30%` if bought at `0.89`+) |
 | **1** stage 1 | `90`-`50`s left (until stage 2 starts), best ask >= `0.85`, gap >= `$45` (waits and buys as soon as it gets there inside that window) | Bought up to `0.88`: `+8%`; dearer: bid `0.98` | `18%` |
 | **2** add-on | `<= 50`s left, ask `0.88`-`0.97`, spread <= `0.05`, gap >= `$38` | Bid `0.98` | `10%` |
-| **3** add-on | `<= 30`s left, ask `0.90`-`0.98`, spread <= `0.05`, bid above the current stop by `0.01`, gap >= `$35` | held to settlement | `5%` |
+| **3** add-on | `<= 30`s left, ask `0.90`-`0.98`, spread <= `0.05`, bid above the current stop by `0.01`, gap >= `$35` | held to settlement | `5%`, tightening to `3%` with <= 20s left and `2%` with <= 10s left |
 
 - Entries are marketable BUY (FOK) at the current ask; exits (take-profit / stop-loss) are marketable SELL (FAK: whatever fills above the floor is sold, the remainder is retried). A take-profit floor sits `SELL_FLOOR_TOLERANCE_TICKS` ticks (default 1, 0.01 each) under the take-profit price. `0.85` / `0.88` / `0.90` are triggers, never limit prices; `MAX_EXECUTION_PRICE` caps the price paid.
 - Take-profit sells are marketable and never below their sell price minus the floor tolerance. Stop-loss sells at market with no floor. `0` turns a stop-loss off.
@@ -135,7 +135,7 @@ A manual buy button next to the BTC tape chart (dashboard) and under the odds (A
 
 - **One tap = one market buy.** No confirm step. A second tap within 1 s is ignored (client and server), a tap is refused while another is in flight, and every tap carries a request id so a retried request never buys twice.
 - **Separate from the strategy.** One-tap shares are their own position row, tagged **One-tap** (cyan). No take profit, no stop loss: they are held until the market settles or you sell them by hand. They never count towards max open positions, daily loss/profit or trades per day, and are never topped up.
-- **40¢ floor.** A side whose best ask is under 40¢ (for example a DOWN at 1¢ in a market that already went UP) cannot be bought with a tap: its buttons are greyed out on the dashboard and in the app ("Down under 40¢: buy is off"), and the server refuses the buy too (`ask_too_low`), so even a stale screen cannot buy it. Exactly 40¢ and above is allowed. The number is `TAP_MIN_ASK` in `backend/app/order_manager/manager.py` and is sent to the clients as `tap.min_ask`.
+- **40¢ floor.** A side whose best ask is under 40¢ (for example a DOWN at 1¢ in a market that already went UP) cannot be bought with a tap: its buttons are greyed out on the dashboard and in the app ("Down under 40¢: buy is off"), and the server refuses the buy too (`ask_too_low`), so even a stale screen cannot buy it. Exactly 40¢ and above is allowed. The server default is `TAP_MIN_ASK` in `backend/app/order_manager/manager.py` (sent to the clients as `tap.min_ask`); the owner can change the minimum in the One-tap settings, and the client then sends its own `min_ask` with the buy (`0` switches the floor off), which the server applies.
 - **Selling.** Each one-tap row has its own Sell button. **Sell all** sells the strategy stages only; **Sell all tap** sells the one-tap shares only.
 - **Needs the bot RUNNING.** The kill switch, a stale or missing order book and the balance check still apply. It ignores the buy-guard switch because it is a manual buy.
 - API: `POST /api/orders/tap-buy` (`market_id`, `side`, `amount`, optional `request_id`).

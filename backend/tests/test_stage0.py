@@ -747,7 +747,7 @@ async def test_stage0_tier_set_to_zero_holds_to_settlement():
 
 
 # ------------------------------------------------ 0.90+ buys only in the later part of the window
-HIGH = dict(stage0_start_seconds=200, stage0_end_seconds=100, stage0_max_ask=0.99, stage0_early_max_ask=0.99)
+HIGH = dict(stage0_start_seconds=200, stage0_end_seconds=100, stage0_max_ask=0.99, stage0_early_max_ask=0.99, stage0_sell_cap_price=0.999)
 
 
 def test_high_buy_opens_halfway_through_the_stage0_window():
@@ -951,7 +951,7 @@ def test_stage0_block_ask_setting_changes_when_the_market_is_blocked():
     market = make_market(remaining=1150)
     end_ms = datetime_to_epoch_ms(market.window_end)
     strategy = Stage1Strategy()
-    config = make_config(**STAGE0, stage0_block_ask=0.95, stage0_max_ask=0.99, stage0_early_max_ask=0.99)
+    config = make_config(**STAGE0, stage0_block_ask=0.95, stage0_max_ask=0.99, stage0_early_max_ask=0.99, stage0_sell_cap_price=0.999)
 
     def run(remaining: float, up: float, down: float):
         return strategy.evaluate(market, books_for(market, up, down), end_ms - int(remaining * 1000), config)
