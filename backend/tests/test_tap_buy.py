@@ -291,18 +291,21 @@ async def test_bot_tap_buy_works_with_the_bot_stopped_in_paper_mode():
     assert snapshot["bot"]["manual_ready"] is True
 
 
-async def test_bot_tap_buy_in_live_mode_needs_the_live_gate_even_when_the_bot_is_stopped():
+async def test_bot_tap_buy_in_live_mode_needs_live_enabled_in_env_not_a_bot_start(monkeypatch):
     from app.services.bot import BotError
 
     market = make_market(remaining=150)
     bot = _running_bot(market, btc=(100_150.0, 100_000.0, ""))
     bot._status = "STOPPED"
-    bot._mode = "live"  # e.g. restored from the database after a restart: the gate was not passed yet
-    assert bot._live_armed is False and bot._manual_ready() is False
-    with pytest.raises(BotError, match="not unlocked"):
+    bot._mode = "live"  # e.g. restored from the database after a restart
+    cls = type(bot.settings)
+    monkeypatch.setattr(bot.settings, "live_trading_enabled", False)  # .env does not allow live trading
+    monkeypatch.setattr(bot.settings, "polymarket_geo_verified", True)
+    monkeypatch.setattr(cls, "live_credentials_present", property(lambda self: True))
+    with pytest.raises(BotError, match="not enabled"):
         await bot.tap_buy(market.market_id, "UP", 2.0)
-    bot._live_armed = True  # a mode switch to live / a bot start passed the gate
-    assert bot._manual_ready() is True
+    monkeypatch.setattr(bot.settings, "live_trading_enabled", True)
+    assert bot._manual_ready() is True  # no bot start, no confirmation phrase needed
     bot._kill_switch = True  # the kill switch beats everything
     assert bot._manual_ready() is False
 

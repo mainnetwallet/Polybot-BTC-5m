@@ -131,10 +131,6 @@ class TradingBot:
         self._status = "STOPPED"
         self._mode = "paper"
         self._kill_switch = False
-        # Live manual trading (one-tap, limits, sell now) works with the bot STOPPED, but only after the live
-        # gate was passed in this process (mode switch to live or a bot start). Never true after a restart,
-        # a kill switch or a switch to paper.
-        self._live_armed = False
         self._started_at: datetime | None = None
         self._lock = asyncio.Lock()
         self._stop_generation = 0
@@ -215,19 +211,23 @@ class TradingBot:
     def _manual_ready(self) -> bool:
         """Manual trading (one-tap buy, limit buy / sell, sell now) does not need the bot to be started.
 
-        It needs: no kill switch and, in live mode, the live gate passed in this process (`_live_armed`:
-        switching to live or starting the bot). The strategy (stages, take-profit, stop-loss) still needs RUNNING.
+        It needs: no kill switch and, in live mode, live trading enabled in .env (LIVE_TRADING_ENABLED, geo
+        verified, credentials). The strategy (stages, take-profit, stop-loss) still needs RUNNING.
         """
         if self._kill_switch:
             return False
-        if self._mode == "live" and not self._live_armed:
+        if self._mode == "live" and not (
+            self.settings.live_trading_enabled
+            and self.settings.polymarket_geo_verified
+            and self.settings.live_credentials_present
+        ):
             return False
         return True
 
     def _manual_blocked_message(self) -> str:
         if self._kill_switch:
             return "the kill switch is active: clear it first"
-        return "live trading is not unlocked: switch to live mode (with the confirmation phrase) or start the bot once"
+        return "live trading is not enabled in .env (LIVE_TRADING_ENABLED, geo verified, credentials)"
 
     def _manual_can_submit(self, mode: str) -> bool:
         # The strategy's risk halt (daily loss limit) does not stop the operator's own manual buys.
@@ -260,7 +260,6 @@ class TradingBot:
             self._kill_switch = bool(state.kill_switch)
             self._load_buys_state(session)
             self._status = "STOPPED"
-            self._live_armed = False
             self._started_at = None
             self._market = None
             self._evaluation = None
@@ -292,6 +291,8 @@ class TradingBot:
             ).scalars().all()
             paper_open_count, live_open_count = len(paper_open), len(live_open)
 
+        if self._mode == "live" and not self._kill_switch:
+            self.live_engine.allow_new_orders()  # manual orders do not wait for a bot start
         self._clock_task = asyncio.create_task(clock.run(self.settings.clob_base_url), name="clock-sync")
         await self.discovery.start()
         await self.data.start()
@@ -1642,7 +1643,6 @@ class TradingBot:
             if self._stop_generation != start_generation or self._kill_switch:
                 raise BotError("start request was canceled by a stop or kill switch")
             self._status = "RUNNING"
-            self._live_armed = self._mode == "live"
             self._started_at = utcnow()
             with session_scope() as session:
                 state = session.get(AppState, 1)
@@ -1728,7 +1728,6 @@ class TradingBot:
             self._mode = "paper"
             self._kill_switch = False
             self._status = "STOPPED"
-            self._live_armed = False
             self._limits.clear()
             self._buy_limits.clear()
             self._started_at = None
@@ -1767,7 +1766,6 @@ class TradingBot:
         if reason != "operator":
             self._limits.clear()
             self._buy_limits.clear()
-            self._live_armed = False
         self.live_engine.block_new_orders()
         async with self._lock:
             was_running = self._status == "RUNNING"
@@ -1795,7 +1793,7 @@ class TradingBot:
                     payload={"mode": self._mode},
                     mode=self._mode,
                 )
-            if self._mode == "live" and self._live_armed and not self._kill_switch:
+            if self._mode == "live" and not self._kill_switch:
                 # fenced above while queued strategy orders drained; the strategy stays off (status STOPPED),
                 # manual orders may go out again
                 self.live_engine.allow_new_orders()
@@ -1827,7 +1825,6 @@ class TradingBot:
             # limits belong to the mode they were set in
             self._limits.clear()
             self._buy_limits.clear()
-            self._live_armed = mode == "live"
             if mode == "live":
                 self.live_engine.allow_new_orders()
                 if self._market is not None:
@@ -2082,6 +2079,8 @@ class TradingBot:
                 if self._status == "RUNNING":
                     raise BotError("stop the bot before clearing the kill switch")
                 self._kill_switch = False
+                if self._mode == "live":
+                    self.live_engine.allow_new_orders()
                 with session_scope() as session:
                     state = session.get(AppState, 1)
                     if state:

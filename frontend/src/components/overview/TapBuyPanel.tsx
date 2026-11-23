@@ -75,7 +75,7 @@ export function TapBuyPanel({ className }: { className?: string }) {
   let blocked: string | null = null;
   if (!enabled) blocked = "Off · press ON to buy";
   else if (snapshot.bot.kill_switch) blocked = "Kill switch is on";
-  else if (!(snapshot.bot.manual_ready ?? snapshot.bot.status === "RUNNING")) blocked = "Unlock live first (switch to live mode)";
+  else if (!(snapshot.bot.manual_ready ?? snapshot.bot.status === "RUNNING")) blocked = "Live trading is off in .env";
   else if (ended) blocked = "Waiting for the next market";
   else if (lowCash) blocked = "Not enough cash";
 

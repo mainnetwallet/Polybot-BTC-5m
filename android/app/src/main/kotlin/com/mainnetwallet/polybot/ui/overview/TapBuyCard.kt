@@ -128,7 +128,7 @@ fun TapBuyCard(
     val blocked: String? = when {
         !enabled -> "One-tap is OFF: tap the OFF button to turn it on"
         bot.killSwitch -> "Kill switch is on"
-        !bot.manualOk -> "Unlock live first (switch to live mode)"
+        !bot.manualOk -> "Live trading is off in .env"
         ended -> "Waiting for the next market"
         else -> null
     }

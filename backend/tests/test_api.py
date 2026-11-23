@@ -162,7 +162,6 @@ async def test_stop_during_live_start_cannot_be_overridden_by_late_validation():
     bot._status = "STOPPED"
     bot._mode = "live"
     bot._kill_switch = False
-    bot._live_armed = False
     bot._started_at = None
     bot._market = None
     bot._risk_halt_reason = None
@@ -204,8 +203,9 @@ async def test_stop_during_live_start_cannot_be_overridden_by_late_validation():
         raise AssertionError("a pending stop must cancel a live start")
     await stopping
 
-    assert bot._status == "STOPPED"
-    assert bot.live_engine.allowed is False
+    assert bot._status == "STOPPED"  # the late validation did not start the strategy
+    # (the engine itself is open again after a plain stop: manual orders need it, the strategy is gated by the bot)
+    assert bot.live_engine.allowed is True
 
 
 def test_mode_switch_blocked_while_running():
