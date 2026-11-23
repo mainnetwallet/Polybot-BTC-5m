@@ -939,6 +939,8 @@ fun PositionBoxCard(
     onSellAll: (String) -> Unit,
     onSellAllTap: (String) -> Unit,
     modifier: Modifier = Modifier,
+    /** Right end of the header (the "Limit" buy/sell pill lives here). */
+    headerExtra: @Composable () -> Unit = {},
 ) {
     val scheme = MaterialTheme.colorScheme
     val open = if (marketId == null) {
@@ -960,12 +962,20 @@ fun PositionBoxCard(
     val pendingBuys = if (marketId == null) emptyList() else buyLimits.filter { it.marketId == marketId }
 
     CompactCard(modifier) {
-        CardHeader("Position") {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = 24.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Space.sm),
+        ) {
+            Label("Position")
             if (marketId != null && tapHere.isNotEmpty()) {
                 SellButton(
                     label = if (sellingTap) "Selling\u2026" else "Sell all tap",
                     enabled = !sellingTap,
                     onClick = { onSellAllTap(marketId) },
+                    compact = true,
                 )
             }
             if (marketId != null && stagesHere.isNotEmpty()) {
@@ -973,8 +983,11 @@ fun PositionBoxCard(
                     label = if (sellingAll) "Selling\u2026" else "Sell all",
                     enabled = !sellingAll,
                     onClick = { onSellAll(marketId) },
+                    compact = true,
                 )
             }
+            Spacer(Modifier.weight(1f))
+            headerExtra()
         }
         if (open.isEmpty() && pendingBuys.isEmpty()) {
             Text(

@@ -142,7 +142,9 @@ fun OverviewScreen(modifier: Modifier = Modifier) {
                             graph.prefsStore.setTapEnabled(enabled)
                         }
                     },
-                    // "Limit" pill sits in the one-tap buy header, on the left after the title: one dialog for a limit buy and a limit sell
+                )
+                PositionBoxCard(
+                    // "Limit" pill sits in the Position header on the right, where "Sell all tap" used to be: one dialog for a limit buy and a limit sell
                     headerExtra = {
                         LimitOrderButton(
                             marketId = snap.market?.marketId,
@@ -172,8 +174,6 @@ fun OverviewScreen(modifier: Modifier = Modifier) {
                             },
                         )
                     },
-                )
-                PositionBoxCard(
                     marketId = snap.market?.marketId,
                     positions = snap.positions,
                     sellable = snap.sellable,
