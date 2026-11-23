@@ -191,6 +191,21 @@ data class LimitRow(
     @SerialName("set_at") val setAt: String? = null,
 )
 
+/**
+ * A limit buy kept by the bot (in code, never an exchange order): once the best ask is at or below [price] the bot makes
+ * ONE one-tap buy of [amount] USDC that never pays more than [price], then the limit is gone.
+ */
+@Serializable
+data class BuyLimitRow(
+    @SerialName("market_id") val marketId: String = "",
+    val side: String = "",
+    /** share price, 0.01 to 0.99: the buy never pays more than this */
+    val price: Double = 0.0,
+    /** USDC to spend */
+    val amount: Double = 0.0,
+    @SerialName("set_at") val setAt: String? = null,
+)
+
 @Serializable
 data class OrderRow(
     val id: Long = 0,
@@ -351,6 +366,8 @@ data class Snapshot(
     val sellable: List<SellableHolding> = emptyList(),
     /** the operator's limit sells of the live market (bot-managed, not exchange orders) */
     val limits: List<LimitRow> = emptyList(),
+    /** the operator's limit buys of the live market (bot-managed, one one-tap buy each when the ask falls to the limit) */
+    @SerialName("buy_limits") val buyLimits: List<BuyLimitRow> = emptyList(),
     val tap: TapLimits? = null,
     @SerialName("tap_buy") val tapBuy: TapBuyResult? = null,
     @SerialName("manual_sell_all") val manualSellAll: ManualSellAll? = null,

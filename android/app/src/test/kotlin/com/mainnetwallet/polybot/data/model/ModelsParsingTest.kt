@@ -238,4 +238,17 @@ class ModelsParsingTest {
         assertEquals(2, s.limits[0].stage)
         assertEquals(0.85, s.limits[0].price, 0.0)
     }
+
+    @Test fun limitBuysParseAndDefaultToNone() {
+        assertTrue(AppJson.decodeFromString(Snapshot.serializer(), "{}").buyLimits.isEmpty())
+        val s = AppJson.decodeFromString(
+            Snapshot.serializer(),
+            """{"buy_limits":[{"market_id":"m1","side":"DOWN","price":0.45,"amount":5,"set_at":"2026-11-23T10:00:00Z"}]}""",
+        )
+        assertEquals(1, s.buyLimits.size)
+        assertEquals("m1", s.buyLimits[0].marketId)
+        assertEquals("DOWN", s.buyLimits[0].side)
+        assertEquals(0.45, s.buyLimits[0].price, 0.0)
+        assertEquals(5.0, s.buyLimits[0].amount, 0.0)
+    }
 }

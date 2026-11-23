@@ -419,6 +419,23 @@ class BotRepository(
         return result
     }
 
+    /** Set or change the limit buy of one side: one one-tap buy of [amount] USDC once the ask is at or below [price] (0..1). */
+    suspend fun setBuyLimit(marketId: String, side: String, price: Double, amount: Double): ActionResult {
+        val cents = String.format(Locale.US, "%.1f", price * 100.0).removeSuffix(".0")
+        val usd = String.format(Locale.US, "%.2f", amount).removeSuffix(".00")
+        val result = act({ "Buy limit set: $side buys $$usd when the ask is $cents¢ or lower." }) {
+            api.setBuyLimit(marketId, side, price, amount)
+        }
+        if (!result.ok) refresh()
+        return result
+    }
+
+    suspend fun cancelBuyLimit(marketId: String, side: String): ActionResult {
+        val result = act({ "Buy limit removed: $side." }) { api.cancelBuyLimit(marketId, side) }
+        if (!result.ok) refresh()
+        return result
+    }
+
     /** [tapOnly] false = "Sell all" (strategy stages only); true = "Sell all tap" (one-tap shares only). */
     suspend fun sellAll(marketId: String, tapOnly: Boolean = false): ActionResult {
         val what = if (tapOnly) "one-tap position" else "stage"

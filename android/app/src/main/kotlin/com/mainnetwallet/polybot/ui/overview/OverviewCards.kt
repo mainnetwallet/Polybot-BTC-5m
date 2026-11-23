@@ -65,6 +65,7 @@ import com.mainnetwallet.polybot.data.model.BookSnapshot
 import com.mainnetwallet.polybot.data.model.BotState
 import com.mainnetwallet.polybot.data.model.BtcState
 import com.mainnetwallet.polybot.data.model.BuyGuardState
+import com.mainnetwallet.polybot.data.model.BuyLimitRow
 import com.mainnetwallet.polybot.data.model.LiveReadiness
 import com.mainnetwallet.polybot.data.model.LimitRow
 import com.mainnetwallet.polybot.data.model.MarketSnapshot
@@ -943,6 +944,13 @@ fun PositionBoxCard(
     canSetLimit: Boolean = false,
     onSetLimit: (SellableHolding, Double) -> Unit = { _, _ -> },
     onCancelLimit: (SellableHolding) -> Unit = {},
+    buyLimits: List<BuyLimitRow> = emptyList(),
+    minBuyUsd: Double = 1.0,
+    maxBuyUsd: Double = 100.0,
+    onSetBuyLimit: (side: String, price: Double, amount: Double) -> Unit = { _, _, _ -> },
+    onCancelBuyLimit: (side: String) -> Unit = {},
+    onSetSellLimit: (side: String, stage: Int, price: Double) -> Unit = { _, _, _ -> },
+    onCancelSellLimit: (side: String, stage: Int) -> Unit = { _, _ -> },
     onSell: (SellableHolding) -> Unit,
     onSellAll: (String) -> Unit,
     onSellAllTap: (String) -> Unit,
@@ -963,6 +971,9 @@ fun PositionBoxCard(
     val tapHere = sellableHere.filter { it.stage == TAP_STAGE }
     val sellingAll = SELL_ALL_KEY in selling
     val sellingTap = SELL_ALL_TAP_KEY in selling
+    // limit buys of this market that have not filled yet: they show here as pending until the ask reaches the limit
+    // (then the bot buys once, the limit is gone and the shares appear as a one-tap row)
+    val pendingBuys = if (marketId == null) emptyList() else buyLimits.filter { it.marketId == marketId }
 
     CompactCard(modifier) {
         CardHeader("Position") {
@@ -981,7 +992,23 @@ fun PositionBoxCard(
                 )
             }
         }
-        if (open.isEmpty()) {
+        // one "Limit buy/sell" dialog for a limit buy and a limit sell, the same as the web dashboard
+        LimitOrderButton(
+            marketId = marketId,
+            upBook = upBook,
+            downBook = downBook,
+            sellable = sellable,
+            buyLimits = buyLimits,
+            sellLimits = limits,
+            canSet = canSetLimit,
+            minUsd = minBuyUsd,
+            maxUsd = maxBuyUsd,
+            onSetBuy = onSetBuyLimit,
+            onCancelBuy = onCancelBuyLimit,
+            onSetSell = onSetSellLimit,
+            onCancelSell = onCancelSellLimit,
+        )
+        if (open.isEmpty() && pendingBuys.isEmpty()) {
             Text(
                 "No open position in this market",
                 style = MaterialTheme.typography.bodySmall,
@@ -1080,6 +1107,70 @@ fun PositionBoxCard(
                         MiniStat("PnL", Fmt.signedUsd(p.unrealizedPnl), Modifier.weight(1f), valueColor = pnlColor(p.unrealizedPnl))
                     }
                 }
+            }
+            pendingBuys.forEach { l ->
+                val ask = (if (l.side.equals("UP", ignoreCase = true)) upBook else downBook)?.bestAsk
+                PendingBuyRow(
+                    limit = l,
+                    ask = ask,
+                    busy = "buy:${l.side}" in selling,
+                    onCancel = { onCancelBuyLimit(l.side) },
+                )
+            }
+        }
+    }
+}
+
+/** A limit buy that has not filled yet: the bot waits for the ask to fall to the limit, buys once, then the limit is gone. */
+@Composable
+private fun PendingBuyRow(limit: BuyLimitRow, ask: Double?, busy: Boolean, onCancel: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    val c = Poly.colors
+    val cents = Fmt.centsShort(limit.price)
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(scheme.surfaceContainerHigh)
+            .padding(horizontal = Space.sm, vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Space.sm),
+        ) {
+            SidePill(limit.side)
+            Text(
+                "Limit buy ${Fmt.usd(limit.amount)} at $cents or lower",
+                style = Mono.small,
+                modifier = Modifier.weight(1f),
+                maxLines = 2,
+            )
+            Pill("PENDING", c.warn, c.warnContainer)
+        }
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Space.sm),
+        ) {
+            Text(
+                "One-tap · ask ${Fmt.centsShort(ask)} · waiting to fill, never above $cents",
+                style = MaterialTheme.typography.bodySmall,
+                color = scheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+            Button(
+                onClick = onCancel,
+                enabled = !busy,
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = scheme.surfaceVariant,
+                    contentColor = scheme.onSurfaceVariant,
+                ),
+                modifier = Modifier.heightIn(min = 32.dp),
+            ) {
+                Text(if (busy) "Cancelling…" else "Cancel", style = MaterialTheme.typography.labelLarge, maxLines = 1)
             }
         }
     }
