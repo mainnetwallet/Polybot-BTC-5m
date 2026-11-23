@@ -945,12 +945,7 @@ fun PositionBoxCard(
     onSetLimit: (SellableHolding, Double) -> Unit = { _, _ -> },
     onCancelLimit: (SellableHolding) -> Unit = {},
     buyLimits: List<BuyLimitRow> = emptyList(),
-    minBuyUsd: Double = 1.0,
-    maxBuyUsd: Double = 100.0,
-    onSetBuyLimit: (side: String, price: Double, amount: Double) -> Unit = { _, _, _ -> },
     onCancelBuyLimit: (side: String) -> Unit = {},
-    onSetSellLimit: (side: String, stage: Int, price: Double) -> Unit = { _, _, _ -> },
-    onCancelSellLimit: (side: String, stage: Int) -> Unit = { _, _ -> },
     onSell: (SellableHolding) -> Unit,
     onSellAll: (String) -> Unit,
     onSellAllTap: (String) -> Unit,
@@ -992,22 +987,6 @@ fun PositionBoxCard(
                 )
             }
         }
-        // one "Limit buy/sell" dialog for a limit buy and a limit sell, the same as the web dashboard
-        LimitOrderButton(
-            marketId = marketId,
-            upBook = upBook,
-            downBook = downBook,
-            sellable = sellable,
-            buyLimits = buyLimits,
-            sellLimits = limits,
-            canSet = canSetLimit,
-            minUsd = minBuyUsd,
-            maxUsd = maxBuyUsd,
-            onSetBuy = onSetBuyLimit,
-            onCancelBuy = onCancelBuyLimit,
-            onSetSell = onSetSellLimit,
-            onCancelSell = onCancelSellLimit,
-        )
         if (open.isEmpty() && pendingBuys.isEmpty()) {
             Text(
                 "No open position in this market",

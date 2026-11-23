@@ -112,6 +112,8 @@ fun TapBuyCard(
     onSetEnabled: (Boolean) -> Unit,
     onSaveSettings: (amounts: List<Double>, enabled: Boolean, minAsk: Double) -> Unit,
     modifier: Modifier = Modifier,
+    /** Shown under the buy rows (the "Limit buy/sell" button lives here, next to the one-tap buy). */
+    extra: @Composable () -> Unit = {},
 ) {
     val scheme = MaterialTheme.colorScheme
     val c = Poly.colors
@@ -273,6 +275,7 @@ fun TapBuyCard(
                             color = scheme.onSurfaceVariant,
                         )
                     }
+                    extra()
                 }
             }
         }

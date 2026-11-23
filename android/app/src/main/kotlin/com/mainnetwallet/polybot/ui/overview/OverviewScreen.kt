@@ -148,6 +148,36 @@ fun OverviewScreen(modifier: Modifier = Modifier) {
                             graph.prefsStore.setTapEnabled(enabled)
                         }
                     },
+                    // "Limit buy/sell" sits under the one-tap buy rows: one dialog for a limit buy and a limit sell
+                    extra = {
+                        LimitOrderButton(
+                            marketId = snap.market?.marketId,
+                            upBook = snap.books.up,
+                            downBook = snap.books.down,
+                            sellable = snap.sellable,
+                            buyLimits = snap.buyLimits,
+                            sellLimits = snap.limits,
+                            canSet = snap.bot.running && !snap.bot.killSwitch && (snap.market?.remainingSeconds ?: 0.0) > 0.0,
+                            minUsd = snap.tap?.minUsdc ?: 1.0,
+                            maxUsd = snap.tap?.maxUsdc ?: 100.0,
+                            onSetBuy = { side, price, amount ->
+                                val marketId = snap.market?.marketId
+                                if (marketId != null) scope.launch { ui.report(repo.setBuyLimit(marketId, side, price, amount)) }
+                            },
+                            onCancelBuy = { side ->
+                                val marketId = snap.market?.marketId
+                                if (marketId != null) sell("buy:$side") { repo.cancelBuyLimit(marketId, side) }
+                            },
+                            onSetSell = { side, stage, price ->
+                                val marketId = snap.market?.marketId
+                                if (marketId != null) scope.launch { ui.report(repo.setLimit(marketId, side, stage, price)) }
+                            },
+                            onCancelSell = { side, stage ->
+                                val marketId = snap.market?.marketId
+                                if (marketId != null) scope.launch { ui.report(repo.cancelLimit(marketId, side, stage)) }
+                            },
+                        )
+                    },
                 )
                 PositionBoxCard(
                     marketId = snap.market?.marketId,
@@ -164,25 +194,11 @@ fun OverviewScreen(modifier: Modifier = Modifier) {
                     onCancelLimit = { h ->
                         scope.launch { ui.report(repo.cancelLimit(h.marketId, h.side, h.stage)) }
                     },
-                    // "Limit buy/sell" dialog: limit buys (and the pending rows) plus a sell limit for any listed position
+                    // limit buys that have not filled yet show here as PENDING rows
                     buyLimits = snap.buyLimits,
-                    minBuyUsd = snap.tap?.minUsdc ?: 1.0,
-                    maxBuyUsd = snap.tap?.maxUsdc ?: 100.0,
-                    onSetBuyLimit = { side, price, amount ->
-                        val marketId = snap.market?.marketId
-                        if (marketId != null) scope.launch { ui.report(repo.setBuyLimit(marketId, side, price, amount)) }
-                    },
                     onCancelBuyLimit = { side ->
                         val marketId = snap.market?.marketId
                         if (marketId != null) sell("buy:$side") { repo.cancelBuyLimit(marketId, side) }
-                    },
-                    onSetSellLimit = { side, stage, price ->
-                        val marketId = snap.market?.marketId
-                        if (marketId != null) scope.launch { ui.report(repo.setLimit(marketId, side, stage, price)) }
-                    },
-                    onCancelSellLimit = { side, stage ->
-                        val marketId = snap.market?.marketId
-                        if (marketId != null) scope.launch { ui.report(repo.cancelLimit(marketId, side, stage)) }
                     },
                     onSell = { h -> sell(sellKey(h)) { repo.sellNow(h.marketId, h.side, h.stage) } },
                     onSellAll = { marketId -> sell(SELL_ALL_KEY) { repo.sellAll(marketId) } },
