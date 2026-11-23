@@ -16,7 +16,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
@@ -45,10 +48,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -274,20 +280,28 @@ private fun LimitOrderDialog(
             color = scheme.surfaceContainerHigh,
         ) {
             Column {
-                // header
-                Column(
+                // header: the title and the order book on one line
+                Row(
                     Modifier
                         .fillMaxWidth()
-                        .padding(start = Space.lg, end = Space.lg, top = Space.md, bottom = Space.sm),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                        .padding(start = Space.md, end = Space.md, top = Space.md, bottom = 4.dp),
+                    verticalAlignment = Alignment.Bottom,
+                    horizontalArrangement = Arrangement.spacedBy(Space.sm),
                 ) {
-                    Label("Limit order")
                     Text(
                         if (buyMode) "Buy limit" else "Sell limit",
-                        style = MaterialTheme.typography.titleLarge,
+                        style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                     )
-                    Text(subtitle, style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+                    Text(
+                        subtitle,
+                        style = Mono.small,
+                        color = scheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.End,
+                        modifier = Modifier.weight(1f),
+                    )
                 }
 
                 // body
@@ -295,16 +309,17 @@ private fun LimitOrderDialog(
                     Modifier
                         .weight(1f, fill = false)
                         .verticalScroll(rememberScrollState())
-                        .padding(horizontal = Space.lg, vertical = Space.sm),
-                    verticalArrangement = Arrangement.spacedBy(Space.md),
+                        .padding(horizontal = Space.md, vertical = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         SegRow(
                             labels = listOf("Buy", "Sell"),
                             selected = if (buyMode) 0 else 1,
                             containers = listOf(c.up, c.down),
                             contents = listOf(OnUpFill, OnDownFill),
                             onSelect = { buyMode = it == 0 },
+                            modifier = Modifier.weight(1f),
                         )
                         if (buyMode) {
                             SegRow(
@@ -313,6 +328,7 @@ private fun LimitOrderDialog(
                                 containers = listOf(c.up, c.down),
                                 contents = listOf(OnUpFill, OnDownFill),
                                 onSelect = { switchSide(if (it == 0) "UP" else "DOWN") },
+                                modifier = Modifier.weight(1f),
                             )
                         }
                     }
@@ -349,7 +365,7 @@ private fun LimitOrderDialog(
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text(
                                 if (buyMode) {
-                                    "Buy when the ask is this low or lower (¢)"
+                                    "Buy when ask is this low or lower"
                                 } else {
                                     "Sell ${selected?.side} (${LimitOrder.stageLabel(selected?.stage ?: TAP_STAGE)}) at this price or better (¢)"
                                 },
@@ -387,26 +403,21 @@ private fun LimitOrderDialog(
                     if (buyMode) {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text("Amount to spend", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                            OutlinedTextField(
-                                value = usd,
-                                onValueChange = { usd = it },
-                                prefix = { Text("$") },
-                                singleLine = true,
-                                isError = usd.isNotBlank() && !amountOk,
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                modifier = Modifier.width(140.dp),
-                            )
-                            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                CompactField(
+                                    value = usd,
+                                    onValueChange = { usd = it },
+                                    prefix = "$",
+                                    isError = usd.isNotBlank() && !amountOk,
+                                    textStyle = Mono.body.copy(fontSize = 16.sp),
+                                    modifier = Modifier.width(88.dp),
+                                )
                                 LimitOrder.AMOUNT_PICKS.forEach { v ->
-                                    FilterChip(
-                                        selected = amount == v.toDouble(),
-                                        onClick = { usd = v.toString() },
-                                        label = { Text("$$v") },
-                                        colors = FilterChipDefaults.filterChipColors(
-                                            selectedContainerColor = c.up,
-                                            selectedLabelColor = OnUpFill,
-                                        ),
-                                    )
+                                    PickChip("$$v", amount == v.toDouble(), c.up, OnUpFill, { usd = v.toString() }, Modifier.weight(1f))
                                 }
                             }
                             if (usd.isNotBlank() && !amountOk) {
@@ -460,7 +471,7 @@ private fun LimitOrderDialog(
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = Space.md, vertical = Space.sm),
+                        .padding(horizontal = Space.md, vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -487,25 +498,26 @@ private fun SegRow(
     containers: List<Color>,
     contents: List<Color>,
     onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val scheme = MaterialTheme.colorScheme
     Row(
-        Modifier
+        modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(10.dp))
             .background(scheme.surface)
-            .padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+            .padding(3.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
     ) {
         labels.forEachIndexed { i, label ->
             val on = i == selected
             Box(
                 Modifier
                     .weight(1f)
-                    .clip(RoundedCornerShape(9.dp))
+                    .clip(RoundedCornerShape(8.dp))
                     .background(if (on) containers[i] else Color.Transparent)
                     .selectable(selected = on, role = Role.RadioButton, onClick = { onSelect(i) })
-                    .padding(vertical = 9.dp),
+                    .padding(vertical = 7.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
@@ -630,29 +642,21 @@ private fun LimitPriceSlider(
     val pick: (Int) -> Unit = { cents -> onDraft(LimitOrder.clampCents(cents.toDouble()).toString()) }
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             StepButton("−") { pick(shown - 1) }
-            OutlinedTextField(
+            CompactField(
                 value = draft,
                 onValueChange = onDraft,
+                placeholder = shown.toString(),
+                suffix = "¢",
+                centered = true,
+                textStyle = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold),
                 modifier = Modifier.weight(1f),
-                textStyle = MaterialTheme.typography.headlineSmall.copy(textAlign = TextAlign.Center, fontWeight = FontWeight.ExtraBold),
-                placeholder = {
-                    Text(
-                        shown.toString(),
-                        modifier = Modifier.fillMaxWidth(),
-                        textAlign = TextAlign.Center,
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = scheme.onSurfaceVariant.copy(alpha = 0.5f),
-                    )
-                },
-                suffix = { Text("¢") },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             )
             StepButton("+") { pick(shown + 1) }
         }
         Slider(
+            modifier = Modifier.height(32.dp).wrapContentHeight(align = Alignment.CenterVertically, unbounded = true),
             value = shown.toFloat(),
             onValueChange = { pick(it.roundToInt()) },
             valueRange = 1f..99f,
@@ -682,14 +686,9 @@ private fun LimitPriceSlider(
                 )
             }
         }
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
             picks.forEach { p ->
-                FilterChip(
-                    selected = value == p.toDouble(),
-                    onClick = { pick(p) },
-                    label = { Text("$p¢") },
-                    colors = FilterChipDefaults.filterChipColors(selectedContainerColor = tone, selectedLabelColor = onTone),
-                )
+                PickChip("$p¢", value == p.toDouble(), tone, onTone, { pick(p) }, Modifier.weight(1f))
             }
         }
     }
@@ -702,8 +701,87 @@ private fun StepButton(label: String, onClick: () -> Unit) {
         onClick = onClick,
         contentPadding = PaddingValues(0.dp),
         colors = ButtonDefaults.buttonColors(containerColor = scheme.surfaceVariant, contentColor = scheme.onSurfaceVariant),
-        modifier = Modifier.size(44.dp),
+        modifier = Modifier.size(40.dp),
     ) {
         Text(label, fontSize = 22.sp, fontWeight = FontWeight.Medium)
+    }
+}
+
+/** One-line input box, 40dp high (the stock outlined text field is 56dp): optional prefix, suffix and placeholder. */
+@Composable
+private fun CompactField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    textStyle: TextStyle = MaterialTheme.typography.titleMedium,
+    placeholder: String? = null,
+    prefix: String? = null,
+    suffix: String? = null,
+    isError: Boolean = false,
+    centered: Boolean = false,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val edge = if (isError) scheme.error else scheme.outline
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        singleLine = true,
+        textStyle = textStyle.copy(color = scheme.onSurface, textAlign = if (centered) TextAlign.Center else TextAlign.Start),
+        cursorBrush = SolidColor(scheme.primary),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+        modifier = modifier
+            .height(40.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .border(BorderStroke(1.dp, edge), RoundedCornerShape(10.dp)),
+        decorationBox = { inner ->
+            Row(
+                Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (prefix != null) {
+                    Text(prefix, style = textStyle, color = scheme.onSurfaceVariant, modifier = Modifier.padding(end = 4.dp))
+                }
+                Box(Modifier.weight(1f), contentAlignment = if (centered) Alignment.Center else Alignment.CenterStart) {
+                    if (value.isEmpty() && placeholder != null) {
+                        Text(placeholder, style = textStyle, color = scheme.onSurfaceVariant.copy(alpha = 0.5f))
+                    }
+                    inner()
+                }
+                if (suffix != null) {
+                    Text(suffix, style = Mono.small, color = scheme.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp))
+                }
+            }
+        },
+    )
+}
+
+/** Small outlined pick (a price or an amount); several share one row with equal weight, so nothing scrolls. */
+@Composable
+private fun PickChip(
+    label: String,
+    selected: Boolean,
+    tone: Color,
+    onTone: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val scheme = MaterialTheme.colorScheme
+    Box(
+        modifier
+            .height(32.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(if (selected) tone else Color.Transparent)
+            .border(BorderStroke(1.dp, if (selected) tone else scheme.outlineVariant), RoundedCornerShape(8.dp))
+            .selectable(selected = selected, role = Role.RadioButton, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label,
+            style = Mono.small.copy(fontWeight = FontWeight.Medium),
+            color = if (selected) onTone else scheme.onSurface,
+            maxLines = 1,
+        )
     }
 }
