@@ -216,8 +216,7 @@ private fun LimitOrderDialog(
 
     val hint: String? = when {
         draft.isNotBlank() && !priceOk -> "Enter a price from 1 to 99."
-        buyMode ->
-            if (firesNow && ref != null) "The ask (${LimitOrder.centsText(ref)}¢) is already at or below this limit: it buys right away." else null
+        buyMode -> null
         selected != null && selected.size == null -> "Nothing is held yet. This limit applies to the shares your buy limit buys."
         firesNow && ref != null -> "The bid (${LimitOrder.centsText(ref)}¢) is already at or above this limit: the shares are sold right away."
         ref != null ->
@@ -309,9 +308,9 @@ private fun LimitOrderDialog(
                         .padding(horizontal = 16.dp, vertical = 6.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         SegRow(
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.fillMaxWidth(),
                             labels = listOf("Buy", "Sell"),
                             selected = if (buyMode) 0 else 1,
                             containers = listOf(c.up, c.down),
@@ -320,7 +319,7 @@ private fun LimitOrderDialog(
                         )
                         if (buyMode) {
                             SegRow(
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier.fillMaxWidth(),
                                 labels = listOf("UP", "DOWN"),
                                 selected = if (side == "UP") 0 else 1,
                                 containers = listOf(c.up, c.down),
