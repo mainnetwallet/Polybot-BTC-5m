@@ -20,10 +20,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
@@ -33,7 +34,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -55,8 +55,8 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -74,6 +74,7 @@ import com.mainnetwallet.polybot.data.model.PositionRow
 import com.mainnetwallet.polybot.data.model.SellableHolding
 import com.mainnetwallet.polybot.data.model.StrategyState
 import com.mainnetwallet.polybot.data.model.TAP_STAGE
+import com.mainnetwallet.polybot.domain.LimitOrder
 import com.mainnetwallet.polybot.domain.ringStage
 import com.mainnetwallet.polybot.ui.Fmt
 import com.mainnetwallet.polybot.ui.components.Dot
@@ -838,26 +839,47 @@ private fun LimitButton(
         val cents = draft.trim().replace(',', '.').toDoubleOrNull()
         val valid = cents != null && cents >= 1.0 && cents <= 99.0
         val alreadyThere = valid && bid != null && bid * 100.0 + 1e-9 >= cents!!
+        val bidCents = bid?.let { it * 100.0 }
         AlertDialog(
             onDismissRequest = { open = false },
-            title = { Text("Limit sell \u00B7 $title") },
+            properties = DialogProperties(usePlatformDefaultWidth = false),
+            modifier = Modifier.padding(horizontal = 16.dp),
+            title = {
+                Column {
+                    Text(
+                        "LIMIT SELL",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = scheme.onSurfaceVariant,
+                    )
+                    Text(title, style = MaterialTheme.typography.titleLarge)
+                }
+            },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(Space.sm)) {
+                Column(
+                    Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(Space.sm),
+                ) {
                     Text(
                         if (bid != null) "Best bid now ${Fmt.centsShort(bid)}" else "No bid in the order book right now",
                         style = MaterialTheme.typography.bodySmall,
                         color = scheme.onSurfaceVariant,
                     )
-                    OutlinedTextField(
-                        value = draft,
-                        onValueChange = { draft = it },
-                        label = { Text("Sell at this price or better (\u00A2)") },
-                        placeholder = { Text("e.g. 85") },
-                        suffix = { Text("\u00A2") },
-                        singleLine = true,
-                        isError = draft.isNotBlank() && !valid,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        modifier = Modifier.fillMaxWidth(),
+                    Text(
+                        "Sell at this price or better (\u00A2)",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    LimitPriceSlider(
+                        draft = draft,
+                        onDraft = { draft = it },
+                        markCents = bidCents,
+                        markLabel = "bid",
+                        fallback = bidCents ?: 50.0,
+                        picks = LimitOrder.SELL_PICKS,
+                        tone = Poly.colors.down,
+                        onTone = OnDownFill,
+                        fillRight = true,
                     )
                     Text(
                         when {

@@ -75,7 +75,7 @@ import kotlin.math.roundToInt
 
 // Text colour on the green / red fills (the same dark tones as the web dashboard's Buy / Sell buttons).
 private val OnUpFill = Color(0xFF06281C)
-private val OnDownFill = Color(0xFF2A0A10)
+internal val OnDownFill = Color(0xFF2A0A10)
 
 private fun usdText(amount: Double): String = "$" + String.format(Locale.US, "%.2f", amount).removeSuffix(".00")
 
@@ -628,7 +628,7 @@ private fun ActiveLimitRow(tag: String, tagColor: Color, text: String, onRemove:
  * ("this price or higher" for a sell); otherwise the left part is filled ("this price or lower" for a buy).
  */
 @Composable
-private fun LimitPriceSlider(
+internal fun LimitPriceSlider(
     draft: String,
     onDraft: (String) -> Unit,
     markCents: Double?,
