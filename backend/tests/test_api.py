@@ -162,6 +162,7 @@ async def test_stop_during_live_start_cannot_be_overridden_by_late_validation():
     bot._status = "STOPPED"
     bot._mode = "live"
     bot._kill_switch = False
+    bot._live_armed = False
     bot._started_at = None
     bot._market = None
     bot._risk_halt_reason = None

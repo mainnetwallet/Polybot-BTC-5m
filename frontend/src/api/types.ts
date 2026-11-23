@@ -248,6 +248,8 @@ export interface Snapshot {
   bot: {
     status: "RUNNING" | "STOPPED";
     mode: Mode;
+    /** one-tap / limits / sell now work (no kill switch, live unlocked); they do not need the bot started */
+    manual_ready?: boolean;
     kill_switch: boolean;
     started_at: string | null;
     risk_halt: string | null;

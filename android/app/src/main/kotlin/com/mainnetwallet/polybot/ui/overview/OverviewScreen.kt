@@ -156,7 +156,7 @@ fun OverviewScreen(modifier: Modifier = Modifier) {
                             sellable = snap.sellable,
                             buyLimits = snap.buyLimits,
                             sellLimits = snap.limits,
-                            canSet = snap.bot.running && !snap.bot.killSwitch && (snap.market?.remainingSeconds ?: 0.0) > 0.0,
+                            canSet = snap.bot.manualOk && !snap.bot.killSwitch && (snap.market?.remainingSeconds ?: 0.0) > 0.0,
                             minUsd = snap.tap?.minUsdc ?: 1.0,
                             maxUsd = snap.tap?.maxUsdc ?: 100.0,
                             onSetBuy = { side, price, amount ->
@@ -184,7 +184,7 @@ fun OverviewScreen(modifier: Modifier = Modifier) {
                     downBook = snap.books.down,
                     selling = selling,
                     limits = snap.limits,
-                    canSetLimit = snap.bot.running && !snap.bot.killSwitch && (snap.market?.remainingSeconds ?: 0.0) > 0.0,
+                    canSetLimit = snap.bot.manualOk && !snap.bot.killSwitch && (snap.market?.remainingSeconds ?: 0.0) > 0.0,
                     onSetLimit = { h, price ->
                         scope.launch { ui.report(repo.setLimit(h.marketId, h.side, h.stage, price)) }
                     },

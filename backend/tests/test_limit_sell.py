@@ -194,12 +194,21 @@ async def test_bot_limit_is_refused_when_stopped_killed_ended_or_out_of_range():
     with pytest.raises(BotError, match="stage"):
         await bot.set_limit(market.market_id, "UP", 5, 0.8)
     bot._kill_switch = True
-    with pytest.raises(BotError, match="running"):
+    with pytest.raises(BotError, match="kill switch"):
         await bot.set_limit(market.market_id, "UP", TAP, 0.8)
     bot._kill_switch = False
-    bot._status = "STOPPED"
-    with pytest.raises(BotError, match="running"):
-        await bot.set_limit(market.market_id, "UP", TAP, 0.8)
+
+
+async def test_bot_limit_sell_fires_with_the_bot_stopped_and_survives_an_operator_stop():
+    market, bot, books = _setup()
+    await bot.tap_buy(market.market_id, "UP", 5.0)
+    await bot.set_limit(market.market_id, "UP", TAP, 0.80)
+    await bot.stop_bot("operator")  # the stop button: only the strategy stops
+    assert bot._status == "STOPPED" and len(bot._limits) == 1
+    _set_bid(bot, books, market, "UP", 0.90)
+    await _run_limits(bot)
+    assert len(_sell_orders(bot)) == 1  # sold although the bot is stopped
+    assert bot._limits == {}
 
 
 async def test_bot_stopping_drops_every_limit_so_nothing_fires_later():

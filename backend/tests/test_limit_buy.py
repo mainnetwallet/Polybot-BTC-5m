@@ -248,3 +248,24 @@ async def test_bot_slow_limit_sell_does_not_hold_back_a_due_limit_buy():
     assert _buy_orders(bot), "the buy limit never fired"
     assert time.monotonic() - started < 0.5  # it did not wait for the 0.8 s sell
     await asyncio.gather(*list(bot._limit_jobs))
+
+
+async def test_bot_limit_buy_fires_with_the_bot_stopped():
+    market, bot, books = _setup(up_ask=0.60, down_ask=0.40)
+    await bot.set_buy_limit(market.market_id, "UP", 0.50, 2.0)
+    await bot.stop_bot("operator")
+    assert bot._status == "STOPPED" and len(bot._buy_limits) == 1  # a plain stop keeps the operator's limit buy
+    _set_ask(bot, books, market, "UP", 0.48)
+    await _run_limits(bot)
+    assert len(_buy_orders(bot)) == 1
+    assert bot._buy_limits == {}
+
+
+async def test_bot_kill_switch_drops_the_limit_buys_and_sells():
+    market, bot, books = _setup(up_ask=0.60, down_ask=0.40)
+    await bot.set_buy_limit(market.market_id, "UP", 0.50, 2.0)
+    await bot.set_kill_switch(True)
+    assert bot._buy_limits == {} and bot._limits == {}
+    _set_ask(bot, books, market, "UP", 0.48)
+    await _run_limits(bot)
+    assert _buy_orders(bot) == []

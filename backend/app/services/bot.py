@@ -125,11 +125,16 @@ class TradingBot:
             self._executor_for,
             self.logs,
             submission_allowed=self._can_submit,
+            manual_submission_allowed=self._manual_can_submit,
         )
 
         self._status = "STOPPED"
         self._mode = "paper"
         self._kill_switch = False
+        # Live manual trading (one-tap, limits, sell now) works with the bot STOPPED, but only after the live
+        # gate was passed in this process (mode switch to live or a bot start). Never true after a restart,
+        # a kill switch or a switch to paper.
+        self._live_armed = False
         self._started_at: datetime | None = None
         self._lock = asyncio.Lock()
         self._stop_generation = 0
@@ -207,6 +212,27 @@ class TradingBot:
             and self._risk_halt_reason is None
         )
 
+    def _manual_ready(self) -> bool:
+        """Manual trading (one-tap buy, limit buy / sell, sell now) does not need the bot to be started.
+
+        It needs: no kill switch and, in live mode, the live gate passed in this process (`_live_armed`:
+        switching to live or starting the bot). The strategy (stages, take-profit, stop-loss) still needs RUNNING.
+        """
+        if self._kill_switch:
+            return False
+        if self._mode == "live" and not self._live_armed:
+            return False
+        return True
+
+    def _manual_blocked_message(self) -> str:
+        if self._kill_switch:
+            return "the kill switch is active: clear it first"
+        return "live trading is not unlocked: switch to live mode (with the confirmation phrase) or start the bot once"
+
+    def _manual_can_submit(self, mode: str) -> bool:
+        # The strategy's risk halt (daily loss limit) does not stop the operator's own manual buys.
+        return mode == self._mode and self._manual_ready()
+
     def _schedule_background(self, fn, *args) -> None:
         task = asyncio.create_task(asyncio.to_thread(fn, *args))
         self._background_tasks.add(task)
@@ -234,6 +260,7 @@ class TradingBot:
             self._kill_switch = bool(state.kill_switch)
             self._load_buys_state(session)
             self._status = "STOPPED"
+            self._live_armed = False
             self._started_at = None
             self._market = None
             self._evaluation = None
@@ -431,8 +458,7 @@ class TradingBot:
         # The operator's limit sells are watched right here too, on the same book event.
         if (
             (self._limits or self._buy_limits)
-            and self._status == "RUNNING"
-            and not self._kill_switch
+            and self._manual_ready()
             and (self._limit_due(market_id) or self._buy_limit_due(market_id))
         ):
             self._dispatch_limits()
@@ -523,7 +549,7 @@ class TradingBot:
             while self._limit_dirty:
                 self._limit_dirty = False
                 market = self._market
-                if market is None or self._status != "RUNNING" or self._kill_switch:
+                if market is None or not self._manual_ready():
                     return
                 now_ms = int(time.time() * 1000)
                 for key, entry in list(self._limits.items()):
@@ -586,7 +612,7 @@ class TradingBot:
         if handle is not None:
             handle.cancel()
             self._limit_wakeup_handle = None
-        if not waits or self._status != "RUNNING":
+        if not waits or not self._manual_ready():
             return
         delay = max(0.01, min(waits) / 1000.0)
         self._limit_wakeup_handle = asyncio.get_running_loop().call_later(delay, self._dispatch_limits)
@@ -692,8 +718,8 @@ class TradingBot:
         shares exist (one-tap), changed or removed at any time, and a manual "Sell" still works at once.
         """
         market = self._market
-        if self._status != "RUNNING" or self._kill_switch:
-            raise BotError("the bot must be running to set a limit")
+        if not self._manual_ready():
+            raise BotError(self._manual_blocked_message())
         if market is None or market.market_id != market_id or market.remaining_seconds() <= 0:
             raise BotError("this market has ended: wait for the next one")
         if side not in {"UP", "DOWN"}:
@@ -857,8 +883,8 @@ class TradingBot:
         be changed or removed at any time. Like a one-tap buy it is manual: no stage rules, no strategy risk limits.
         """
         market = self._market
-        if self._status != "RUNNING" or self._kill_switch:
-            raise BotError("the bot must be running to set a limit")
+        if not self._manual_ready():
+            raise BotError(self._manual_blocked_message())
         if market is None or market.market_id != market_id or market.remaining_seconds() <= 0:
             raise BotError("this market has ended: wait for the next one")
         if side not in {"UP", "DOWN"}:
@@ -1616,6 +1642,7 @@ class TradingBot:
             if self._stop_generation != start_generation or self._kill_switch:
                 raise BotError("start request was canceled by a stop or kill switch")
             self._status = "RUNNING"
+            self._live_armed = self._mode == "live"
             self._started_at = utcnow()
             with session_scope() as session:
                 state = session.get(AppState, 1)
@@ -1701,6 +1728,9 @@ class TradingBot:
             self._mode = "paper"
             self._kill_switch = False
             self._status = "STOPPED"
+            self._live_armed = False
+            self._limits.clear()
+            self._buy_limits.clear()
             self._started_at = None
             self._evaluation = None
             self._last_order = None
@@ -1732,9 +1762,12 @@ class TradingBot:
 
     async def stop_bot(self, reason: str = "operator") -> dict:
         self._stop_generation += 1
-        # a stopped bot (stop button, kill switch, mode switch) fires nothing later on its own
-        self._limits.clear()
-        self._buy_limits.clear()
+        # A plain stop only stops the strategy: the operator's limits and manual buys / sells keep working.
+        # Anything else (kill switch, shutdown) drops them, so they can never fire later on their own.
+        if reason != "operator":
+            self._limits.clear()
+            self._buy_limits.clear()
+            self._live_armed = False
         self.live_engine.block_new_orders()
         async with self._lock:
             was_running = self._status == "RUNNING"
@@ -1762,6 +1795,10 @@ class TradingBot:
                     payload={"mode": self._mode},
                     mode=self._mode,
                 )
+            if self._mode == "live" and self._live_armed and not self._kill_switch:
+                # fenced above while queued strategy orders drained; the strategy stays off (status STOPPED),
+                # manual orders may go out again
+                self.live_engine.allow_new_orders()
         await self._broadcast_state()
         return await self.snapshot()
 
@@ -1787,6 +1824,18 @@ class TradingBot:
             gate = await self._live_gate(mode, confirm_live, confirmation_phrase, validate=True)
             previous = self._mode
             self._mode = mode
+            # limits belong to the mode they were set in
+            self._limits.clear()
+            self._buy_limits.clear()
+            self._live_armed = mode == "live"
+            if mode == "live":
+                self.live_engine.allow_new_orders()
+                if self._market is not None:
+                    await self.live_engine.prewarm(
+                        [self._market.up_token_id, self._market.down_token_id], self._market.market_id
+                    )
+            else:
+                self.live_engine.block_new_orders()
             with session_scope() as session:
                 state = session.get(AppState, 1)
                 if state:
@@ -1843,8 +1892,8 @@ class TradingBot:
         risk halt (selling only reduces exposure), but it needs the bot running with an open market.
         """
         market = self._market
-        if self._status != "RUNNING" or self._kill_switch:
-            raise BotError("the bot must be running to sell")
+        if not self._manual_ready():
+            raise BotError(self._manual_blocked_message())
         if market is None or market.market_id != market_id or market.remaining_seconds() <= 0:
             raise BotError("this market has ended: its shares settle automatically")
         self.logs.log(
@@ -1898,8 +1947,8 @@ class TradingBot:
         when none is sent; a floor of 0 turns the check off.
         """
         market = self._market
-        if self._status != "RUNNING" or self._kill_switch:
-            raise BotError("the bot must be running to buy")
+        if not self._manual_ready():
+            raise BotError(self._manual_blocked_message())
         if market is None or market.market_id != market_id or market.remaining_seconds() <= 0:
             raise BotError("this market has ended: wait for the next one")
         limit = float(getattr(self.settings, "tap_buy_max_usdc", 100.0))
@@ -1953,8 +2002,8 @@ class TradingBot:
         (no bid, a sell already in progress) the others still go through and the rest is reported back.
         """
         market = self._market
-        if self._status != "RUNNING" or self._kill_switch:
-            raise BotError("the bot must be running to sell")
+        if not self._manual_ready():
+            raise BotError(self._manual_blocked_message())
         if market is None or market.market_id != market_id or market.remaining_seconds() <= 0:
             raise BotError("this market has ended: its shares settle automatically")
         self.logs.log(
@@ -2703,8 +2752,7 @@ class TradingBot:
             market.market_id
             if market is not None
             and market.remaining_seconds() > 0
-            and self._status == "RUNNING"
-            and not self._kill_switch
+            and self._manual_ready()
             else None
         )
         db = await asyncio.to_thread(self._snapshot_db, mode, marks, sellable_market_id)
@@ -2749,6 +2797,7 @@ class TradingBot:
             "bot": {
                 "status": self._status,
                 "mode": self._mode,
+                "manual_ready": self._manual_ready(),
                 "kill_switch": self._kill_switch,
                 "started_at": iso_z(self._started_at),
                 "risk_halt": risk_halt,

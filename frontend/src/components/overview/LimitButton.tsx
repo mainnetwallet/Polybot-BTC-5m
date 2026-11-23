@@ -42,7 +42,7 @@ export function LimitButton({
   const marketId = market?.market_id ?? null;
   const active = snapshot.limits?.find((l) => l.market_id === marketId && l.side === side && l.stage === stage) ?? null;
   const bid = (side === "UP" ? snapshot.books.up : snapshot.books.down)?.best_bid ?? null;
-  const canSet = snapshot.bot.status === "RUNNING" && !snapshot.bot.kill_switch && !!market && market.remaining_seconds > 0;
+  const canSet = (snapshot.bot.manual_ready ?? snapshot.bot.status === "RUNNING") && !snapshot.bot.kill_switch && !!market && market.remaining_seconds > 0;
   const label = stage === TAP_STAGE ? "One-tap" : `Stage ${stage}`;
 
   const parsed = parseCents(draft);

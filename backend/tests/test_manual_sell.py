@@ -97,10 +97,10 @@ async def test_bot_manual_sell_errors_when_stopped_or_market_ended():
 
     market = make_market(remaining=150)
     bot = _running_bot(market, btc=(100_150.0, 100_000.0, ""))
-    with pytest.raises(BotError, match="running"):
-        bot._status = "STOPPED"
+    with pytest.raises(BotError, match="kill switch"):
+        bot._kill_switch = True
         await bot.manual_sell(market.market_id, "UP", 0)
-    bot._status = "RUNNING"
+    bot._kill_switch = False
     with pytest.raises(BotError, match="ended"):
         await bot.manual_sell("some-other-market", "UP", 0)
 
@@ -191,6 +191,6 @@ async def test_bot_manual_sell_all_sells_everything_and_errors_when_nothing_is_h
         await bot.manual_sell_all(market.market_id)
     with pytest.raises(BotError, match="ended"):
         await bot.manual_sell_all("some-other-market")
-    bot._status = "STOPPED"
-    with pytest.raises(BotError, match="running"):
+    bot._kill_switch = True
+    with pytest.raises(BotError, match="kill switch"):
         await bot.manual_sell_all(market.market_id)

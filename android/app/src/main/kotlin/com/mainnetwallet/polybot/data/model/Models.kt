@@ -286,8 +286,12 @@ data class BotState(
     @SerialName("kill_switch") val killSwitch: Boolean = false,
     @SerialName("started_at") val startedAt: String? = null,
     @SerialName("risk_halt") val riskHalt: String? = null,
+    @SerialName("manual_ready") val manualReady: Boolean? = null,
 ) {
     val running: Boolean get() = status == "RUNNING"
+
+    /** One-tap, limits and sell-now do not need the bot started (older servers: fall back to running). */
+    val manualOk: Boolean get() = manualReady ?: running
     val isLive: Boolean get() = mode == Modes.LIVE
 }
 

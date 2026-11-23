@@ -63,7 +63,7 @@ export function LimitOrderButton({ className }: { className?: string }) {
   const buyLimits = (snapshot.buy_limits ?? []).filter((l) => l.market_id === marketId);
   const sellLimits = (snapshot.limits ?? []).filter((l) => l.market_id === marketId);
   const activeCount = buyLimits.length + sellLimits.length;
-  const canSet = snapshot.bot.status === "RUNNING" && !snapshot.bot.kill_switch && !!market && market.remaining_seconds > 0;
+  const canSet = (snapshot.bot.manual_ready ?? snapshot.bot.status === "RUNNING") && !snapshot.bot.kill_switch && !!market && market.remaining_seconds > 0;
 
   const bookOf = (s: Side) => (s === "UP" ? snapshot.books.up : snapshot.books.down);
   const sellLimitOf = (t: SellTarget) => sellLimits.find((l) => l.side === t.side && l.stage === t.stage);

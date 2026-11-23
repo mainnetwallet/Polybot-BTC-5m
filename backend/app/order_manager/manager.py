@@ -128,6 +128,7 @@ class OrderManager:
         executor_provider: ExecutorProvider,
         logs: LogService,
         submission_allowed: SubmissionAllowed | None = None,
+        manual_submission_allowed: SubmissionAllowed | None = None,
     ) -> None:
         self._settings = settings
         self._runtime = runtime
@@ -136,6 +137,8 @@ class OrderManager:
         self._executor_provider = executor_provider
         self._logs = logs
         self._submission_allowed = submission_allowed or (lambda _mode: True)
+        # One-tap buys and limit buys (manual) do not need the strategy to be running
+        self._manual_submission_allowed = manual_submission_allowed or self._submission_allowed
         self._lock = asyncio.Lock()
         # One lock per exit stage: a stop-loss must not queue behind an entry order (self._lock)
         # or behind another stage's sell that is still waiting for the exchange.
@@ -1215,7 +1218,7 @@ class OrderManager:
             now_s = time.monotonic()
             if now_s - self._tap_last_s < TAP_COOLDOWN_S:
                 return OrderResult(None, side, "BLOCKED", "tap_cooldown")
-            if not self._submission_allowed(mode):
+            if not self._manual_submission_allowed(mode):
                 return OrderResult(None, side, "BLOCKED", "bot_not_accepting_orders")
             token_id = market.token_for(side)
             book = books.get(token_id)

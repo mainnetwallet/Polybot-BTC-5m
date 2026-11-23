@@ -273,14 +273,38 @@ async def test_bot_tap_buy_refuses_a_stopped_bot_a_bad_amount_too_little_balance
     with pytest.raises(BotError, match="ended"):
         await bot.tap_buy("another-market", "UP", 2.0)
     bot._kill_switch = True
-    with pytest.raises(BotError, match="running"):
+    with pytest.raises(BotError, match="kill switch"):
         await bot.tap_buy(market.market_id, "UP", 2.0)
     bot._kill_switch = False
-    bot._status = "STOPPED"
-    with pytest.raises(BotError, match="running"):
-        await bot.tap_buy(market.market_id, "UP", 2.0)
     with session_scope() as session:
         assert session.execute(select(Order)).scalars().all() == []  # none of them reached the exchange path
+
+
+async def test_bot_tap_buy_works_with_the_bot_stopped_in_paper_mode():
+    market = make_market(remaining=150)
+    bot = _running_bot(market, btc=(100_150.0, 100_000.0, ""))
+    bot._status = "STOPPED"  # the strategy is off: a one-tap buy does not need it
+    bot.data._books = dict(books_for(market, up_ask=0.80, down_ask=0.40))
+    snapshot = await bot.tap_buy(market.market_id, "UP", 2.0)
+    assert snapshot["tap_buy"]["status"] == "FILLED"
+    assert snapshot["bot"]["status"] == "STOPPED"
+    assert snapshot["bot"]["manual_ready"] is True
+
+
+async def test_bot_tap_buy_in_live_mode_needs_the_live_gate_even_when_the_bot_is_stopped():
+    from app.services.bot import BotError
+
+    market = make_market(remaining=150)
+    bot = _running_bot(market, btc=(100_150.0, 100_000.0, ""))
+    bot._status = "STOPPED"
+    bot._mode = "live"  # e.g. restored from the database after a restart: the gate was not passed yet
+    assert bot._live_armed is False and bot._manual_ready() is False
+    with pytest.raises(BotError, match="not unlocked"):
+        await bot.tap_buy(market.market_id, "UP", 2.0)
+    bot._live_armed = True  # a mode switch to live / a bot start passed the gate
+    assert bot._manual_ready() is True
+    bot._kill_switch = True  # the kill switch beats everything
+    assert bot._manual_ready() is False
 
 
 async def test_bot_tap_buy_ignores_the_buy_guard_switch_because_it_is_a_manual_buy():
@@ -608,3 +632,12 @@ async def test_a_tap_buy_request_is_not_serialised_behind_the_order_lock():
     manager._executor_provider = spy_provider
     assert (await manager.tap_buy(market, books, "paper", stack["config"], "UP", 2.0)).status == "FILLED"
     assert seen == [False]  # a tap asks for no lock; strategy buys keep the default (True)
+
+
+async def test_bot_tap_buy_ignores_the_strategy_risk_halt():
+    market = make_market(remaining=150)
+    bot = _running_bot(market, btc=(100_150.0, 100_000.0, ""))
+    bot.data._books = dict(books_for(market, up_ask=0.80, down_ask=0.40))
+    bot._risk_halt_reason = "daily loss limit reached"  # the strategy is halted ...
+    snapshot = await bot.tap_buy(market.market_id, "UP", 2.0)  # ... the operator's own buy is not
+    assert snapshot["tap_buy"]["status"] == "FILLED"
