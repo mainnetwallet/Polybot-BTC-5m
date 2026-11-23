@@ -112,8 +112,8 @@ fun TapBuyCard(
     onSetEnabled: (Boolean) -> Unit,
     onSaveSettings: (amounts: List<Double>, enabled: Boolean, minAsk: Double) -> Unit,
     modifier: Modifier = Modifier,
-    /** Shown under the buy rows (the "Limit buy/sell" button lives here, next to the one-tap buy). */
-    extra: @Composable () -> Unit = {},
+    /** Shown in the header between the title and the ON / OFF button (the "Limit" pill lives here). */
+    headerExtra: @Composable () -> Unit = {},
 ) {
     val scheme = MaterialTheme.colorScheme
     val c = Poly.colors
@@ -149,6 +149,7 @@ fun TapBuyCard(
                 horizontalArrangement = Arrangement.spacedBy(Space.sm),
             ) {
                 Label("One-tap buy", Modifier.weight(1f))
+                headerExtra()
                 // The ON / OFF button of one-tap buy: one click turns it OFF, the next turns it ON.
                 // ON = tinted and outlined (green in paper, red in live), OFF = grey. The balance next to it stays plain text.
                 val modeTone = if (bot.isLive) scheme.error else c.up
@@ -275,7 +276,6 @@ fun TapBuyCard(
                             color = scheme.onSurfaceVariant,
                         )
                     }
-                    extra()
                 }
             }
         }

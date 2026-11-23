@@ -148,8 +148,8 @@ fun OverviewScreen(modifier: Modifier = Modifier) {
                             graph.prefsStore.setTapEnabled(enabled)
                         }
                     },
-                    // "Limit buy/sell" sits under the one-tap buy rows: one dialog for a limit buy and a limit sell
-                    extra = {
+                    // "Limit" pill sits in the one-tap buy header, next to ON / OFF: one dialog for a limit buy and a limit sell
+                    headerExtra = {
                         LimitOrderButton(
                             marketId = snap.market?.marketId,
                             upBook = snap.books.up,

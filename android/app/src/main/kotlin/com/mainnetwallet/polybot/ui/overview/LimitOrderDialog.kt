@@ -2,6 +2,8 @@ package com.mainnetwallet.polybot.ui.overview
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -79,7 +81,7 @@ private fun bookOf(side: String, up: BookSnapshot?, down: BookSnapshot?): BookSn
     if (side.equals("UP", ignoreCase = true)) up else down
 
 /**
- * "Limit buy/sell" button of the position card: one dialog for a limit BUY and a limit SELL, the same as the web
+ * "Limit" pill (opens the Limit buy/sell dialog) in the header of the one-tap buy card, next to its ON / OFF button: one dialog for a limit BUY and a limit SELL, the same as the web
  * dashboard. Both limits are kept by the bot (code), never placed on the exchange, so nothing has to be cancelled there.
  *  - Buy: once the best ask is at or below the limit the bot makes ONE one-tap buy of the chosen amount that never pays
  *    more than the limit, then the limit is gone. It is manual like a one-tap buy: no stage rules, no take profit / stop loss.
@@ -110,28 +112,24 @@ fun LimitOrderButton(
     val sellHere = if (marketId == null) emptyList() else sellLimits.filter { it.marketId == marketId }
     val activeCount = buyHere.size + sellHere.size
 
-    Button(
-        onClick = { open = true },
-        enabled = marketId != null && (canSet || activeCount > 0),
-        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 2.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = if (activeCount > 0) c.warnContainer else scheme.surfaceVariant,
-            contentColor = if (activeCount > 0) c.warn else scheme.onSurfaceVariant,
-        ),
+    // Small pill in the header of the one-tap buy card, the same look as its ON / OFF button:
+    // grey = no limit set, amber (with the count) = limits are waiting.
+    val usable = marketId != null && (canSet || activeCount > 0)
+    val tone = if (activeCount > 0) c.warn else scheme.onSurfaceVariant
+    val fill = if (activeCount > 0) c.warnContainer else scheme.surfaceContainerHighest
+    val edge = if (activeCount > 0) c.warn else scheme.outlineVariant
+    Text(
+        if (activeCount > 0) "Limit $activeCount" else "Limit",
+        style = Mono.small.copy(fontWeight = FontWeight.Bold),
+        color = if (usable) tone else tone.copy(alpha = 0.4f),
+        maxLines = 1,
         modifier = modifier
-            .fillMaxWidth()
-            .heightIn(min = 36.dp),
-    ) {
-        Text("Limit buy/sell", style = MaterialTheme.typography.labelLarge, maxLines = 1)
-        if (activeCount > 0) {
-            Text(
-                "  $activeCount",
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.ExtraBold,
-                maxLines = 1,
-            )
-        }
-    }
+            .clip(RoundedCornerShape(8.dp))
+            .background(fill)
+            .border(BorderStroke(1.dp, edge), RoundedCornerShape(8.dp))
+            .clickable(enabled = usable) { open = true }
+            .padding(horizontal = 8.dp, vertical = 5.dp),
+    )
 
     if (open && marketId != null) {
         LimitOrderDialog(
