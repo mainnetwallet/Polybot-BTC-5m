@@ -182,7 +182,7 @@ private fun LimitOrderDialog(
     var buyMode by remember { mutableStateOf(true) }
     var side by remember { mutableStateOf("UP") }
     var buyDraft by remember { mutableStateOf(firstUpBuy?.let { LimitOrder.centsText(it.price) }.orEmpty()) }
-    var usd by remember { mutableStateOf(firstUpBuy?.let { Fmt.plain(it.amount) } ?: "10") }
+    var usd by remember { mutableStateOf(firstUpBuy?.let { Fmt.plain(it.amount) } ?: "1") }
     var selKey by remember { mutableStateOf<String?>(null) }
     var sellDrafts by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
 
