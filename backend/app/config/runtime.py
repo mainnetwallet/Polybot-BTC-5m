@@ -162,7 +162,8 @@ class RuntimeSettings(BaseModel):
     #   cost <  stage0_mid_from_ask   -> stage0_take_profit_pct_low  (default 0.60-0.70 buy -> +15 %)
     #   cost <  stage0_high_from_ask  -> stage0_take_profit_pct_mid  (default 0.70-0.80 buy -> +10 %)
     #   otherwise                     -> stage0_take_profit_pct_high (default 0.80-0.85 buy -> +5 %)
-    # 0 = no take-profit for that tier (held to settlement).
+    # 0 = no take-profit for that tier (held to settlement). These are this model's own fallbacks; the app's
+    # Settings (.env) default to +10 / +7 / +5 % with the tiers at 0.80 / 0.85.
     stage0_mid_from_ask: float = Field(default=0.70, ge=0.01, le=0.999)
     stage0_high_from_ask: float = Field(default=0.80, ge=0.01, le=0.999)
     stage0_take_profit_pct_low: float = Field(default=15.0, ge=0.0, le=500.0)
@@ -180,7 +181,7 @@ class RuntimeSettings(BaseModel):
     stage2_sell_enabled: bool = False
     stage2_sell_price: float = Field(default=0.99, ge=0.02, le=0.999)
     # Stop-loss in percent below the average buy price (0 = off). Off when a RuntimeSettings is built
-    # directly; the app's Settings (.env) sets 70 / 18 / 10 / 5 for stages 0 / 1 / 2 / 3.
+    # directly; the app's Settings (.env) sets 60 / 18 / 10 / 5 for stages 0 / 1 / 2 / 3.
     stage0_stop_loss_pct: float = Field(default=0.0, ge=0.0, le=99.0)
     stage1_stop_loss_pct: float = Field(default=0.0, ge=0.0, le=99.0)
     stage2_stop_loss_pct: float = Field(default=0.0, ge=0.0, le=99.0)
@@ -267,6 +268,17 @@ class RuntimeSettings(BaseModel):
             raise ValueError(
                 "stage2_sell_price must be at least 0.01 above stage2_max_ask, "
                 "or a stage 2 take-profit could sell at or below its buy price"
+            )
+        # max_execution_price caps every buy, so the highest price a stage can really pay is the lower of the two
+        if self.stage1_sell_enabled and self.stage1_sell_price_high < min(self.stage1_max_ask, self.max_execution_price) + 0.005 - 1e-9:
+            raise ValueError(
+                "stage1_sell_price_high must be above stage1_max_ask (by at least 0.005), "
+                "or a stage 1 take-profit could sell at or below its buy price"
+            )
+        if self.stage0_enabled and self.stage0_sell_cap_price < min(self.stage0_max_ask, self.max_execution_price) + 0.005 - 1e-9:
+            raise ValueError(
+                "stage0_sell_cap_price must be above stage0_max_ask (by at least 0.005), "
+                "or a stage 0 take-profit could sell at or below its buy price"
             )
         return self
 

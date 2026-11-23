@@ -372,10 +372,16 @@ class Portfolio:
         return rows if include_tap else [p for p in rows if p.tag != TAP_TAG]
 
     def realized_today(self, session: Session, mode: str, include_tap: bool = True) -> float:
+        floor = self.daily_floor(session, mode)
+        # A closed position counts in full. A position that is still open has already banked the PnL of
+        # its partial sells (e.g. stage 1 stopped out while stage 2 shares are still held): that loss is
+        # real, so it counts too. Its unrealized part is never included here.
         query = select(func.coalesce(func.sum(Position.realized_pnl), 0.0)).where(
             Position.mode == mode,
-            Position.status == "closed",
-            Position.closed_at >= self.daily_floor(session, mode),
+            or_(
+                and_(Position.status == "closed", Position.closed_at >= floor),
+                and_(Position.status == "open", Position.updated_at >= floor),
+            ),
         )
         if not include_tap:
             query = query.where(Position.tag != TAP_TAG)

@@ -154,10 +154,15 @@ def _encode(event: dict) -> str:
 
 
 def build_ws_router(
-    hub: RealtimeHub, snapshot_factory, api_token: str = "", auth=None, cors_origins: list[str] | None = None
+    hub: RealtimeHub,
+    snapshot_factory,
+    api_token: str = "",
+    auth=None,
+    cors_origins: list[str] | None = None,
+    trusted_hosts: list[str] | None = None,
 ) -> APIRouter:
     router = APIRouter()
-    origin_allowed = build_origin_checker(cors_origins or [])
+    origin_allowed = build_origin_checker(cors_origins or [], trusted_hosts)
 
     @router.websocket("/api/ws")
     async def websocket_endpoint(websocket: WebSocket) -> None:

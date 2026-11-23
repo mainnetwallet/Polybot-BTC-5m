@@ -63,7 +63,7 @@ def build_router(
                 return
         raise HTTPException(status_code=401, detail="Authentication required")
 
-    reject_cross_site = build_cross_site_guard(settings.cors_origin_list)
+    reject_cross_site = build_cross_site_guard(settings.cors_origin_list, settings.host_allowlist)
 
     # /health stays open so uptime monitors keep working; everything else needs the token.
     public = APIRouter(prefix="/api")

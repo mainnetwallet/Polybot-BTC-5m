@@ -1124,8 +1124,9 @@ class OrderManager:
     async def handle_exits(
         self, market: MarketInfo, books: dict[str, OrderBook], mode: str, config
     ) -> list[OrderResult]:
-        """Exit sells: take-profit for stage 0 (15 / 10 / 5 % above the buy price), stage 1 (0.95 / 0.99 by cost) and stage 2 (0.99)
-        shares, and a stop-loss (percent below the buy price) for the shares of every stage 0-3."""
+        """Exit sells: take-profit for stage 0 (a percentage above the buy price by cost tier, capped at stage0_sell_cap_price),
+        stage 1 (a percentage above cost up to stage1_sell_max_buy, otherwise stage1_sell_price_high) and stage 2
+        (stage2_sell_price) shares, and a stop-loss (percent below the buy price) for the shares of every stage 0-3."""
         if market.remaining_seconds() <= 0:
             return []
         # Stages run side by side: a slow sell of one stage must not delay another stage's stop-loss.
