@@ -7,13 +7,16 @@ Secrets are never overridable from the API.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, ValidationError, model_validator
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.config.settings import Settings
+
+logger = logging.getLogger(__name__)
 
 OVERRIDABLE_KEYS = (
     "stage1_threshold",
@@ -506,11 +509,12 @@ class SettingsService:
         if changed:
             session.commit()
 
-    def get(self) -> RuntimeSettings:
+    def _merged(self, with_overrides: bool = True) -> dict[str, Any]:
         merged: dict[str, Any] = {}
         for key in OVERRIDABLE_KEYS:
             merged[key] = getattr(self._settings, key)
-        merged.update(self._overrides)
+        if with_overrides:
+            merged.update(self._overrides)
         merged.update(
             paper_fill_ratio=self._settings.paper_fill_ratio,
             paper_fee_exponent=self._settings.paper_fee_exponent,
@@ -519,7 +523,19 @@ class SettingsService:
             live_credentials_present=self._settings.live_credentials_present,
             geo_verified=self._settings.polymarket_geo_verified,
         )
-        return RuntimeSettings(**merged)
+        return merged
+
+    def get(self) -> RuntimeSettings:
+        try:
+            return RuntimeSettings(**self._merged())
+        except ValidationError as exc:
+            # Saved dashboard values that a newer validation rule rejects must not lock the owner out of the
+            # Settings page (update() would fail too). Fall back to the .env values until they are corrected.
+            logger.error(
+                "Saved dashboard settings are invalid (%s); using the .env values until they are fixed in Settings.",
+                "; ".join(str(e.get("msg", "")) for e in exc.errors())[:300],
+            )
+            return RuntimeSettings(**self._merged(with_overrides=False))
 
     def update(self, session: Session, changes: dict[str, Any]) -> RuntimeSettings:
         from app.database.models import BotSetting
@@ -527,7 +543,8 @@ class SettingsService:
         clean = {k: v for k, v in changes.items() if k in OVERRIDABLE_KEYS and v is not None}
         if not clean:
             raise ValueError("no supported settings supplied")
-        candidate = self.get().model_dump()
+        # Built from the raw saved values (not get()), so a change that repairs an invalid saved value is accepted.
+        candidate = self._merged()
         candidate.update(clean)
         RuntimeSettings(**candidate)  # validate before persisting
 

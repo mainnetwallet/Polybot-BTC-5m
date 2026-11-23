@@ -162,3 +162,25 @@ async def test_uma_resolved_market_settles_at_099(monkeypatch):
     market = make_market(remaining=-30.0)
     discovery = _discovery_with_gamma(monkeypatch, market, [0.995, 0.005], uma_status="resolved")
     assert (await discovery._gamma_resolution(market)).outcome == "UP"
+
+
+def test_invalid_saved_override_does_not_lock_out_settings():
+    """A saved value that a newer rule rejects falls back to .env and can still be corrected via update()."""
+    from app.config.runtime import SettingsService
+    from app.config.settings import Settings
+
+    svc = SettingsService(Settings(_env_file=None))
+    svc._overrides = {"stage0_sell_cap_price": 0.50}  # at/below the stage 0 buy limit: now invalid
+    assert svc.get().stage0_sell_cap_price != 0.50  # falls back instead of raising
+
+    class _Session:
+        def get(self, *_):
+            return None
+
+        def add(self, *_):
+            pass
+
+        def commit(self):
+            pass
+
+    assert svc.update(_Session(), {"stage0_sell_cap_price": 0.98}).stage0_sell_cap_price == 0.98
