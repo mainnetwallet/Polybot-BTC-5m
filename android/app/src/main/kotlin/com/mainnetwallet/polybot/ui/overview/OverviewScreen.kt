@@ -114,19 +114,13 @@ fun OverviewScreen(modifier: Modifier = Modifier) {
                     },
                 )
                 HeroCard(snap.market, snap.btc, history.btc, snap.account, snap.strategy.inWindow, snap.strategy, marketEndMs)
-                OddsCard(
-                    up = snap.books.up,
-                    down = snap.books.down,
-                    upArmed = snap.strategy.upArmed,
-                    downArmed = snap.strategy.downArmed,
-                    upHistory = history.up,
-                    downHistory = history.down,
-                )
                 TapBuyCard(
                     market = snap.market,
                     bot = snap.bot,
                     up = snap.books.up,
                     down = snap.books.down,
+                    upArmed = snap.strategy.upArmed,
+                    downArmed = snap.strategy.downArmed,
                     balance = snap.account.balance,
                     amounts = prefs?.tapAmounts ?: DEFAULT_TAP_AMOUNTS,
                     limits = snap.tap,

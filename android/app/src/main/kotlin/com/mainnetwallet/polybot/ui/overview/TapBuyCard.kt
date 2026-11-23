@@ -52,6 +52,7 @@ import com.mainnetwallet.polybot.data.model.MarketSnapshot
 import com.mainnetwallet.polybot.data.model.TAP_MIN_ASK_DEFAULT
 import com.mainnetwallet.polybot.data.model.TapLimits
 import com.mainnetwallet.polybot.ui.Fmt
+import com.mainnetwallet.polybot.ui.components.FlashBackground
 import com.mainnetwallet.polybot.ui.components.Label
 import com.mainnetwallet.polybot.ui.theme.Mono
 import com.mainnetwallet.polybot.ui.theme.Poly
@@ -99,6 +100,8 @@ fun TapBuyCard(
     bot: BotState,
     up: BookSnapshot?,
     down: BookSnapshot?,
+    upArmed: Boolean = false,
+    downArmed: Boolean = false,
     balance: Double,
     amounts: List<Double>,
     limits: TapLimits?,
@@ -209,10 +212,12 @@ fun TapBuyCard(
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
                             val selected = selectedSide == side
-                            // tap the side to select it (the other one is deselected); tap it again to deselect
+                            // tap the side to select it (the other one is deselected); tap it again to deselect.
+                            // The tile also carries the price (best ask), the bid and the ARMED flag, so the separate odds card is gone.
+                            val armed = if (isUp) upArmed else downArmed
                             Column(
                                 Modifier
-                                    .width(70.dp)
+                                    .width(100.dp)
                                     .heightIn(min = 48.dp)
                                     .clip(RoundedCornerShape(10.dp))
                                     .background(if (selected) container else scheme.surfaceContainer)
@@ -221,22 +226,47 @@ fun TapBuyCard(
                                         RoundedCornerShape(10.dp),
                                     )
                                     .clickable { selectedSide = tapSideSelection(selectedSide, side) }
-                                    .padding(horizontal = 4.dp, vertical = 4.dp),
+                                    .padding(horizontal = 6.dp, vertical = 3.dp),
                                 verticalArrangement = Arrangement.Center,
-                                horizontalAlignment = Alignment.CenterHorizontally,
                             ) {
-                                Text(
-                                    if (isUp) "UP" else "DOWN",
-                                    style = Mono.body.copy(fontWeight = FontWeight.Bold, fontSize = 16.sp),
-                                    color = if (selected) tone else tone.copy(alpha = 0.6f),
-                                    maxLines = 1,
-                                )
-                                Text(
-                                    if (ask == null) "--" else Fmt.centsShort(ask),
-                                    style = Mono.small.copy(fontSize = 12.sp),
-                                    color = if (tooLow) scheme.tertiary else scheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                )
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        if (isUp) "UP" else "DOWN",
+                                        style = Mono.body.copy(fontWeight = FontWeight.Bold, fontSize = 13.sp),
+                                        color = if (selected) tone else tone.copy(alpha = 0.6f),
+                                        maxLines = 1,
+                                    )
+                                    Spacer(Modifier.weight(1f))
+                                    Text(
+                                        "bid " + Fmt.num(book?.bestBid?.times(100.0), 0),
+                                        style = Mono.small.copy(fontSize = 11.sp),
+                                        color = scheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                    )
+                                }
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    FlashBackground(ask) {
+                                        Text(
+                                            Fmt.cents(ask),
+                                            style = Mono.large.copy(fontSize = 17.sp),
+                                            color = if (tooLow) scheme.tertiary else tone,
+                                            maxLines = 1,
+                                        )
+                                    }
+                                    Spacer(Modifier.weight(1f))
+                                    if (armed) {
+                                        Text(
+                                            "ARMED",
+                                            style = Mono.small.copy(fontWeight = FontWeight.Bold, fontSize = 9.sp),
+                                            color = c.warn,
+                                            maxLines = 1,
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(50))
+                                                .background(c.warnContainer)
+                                                .padding(horizontal = 5.dp, vertical = 1.dp),
+                                        )
+                                    }
+                                }
                             }
                             amounts.forEach { amount ->
                                 val key = "$side:$amount"

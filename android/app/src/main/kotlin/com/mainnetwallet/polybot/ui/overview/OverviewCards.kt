@@ -136,9 +136,20 @@ private fun MiniStat(
     valueColor: Color = Color.Unspecified,
     hint: String? = null,
     compact: Boolean = false,
+    /** Small one-line caps label, so five stats fit in one row (the position box keeps the normal label). */
+    tinyLabel: Boolean = false,
 ) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(if (compact) 0.dp else 1.dp)) {
-        Label(label)
+        if (tinyLabel) {
+            Text(
+                label.uppercase(),
+                style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.2.sp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+            )
+        } else {
+            Label(label)
+        }
         Text(
             value,
             style = Mono.body.copy(fontWeight = FontWeight.Medium, fontSize = if (compact) 13.sp else 14.sp),
@@ -390,35 +401,13 @@ fun HeroCard(
                     reference = btc?.priceToBeat?.toFloat(),
                     description = "BTC price chart",
                 )
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(1.dp)
-                        .background(scheme.outlineVariant.copy(alpha = 0.6f)),
-                )
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(Space.sm),
-                    verticalAlignment = Alignment.Bottom,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Label("Balance")
-                        Text(Fmt.usdGrouped(account.balance), style = Mono.large.copy(fontSize = 17.sp), maxLines = 1)
-                    }
-                    Column(Modifier.weight(1f), horizontalAlignment = Alignment.End) {
-                        Label("Daily PnL")
-                        Text(
-                            Fmt.signedUsd(account.dailyPnl),
-                            style = Mono.large.copy(fontSize = 17.sp),
-                            color = pnlColor(account.dailyPnl),
-                            maxLines = 1,
-                        )
-                    }
-                }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
-                    MiniStat("Realized", Fmt.signedUsd(account.realizedPnl), Modifier.weight(1f), valueColor = pnlColor(account.realizedPnl))
-                    MiniStat("Unrealized", Fmt.signedUsd(account.unrealizedPnl), Modifier.weight(1f), valueColor = pnlColor(account.unrealizedPnl))
-                    MiniStat("Trades", account.tradesToday.toString(), Modifier.weight(1f))
+                // all five account numbers in one row (the price card and the second stats row are gone)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    MiniStat("Balance", Fmt.usdGrouped(account.balance), Modifier.weight(1.25f), compact = true, tinyLabel = true)
+                    MiniStat("Daily", Fmt.signedUsd(account.dailyPnl), Modifier.weight(1.1f), valueColor = pnlColor(account.dailyPnl), compact = true, tinyLabel = true)
+                    MiniStat("Realized", Fmt.signedUsd(account.realizedPnl), Modifier.weight(1.1f), valueColor = pnlColor(account.realizedPnl), compact = true, tinyLabel = true)
+                    MiniStat("Unreal.", Fmt.signedUsd(account.unrealizedPnl), Modifier.weight(1.1f), valueColor = pnlColor(account.unrealizedPnl), compact = true, tinyLabel = true)
+                    MiniStat("Trades", account.tradesToday.toString(), Modifier.weight(0.75f), compact = true, tinyLabel = true)
                 }
             }
         }
